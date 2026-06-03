@@ -5,18 +5,33 @@ export interface UsedProduct {
   produto: string
   lote?: string | null
   qtd: number
+  preco_venda?: number
 }
 
 export interface ProcedureRecord {
   id: string
   patient_id: string
   professional_id: string | null
+  quote_id: string | null
   procedimento: string
   data: string
   regiao: string | null
   observacoes: string | null
   produtos_usados: UsedProduct[]
   created_at: string
+}
+
+/** Agrupa (somando quantidades) os produtos usados nos procedimentos de um orçamento. */
+export function produtosDoOrcamento(procedimentos: ProcedureRecord[], quoteId: string): UsedProduct[] {
+  const mapa = new Map<string, UsedProduct>()
+  for (const proc of procedimentos.filter((p) => p.quote_id === quoteId)) {
+    for (const u of proc.produtos_usados ?? []) {
+      const ex = mapa.get(u.produto)
+      if (ex) ex.qtd += u.qtd
+      else mapa.set(u.produto, { ...u })
+    }
+  }
+  return [...mapa.values()]
 }
 
 export async function listProcedures(patientId: string): Promise<ProcedureRecord[]> {
@@ -33,6 +48,7 @@ interface CreateArgs {
   clinicId: string
   patientId: string
   professionalId?: string | null
+  quoteId?: string | null
   procedimento: string
   data: string
   regiao?: string | null
@@ -51,6 +67,7 @@ export async function createProcedure(args: CreateArgs): Promise<ProcedureRecord
       clinic_id: args.clinicId,
       patient_id: args.patientId,
       professional_id: args.professionalId ?? null,
+      quote_id: args.quoteId ?? null,
       procedimento: args.procedimento,
       data: args.data,
       regiao: args.regiao ?? null,

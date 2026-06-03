@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listProcedures, createProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, type InventoryItem } from '@/lib/inventory'
+import { listQuotes, brl, type Quote } from '@/lib/finance'
 
 interface Props {
   patientId: string
@@ -82,6 +83,8 @@ function RegistrarModal({
   onSaved: () => void
 }) {
   const [estoque, setEstoque] = useState<InventoryItem[]>([])
+  const [orcamentos, setOrcamentos] = useState<Quote[]>([])
+  const [quoteId, setQuoteId] = useState('')
   const [procedimento, setProcedimento] = useState('')
   const [data, setData] = useState(new Date().toISOString().slice(0, 10))
   const [regiao, setRegiao] = useState('')
@@ -91,7 +94,13 @@ function RegistrarModal({
 
   useEffect(() => {
     listInventory().then(setEstoque).catch(() => {})
-  }, [])
+    listQuotes(patientId)
+      .then((qs) => {
+        setOrcamentos(qs)
+        if (qs.length > 0) setQuoteId(qs[0].id) // pré-seleciona o mais recente
+      })
+      .catch(() => {})
+  }, [patientId])
 
   function addProduto() {
     setProdutos((p) => [...p, { inventory_id: '', produto: '', qtd: 1 }])
@@ -100,7 +109,7 @@ function RegistrarModal({
     setProdutos((arr) =>
       arr.map((p, i) =>
         i === idx
-          ? { inventory_id: item?.id ?? '', produto: item?.produto ?? '', lote: item?.lote ?? null, qtd }
+          ? { inventory_id: item?.id ?? '', produto: item?.produto ?? '', lote: item?.lote ?? null, qtd, preco_venda: item?.preco_venda }
           : p,
       ),
     )
@@ -117,6 +126,7 @@ function RegistrarModal({
         clinicId,
         patientId,
         professionalId,
+        quoteId: quoteId || null,
         procedimento,
         data: new Date(data).toISOString(),
         regiao,
@@ -147,6 +157,19 @@ function RegistrarModal({
           <div className="grid grid-cols-2 gap-3">
             <div><label className="mb-1 block text-sm text-texto/70">Data</label><input type="date" className={field} value={data} onChange={(e) => setData(e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Região</label><input className={field} value={regiao} onChange={(e) => setRegiao(e.target.value)} /></div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Orçamento relacionado</label>
+            <select className={field} value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
+              <option value="">— Sem vínculo —</option>
+              {orcamentos.map((q) => (
+                <option key={q.id} value={q.id}>
+                  {new Date(q.created_at).toLocaleDateString('pt-BR')} · {brl(q.valor_total)}
+                  {q.itens?.[0] ? ` · ${q.itens[0].descricao}` : ''}
+                </option>
+              ))}
+            </select>
+            {orcamentos.length === 0 && <p className="mt-1 text-xs text-texto/40">Nenhum orçamento. Crie um na aba Financeiro para vincular.</p>}
           </div>
           <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
 

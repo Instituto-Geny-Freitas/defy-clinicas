@@ -12,6 +12,7 @@ import {
   type Quote,
   type QuoteItem,
 } from '@/lib/finance'
+import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 
 interface Props {
   patientId: string
@@ -22,15 +23,17 @@ interface Props {
 export default function FinancePanel({ patientId, clinicId, professionalId }: Props) {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [pagamentos, setPagamentos] = useState<Payment[]>([])
+  const [procedimentos, setProcedimentos] = useState<ProcedureRecord[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modalOrc, setModalOrc] = useState(false)
   const [pagandoQuote, setPagandoQuote] = useState<Quote | null>(null)
 
   function recarregar() {
-    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId)])
-      .then(([q, p]) => {
+    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId)])
+      .then(([q, p, proc]) => {
         setQuotes(q)
         setPagamentos(p)
+        setProcedimentos(proc)
       })
       .catch(() => {})
       .finally(() => setCarregando(false))
@@ -75,6 +78,7 @@ export default function FinancePanel({ patientId, clinicId, professionalId }: Pr
           {quotes.map((q) => {
             const pago = totalPago(pagamentos, q.id)
             const saldo = q.valor_total - pago
+            const produtos = produtosDoOrcamento(procedimentos, q.id)
             return (
               <div key={q.id} className="rounded-xl border border-black/5 bg-white p-4">
                 <div className="flex items-start justify-between">
@@ -102,6 +106,18 @@ export default function FinancePanel({ patientId, clinicId, professionalId }: Pr
                     </button>
                   )}
                 </div>
+                {produtos.length > 0 && (
+                  <div className="mt-3 border-t border-black/5 pt-3">
+                    <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {produtos.map((u, i) => (
+                        <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">
+                          {u.produto} ×{u.qtd}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
