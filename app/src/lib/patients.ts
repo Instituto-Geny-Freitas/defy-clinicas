@@ -41,6 +41,7 @@ export async function createPatient(clinicId: string, input: PatientInput): Prom
 export interface PatientUpdate extends Partial<PatientInput> {
   consentimento_lgpd_em?: string | null
   consentimento_lgpd_versao?: string | null
+  senha_provisoria?: boolean
 }
 
 export async function updatePatient(id: string, patch: PatientUpdate): Promise<Patient> {
@@ -49,6 +50,31 @@ export async function updatePatient(id: string, patch: PatientUpdate): Promise<P
   const { data, error } = await supabase.from('patients').update(body).eq('id', id).select().single()
   if (error) throw error
   return data
+}
+
+/**
+ * Provisiona o acesso do paciente: cria o usuário com senha provisória via
+ * Edge Function (server-side). Requer a function 'provision-patient-access'
+ * deployada. Retorna o identificador de login (CPF sintético ou e-mail).
+ */
+export async function provisionPatientAccess(
+  patientId: string,
+  password: string,
+): Promise<{ login: string }> {
+  const { data, error } = await supabase.functions.invoke('provision-patient-access', {
+    body: { patient_id: patientId, password },
+  })
+  if (error) throw error
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error)
+  return data as { login: string }
+}
+
+/** Gera uma senha provisória legível (8 caracteres). */
+export function gerarSenhaProvisoria(): string {
+  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const nums = '23456789'
+  const pick = (s: string, n: number) => Array.from({ length: n }, () => s[Math.floor(Math.random() * s.length)]).join('')
+  return `${pick(letras, 4)}${pick(nums, 4)}`
 }
 
 /** Idade em anos a partir da data de nascimento (ISO). null se inválida. */

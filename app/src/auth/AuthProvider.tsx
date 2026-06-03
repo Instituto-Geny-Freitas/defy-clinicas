@@ -11,6 +11,7 @@ interface AuthState {
   signInWithCpf: (cpf: string, senha: string) => Promise<{ error: string | null }>
   signInWithEmail: (email: string, senha: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  reloadProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
@@ -77,9 +78,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const reloadProfile = async () => {
+    if (session) setProfile(await loadProfile(session.user.id))
+  }
+
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, signInWithGoogle, signInWithCpf, signInWithEmail, signOut }}
+      value={{ session, profile, loading, signInWithGoogle, signInWithCpf, signInWithEmail, signOut, reloadProfile }}
     >
       {children}
     </AuthContext.Provider>

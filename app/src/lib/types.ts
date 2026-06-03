@@ -34,6 +34,7 @@ export interface Patient {
   observacoes: string | null
   consentimento_lgpd_em: string | null
   consentimento_lgpd_versao: string | null
+  senha_provisoria: boolean
 }
 
 export interface ClinicTheme {

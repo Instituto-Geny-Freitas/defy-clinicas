@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import Login from '@/pages/Login'
+import ForcePasswordChange from '@/pages/ForcePasswordChange'
 import ClinicLayout from '@/layouts/ClinicLayout'
 import PatientLayout from '@/layouts/PatientLayout'
 import Dashboard from '@/pages/clinic/Dashboard'
@@ -41,6 +42,12 @@ export default function App() {
   }
 
   const isStaff = profile?.kind === 'staff'
+
+  // Senha provisória + login por senha (não Google) → força redefinição.
+  const provider = session.user.app_metadata?.provider
+  if (profile?.kind === 'patient' && profile.patient?.senha_provisoria && provider !== 'google') {
+    return <ForcePasswordChange />
+  }
 
   return (
     <BrowserRouter>
