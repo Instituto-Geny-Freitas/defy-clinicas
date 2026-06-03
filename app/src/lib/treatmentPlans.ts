@@ -52,6 +52,16 @@ interface CreateArgs {
   valor_total?: number | null
 }
 
+/** Sugere o texto do plano via IA (Edge Function). Requer OPENAI_API_KEY no servidor. */
+export async function suggestPlanIA(patientId: string, instrucao?: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('treatment-plan-suggest', {
+    body: { patient_id: patientId, instrucao },
+  })
+  if (error) throw error
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error)
+  return (data as { texto: string }).texto
+}
+
 export async function createTreatmentPlan(args: CreateArgs): Promise<TreatmentPlan> {
   const { data, error } = await supabase
     .from('treatment_plans')

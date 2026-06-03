@@ -3,6 +3,7 @@ import {
   createTreatmentPlan,
   listSnippets,
   listTreatmentPlans,
+  suggestPlanIA,
   type TextSnippet,
   type TreatmentPlan,
 } from '@/lib/treatmentPlans'
@@ -60,12 +61,28 @@ function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clin
   const [valor, setValor] = useState('')
   const [snippets, setSnippets] = useState<TextSnippet[]>([])
   const [salvando, setSalvando] = useState(false)
+  const [iaInstrucao, setIaInstrucao] = useState('')
+  const [iaCarregando, setIaCarregando] = useState(false)
+  const [iaErro, setIaErro] = useState<string | null>(null)
 
   useEffect(() => { listSnippets('plano').then(setSnippets).catch(() => {}) }, [])
 
   function inserirSnippet(id: string) {
     const s = snippets.find((x) => x.id === id)
     if (s) setTexto((t) => (t ? t + '\n' : '') + s.conteudo)
+  }
+
+  async function sugerirIA() {
+    setIaCarregando(true)
+    setIaErro(null)
+    try {
+      const sugestao = await suggestPlanIA(patientId, iaInstrucao || undefined)
+      setTexto((t) => (t ? t + '\n\n' : '') + sugestao)
+    } catch (e) {
+      setIaErro(e instanceof Error ? e.message : 'Não foi possível gerar a sugestão.')
+    } finally {
+      setIaCarregando(false)
+    }
   }
 
   async function salvar() {
@@ -93,6 +110,17 @@ function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clin
             </select>
           </div>
         )}
+        <div className="rounded-xl border border-primaria/20 bg-primaria/5 p-3">
+          <label className="mb-1 block text-sm font-medium text-texto/80">✨ Sugerir com IA</label>
+          <div className="flex gap-2">
+            <input className={field} placeholder="Instrução opcional (ex.: foco em flacidez abdominal)" value={iaInstrucao} onChange={(e) => setIaInstrucao(e.target.value)} />
+            <button type="button" onClick={sugerirIA} disabled={iaCarregando} className="shrink-0 rounded-lg bg-primaria px-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+              {iaCarregando ? 'Gerando…' : 'Sugerir'}
+            </button>
+          </div>
+          {iaErro && <p className="mt-1 text-xs text-secundaria">{iaErro}</p>}
+          <p className="mt-1 text-xs text-texto/50">Usa anamnese e última avaliação do paciente. Revise antes de salvar.</p>
+        </div>
         <div><label className="mb-1 block text-sm text-texto/70">Conteúdo *</label><textarea rows={6} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} /></div>
         <div className="grid grid-cols-3 gap-2">
           <div><label className="mb-1 block text-sm text-texto/70">Sessões</label><input type="number" className={field} value={sessoes} onChange={(e) => setSessoes(e.target.value)} /></div>
