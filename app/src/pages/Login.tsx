@@ -8,13 +8,26 @@ const inputCls =
   'w-full rounded-lg border border-black/10 px-3 py-2.5 text-sm outline-none focus:border-primaria'
 
 export default function Login() {
-  const { signInWithGoogle, signInWithCpf, signInWithEmail } = useAuth()
+  const { signInWithGoogle, signInWithCpf, signInWithEmail, resetPasswordForEmail } = useAuth()
   const clinic = useClinic()
   const [modo, setModo] = useState<Modo>('cpf')
   const [identificador, setIdentificador] = useState('') // CPF ou e-mail
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  // recuperação de senha
+  const [recuperar, setRecuperar] = useState(false)
+  const [recEmail, setRecEmail] = useState('')
+  const [recMsg, setRecMsg] = useState<string | null>(null)
+
+  async function enviarRecuperacao(e: FormEvent) {
+    e.preventDefault()
+    setRecMsg(null)
+    setEnviando(true)
+    await resetPasswordForEmail(recEmail)
+    setEnviando(false)
+    setRecMsg('Se houver uma conta com este e-mail, enviamos um link para redefinir a senha.')
+  }
 
   async function entrar(e: FormEvent) {
     e.preventDefault()
@@ -55,50 +68,46 @@ export default function Login() {
           Entrar com Google
         </button>
 
-        {/* Alternância de modo */}
-        <div className="mb-3 flex rounded-lg bg-black/5 p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => { setModo('cpf'); setErro(null) }}
-            className={`flex-1 rounded-md py-1.5 transition ${modo === 'cpf' ? 'bg-white font-medium text-texto shadow-sm' : 'text-texto/60'}`}
-          >
-            CPF
-          </button>
-          <button
-            type="button"
-            onClick={() => { setModo('email'); setErro(null) }}
-            className={`flex-1 rounded-md py-1.5 transition ${modo === 'email' ? 'bg-white font-medium text-texto shadow-sm' : 'text-texto/60'}`}
-          >
-            E-mail
-          </button>
-        </div>
+        {recuperar ? (
+          <form onSubmit={enviarRecuperacao} className="space-y-3">
+            <p className="text-sm text-texto/60">Informe seu e-mail e enviaremos um link para redefinir a senha.</p>
+            <input
+              value={recEmail}
+              onChange={(e) => setRecEmail(e.target.value)}
+              type="email"
+              placeholder="E-mail"
+              autoComplete="email"
+              className={inputCls}
+            />
+            {recMsg && <p className="text-sm text-emerald-600">{recMsg}</p>}
+            <button type="submit" disabled={enviando} className="w-full rounded-lg bg-primaria px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+              {enviando ? 'Enviando…' : 'Enviar link de recuperação'}
+            </button>
+            <button type="button" onClick={() => { setRecuperar(false); setRecMsg(null) }} className="w-full text-center text-xs text-texto/50 hover:underline">
+              Voltar ao login
+            </button>
+          </form>
+        ) : (
+          <>
+            {/* Alternância de modo */}
+            <div className="mb-3 flex rounded-lg bg-black/5 p-1 text-sm">
+              <button type="button" onClick={() => { setModo('cpf'); setErro(null) }} className={`flex-1 rounded-md py-1.5 transition ${modo === 'cpf' ? 'bg-white font-medium text-texto shadow-sm' : 'text-texto/60'}`}>CPF</button>
+              <button type="button" onClick={() => { setModo('email'); setErro(null) }} className={`flex-1 rounded-md py-1.5 transition ${modo === 'email' ? 'bg-white font-medium text-texto shadow-sm' : 'text-texto/60'}`}>E-mail</button>
+            </div>
 
-        <form onSubmit={entrar} className="space-y-3">
-          <input
-            value={identificador}
-            onChange={(e) => setIdentificador(e.target.value)}
-            placeholder={modo === 'cpf' ? 'CPF' : 'E-mail'}
-            inputMode={modo === 'cpf' ? 'numeric' : 'email'}
-            autoComplete={modo === 'cpf' ? 'username' : 'email'}
-            className={inputCls}
-          />
-          <input
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            type="password"
-            placeholder="Senha"
-            autoComplete="current-password"
-            className={inputCls}
-          />
-          {erro && <p className="text-sm text-secundaria">{erro}</p>}
-          <button
-            type="submit"
-            disabled={enviando}
-            className="w-full rounded-lg bg-primaria px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            {enviando ? 'Entrando…' : 'Entrar'}
-          </button>
-        </form>
+            <form onSubmit={entrar} className="space-y-3">
+              <input value={identificador} onChange={(e) => setIdentificador(e.target.value)} placeholder={modo === 'cpf' ? 'CPF' : 'E-mail'} inputMode={modo === 'cpf' ? 'numeric' : 'email'} autoComplete={modo === 'cpf' ? 'username' : 'email'} className={inputCls} />
+              <input value={senha} onChange={(e) => setSenha(e.target.value)} type="password" placeholder="Senha" autoComplete="current-password" className={inputCls} />
+              {erro && <p className="text-sm text-secundaria">{erro}</p>}
+              <button type="submit" disabled={enviando} className="w-full rounded-lg bg-primaria px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                {enviando ? 'Entrando…' : 'Entrar'}
+              </button>
+            </form>
+            <button type="button" onClick={() => setRecuperar(true)} className="mt-3 w-full text-center text-xs text-texto/50 hover:underline">
+              Esqueci minha senha
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

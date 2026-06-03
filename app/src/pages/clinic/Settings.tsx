@@ -6,6 +6,7 @@ import {
   getClinic,
   getIntegration,
   listProfessionals,
+  provisionStaffAccess,
   updateClinic,
   uploadLogo,
   upsertIntegration,
@@ -13,6 +14,7 @@ import {
   type IntegrationSetting,
   type ProfessionalInput,
 } from '@/lib/settings'
+import { gerarSenhaProvisoria } from '@/lib/patients'
 import type { Professional, UserRole } from '@/lib/types'
 
 type Sec = 'visual' | 'equipe' | 'integracoes' | 'lgpd'
@@ -224,6 +226,7 @@ function VisualSection() {
 function EquipeSection({ clinicId }: { clinicId: string }) {
   const [profs, setProfs] = useState<Professional[]>([])
   const [modal, setModal] = useState(false)
+  const [acessoFor, setAcessoFor] = useState<Professional | null>(null)
 
   function recarregar() {
     listProfessionals().then(setProfs).catch(() => {})
@@ -231,7 +234,7 @@ function EquipeSection({ clinicId }: { clinicId: string }) {
   useEffect(recarregar, [])
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-semibold text-texto">Profissionais</h3>
         <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
@@ -239,10 +242,11 @@ function EquipeSection({ clinicId }: { clinicId: string }) {
         </button>
       </div>
       {modal && <ProfModal clinicId={clinicId} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
-      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+      {acessoFor && <AcessoStaffModal prof={acessoFor} onClose={() => setAcessoFor(null)} onSaved={() => { setAcessoFor(null); recarregar() }} />}
+      <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-black/[0.02] text-left text-texto/60">
-            <tr><th className="px-4 py-2 font-medium">Nome</th><th className="px-4 py-2 font-medium">Papel</th><th className="px-4 py-2 font-medium">Conselho</th><th className="px-4 py-2 font-medium">Vínculo</th></tr>
+            <tr><th className="px-4 py-2 font-medium">Nome</th><th className="px-4 py-2 font-medium">Papel</th><th className="px-4 py-2 font-medium">Conselho</th><th className="px-4 py-2 font-medium">Acesso</th><th className="px-4 py-2"></th></tr>
           </thead>
           <tbody>
             {profs.map((p) => (
@@ -250,11 +254,71 @@ function EquipeSection({ clinicId }: { clinicId: string }) {
                 <td className="px-4 py-2 text-texto">{p.nome}</td>
                 <td className="px-4 py-2 capitalize text-texto/70">{p.role}</td>
                 <td className="px-4 py-2 text-texto/70">{p.conselho_tipo ? `${p.conselho_tipo} ${p.conselho_numero ?? ''}` : '—'}</td>
-                <td className="px-4 py-2">{p.auth_user_id ? <span className="text-emerald-600">ativo</span> : <span className="text-texto/40">aguarda 1º login</span>}</td>
+                <td className="px-4 py-2">{p.auth_user_id ? <span className="text-emerald-600">ativo</span> : <span className="text-texto/40">sem login</span>}</td>
+                <td className="px-4 py-2 text-right">
+                  <button onClick={() => setAcessoFor(p)} className="text-xs font-medium text-primaria hover:underline" disabled={!p.email} title={!p.email ? 'Cadastre um e-mail primeiro' : ''}>
+                    {p.auth_user_id ? 'Redefinir senha' : 'Provisionar acesso'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+function AcessoStaffModal({ prof, onClose, onSaved }: { prof: Professional; onClose: () => void; onSaved: () => void }) {
+  const [senha, setSenha] = useState(gerarSenhaProvisoria())
+  const [processando, setProcessando] = useState(false)
+  const [resultado, setResultado] = useState<{ login: string; senha: string } | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function processar() {
+    if (senha.length < 6) { setErro('Senha mínima de 6 caracteres.'); return }
+    setProcessando(true); setErro(null)
+    try {
+      const { login } = await provisionStaffAccess(prof.id, senha)
+      setResultado({ login, senha })
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível provisionar o acesso.')
+      setProcessando(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-md rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-texto">Acesso de {prof.nome}</h2>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        {resultado ? (
+          <div>
+            <p className="text-sm text-texto/70">Credenciais para o profissional. No 1º acesso por senha, ele será obrigado a redefinir.</p>
+            <div className="mt-3 space-y-2 rounded-xl border border-black/5 bg-black/[0.02] p-4 text-sm">
+              <div><span className="text-texto/50">Login:</span> <strong>{resultado.login}</strong></div>
+              <div><span className="text-texto/50">Senha provisória:</span> <strong>{resultado.senha}</strong></div>
+            </div>
+            <div className="mt-5 flex justify-end"><button onClick={onSaved} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Concluir</button></div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-texto/60">{prof.auth_user_id ? 'Redefina a senha de acesso (login: ' + prof.email + ').' : 'Crie o acesso para ' + prof.email + '.'}</p>
+            <div className="flex gap-2">
+              <input className={field} value={senha} onChange={(e) => setSenha(e.target.value)} />
+              <button type="button" onClick={() => setSenha(gerarSenhaProvisoria())} className="shrink-0 rounded-lg border border-black/10 px-3 text-sm hover:bg-black/5">Gerar</button>
+            </div>
+            {erro && <p className="text-sm text-secundaria">{erro}</p>}
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+              <button onClick={processar} disabled={processando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                {processando ? 'Processando…' : prof.auth_user_id ? 'Redefinir senha' : 'Provisionar acesso'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

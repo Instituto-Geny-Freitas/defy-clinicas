@@ -60,9 +60,20 @@ export async function listProfessionals(): Promise<Professional[]> {
   return data ?? []
 }
 
-export async function createProfessional(clinicId: string, input: ProfessionalInput): Promise<void> {
-  const { error } = await supabase.from('professionals').insert({ clinic_id: clinicId, ...input })
+export async function createProfessional(clinicId: string, input: ProfessionalInput): Promise<{ id: string }> {
+  const { data, error } = await supabase.from('professionals').insert({ clinic_id: clinicId, ...input }).select('id').single()
   if (error) throw error
+  return data
+}
+
+/** Provisiona/redefine o login do profissional (Edge Function, server-side). */
+export async function provisionStaffAccess(professionalId: string, password: string): Promise<{ login: string }> {
+  const { data, error } = await supabase.functions.invoke('provision-staff-access', {
+    body: { professional_id: professionalId, password },
+  })
+  if (error) throw error
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error)
+  return data as { login: string }
 }
 
 // ---- Integrações (gateway de pagamento, etc.) ------------------------------

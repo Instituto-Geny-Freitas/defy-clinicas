@@ -11,10 +11,12 @@ export interface Professional {
   clinic_id: string
   auth_user_id: string | null
   nome: string
+  email: string | null
   role: UserRole
   conselho_tipo: string | null
   conselho_numero: string | null
   ativo: boolean
+  senha_provisoria: boolean
 }
 
 export interface Patient {

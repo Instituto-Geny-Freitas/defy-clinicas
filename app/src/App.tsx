@@ -24,9 +24,11 @@ function FullScreen({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { session, profile, loading } = useAuth()
+  const { session, profile, loading, recoveryMode } = useAuth()
 
   if (loading) return <FullScreen>Carregando…</FullScreen>
+  // Recuperação de senha (link do e-mail) — antes de tudo, exige nova senha.
+  if (recoveryMode && session) return <ForcePasswordChange reason="recuperacao" />
   if (!session) return <Login />
 
   // Conta autenticada mas ainda não vinculada a profissional/paciente.
@@ -45,8 +47,11 @@ export default function App() {
 
   // Senha provisória + login por senha (não Google) → força redefinição.
   const provider = session.user.app_metadata?.provider
-  if (profile?.kind === 'patient' && profile.patient?.senha_provisoria && provider !== 'google') {
-    return <ForcePasswordChange />
+  const senhaProvisoria =
+    (profile?.kind === 'patient' && profile.patient?.senha_provisoria) ||
+    (profile?.kind === 'staff' && profile.professional?.senha_provisoria)
+  if (senhaProvisoria && provider !== 'google') {
+    return <ForcePasswordChange reason="provisoria" />
   }
 
   return (

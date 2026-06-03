@@ -7,9 +7,12 @@ interface AuthState {
   session: Session | null
   profile: Profile | null
   loading: boolean
+  recoveryMode: boolean
   signInWithGoogle: () => Promise<void>
   signInWithCpf: (cpf: string, senha: string) => Promise<{ error: string | null }>
   signInWithEmail: (email: string, senha: string) => Promise<{ error: string | null }>
+  resetPasswordForEmail: (email: string) => Promise<{ error: string | null }>
+  clearRecovery: () => void
   signOut: () => Promise<void>
   reloadProfile: () => Promise<void>
 }
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -43,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true)
       setSession(newSession)
       setProfile(newSession ? await loadProfile(newSession.user.id) : null)
     })
@@ -74,7 +79,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null }
   }
 
+  const resetPasswordForEmail = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    })
+    return { error: error?.message ?? null }
+  }
+
+  const clearRecovery = () => setRecoveryMode(false)
+
   const signOut = async () => {
+    setRecoveryMode(false)
     await supabase.auth.signOut()
   }
 
@@ -84,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, signInWithGoogle, signInWithCpf, signInWithEmail, signOut, reloadProfile }}
+      value={{ session, profile, loading, recoveryMode, signInWithGoogle, signInWithCpf, signInWithEmail, resetPasswordForEmail, clearRecovery, signOut, reloadProfile }}
     >
       {children}
     </AuthContext.Provider>
