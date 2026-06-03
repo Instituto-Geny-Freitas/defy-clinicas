@@ -25,8 +25,19 @@ export default function ForcePasswordChange() {
       if (error) throw error
       if (profile?.patient) await updatePatient(profile.patient.id, { senha_provisoria: false })
       await reloadProfile()
-    } catch {
-      setErro('Não foi possível alterar a senha. Tente novamente.')
+    } catch (e) {
+      const m = (e instanceof Error ? e.message : '').toLowerCase()
+      setErro(
+        m.includes('different from the old')
+          ? 'A nova senha deve ser diferente da senha atual.'
+          : m.includes('weak') || m.includes('pwned') || m.includes('leaked')
+            ? 'Senha muito fraca ou comprometida. Escolha outra.'
+            : m.includes('length') || m.includes('at least') || m.includes('6 char')
+              ? 'A senha é muito curta.'
+              : e instanceof Error && e.message
+                ? e.message
+                : 'Não foi possível alterar a senha. Tente novamente.',
+      )
       setEnviando(false)
     }
   }
