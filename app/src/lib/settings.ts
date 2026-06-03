@@ -99,6 +99,35 @@ export async function getIntegration(
   return data
 }
 
+// ---- Textos-padrão (snippets) ----------------------------------------------
+export interface Snippet {
+  id: string
+  categoria: string | null
+  titulo: string
+  conteudo: string
+  ativo: boolean
+}
+
+export async function listAllSnippets(): Promise<Snippet[]> {
+  const { data, error } = await supabase
+    .from('treatment_text_snippets')
+    .select('id, categoria, titulo, conteudo, ativo')
+    .order('categoria')
+    .order('titulo')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createSnippet(clinicId: string, input: { categoria: string; titulo: string; conteudo: string }): Promise<void> {
+  const { error } = await supabase.from('treatment_text_snippets').insert({ clinic_id: clinicId, ...input })
+  if (error) throw error
+}
+
+export async function deleteSnippet(id: string): Promise<void> {
+  const { error } = await supabase.from('treatment_text_snippets').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function upsertIntegration(s: IntegrationSetting): Promise<void> {
   const { error } = await supabase
     .from('integration_settings')

@@ -9,7 +9,8 @@ import {
   type AppointmentStatus,
 } from '@/lib/appointments'
 import { listPatients } from '@/lib/patients'
-import type { Patient } from '@/lib/types'
+import { listProfessionals } from '@/lib/settings'
+import type { Patient, Professional } from '@/lib/types'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
 import MonthCalendar from '@/components/MonthCalendar'
 
@@ -27,15 +28,18 @@ export default function Agenda() {
   const { profile } = useAuth()
   const clinicId = profile?.professional?.clinic_id
   const [appts, setAppts] = useState<Appointment[]>([])
+  const [profissionais, setProfissionais] = useState<Professional[]>([])
+  const [filtroProf, setFiltroProf] = useState('')
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [remarcando, setRemarcando] = useState<Appointment | null>(null)
 
   function recarregar() {
     const ontem = new Date(Date.now() - 86400000).toISOString()
-    listAppointments(ontem).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
+    listAppointments(ontem, filtroProf || undefined).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
   }
-  useEffect(recarregar, [])
+  useEffect(recarregar, [filtroProf])
+  useEffect(() => { listProfessionals().then((p) => setProfissionais(p.filter((x) => x.ativo))).catch(() => {}) }, [])
 
   async function mudarStatus(id: string, status: AppointmentStatus) {
     await updateAppointmentStatus(id, status)
@@ -50,15 +54,19 @@ export default function Agenda() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-texto">Agenda</h1>
-        <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-          + Novo agendamento
-        </button>
+        <div className="flex items-center gap-2">
+          <select value={filtroProf} onChange={(e) => setFiltroProf(e.target.value)} className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria">
+            <option value="">Todos os profissionais</option>
+            {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+          <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo</button>
+        </div>
       </div>
 
       {modal && clinicId && (
-        <AgendamentoModal clinicId={clinicId} professionalId={profile?.professional?.id} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
+        <AgendamentoModal clinicId={clinicId} profissionais={profissionais} defaultProf={profile?.professional?.id} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
       )}
       {remarcando && (
         <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar() }} />
@@ -79,7 +87,10 @@ export default function Agenda() {
                     <div className="w-14 text-center"><div className="text-lg font-semibold text-primaria">{hora(a.inicio)}</div></div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium text-texto">{a.patients?.nome ?? 'Paciente'}</div>
-                      <div className="text-sm text-texto/60">{a.procedimento ?? 'Atendimento'}</div>
+                      <div className="text-sm text-texto/60">
+                        {a.procedimento ?? 'Atendimento'}
+                        {a.professionals?.nome && <span className="text-texto/40"> · {a.professionals.nome}</span>}
+                      </div>
                     </div>
                     <ApptStatusBadge status={a.status} />
                     {a.status !== 'cancelado' && a.status !== 'realizado' && (
@@ -103,11 +114,12 @@ export default function Agenda() {
   )
 }
 
-function AgendamentoModal({ clinicId, professionalId, onClose, onSaved }: {
-  clinicId: string; professionalId?: string | null; onClose: () => void; onSaved: () => void
+function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSaved }: {
+  clinicId: string; profissionais: Professional[]; defaultProf?: string | null; onClose: () => void; onSaved: () => void
 }) {
   const [pacientes, setPacientes] = useState<Patient[]>([])
   const [patientId, setPatientId] = useState('')
+  const [professionalId, setProfessionalId] = useState(defaultProf ?? '')
   const [procedimento, setProcedimento] = useState('')
   const [data, setData] = useState<string | null>(null)
   const [horaInicio, setHoraInicio] = useState('09:00')
@@ -124,7 +136,7 @@ function AgendamentoModal({ clinicId, professionalId, onClose, onSaved }: {
     setSalvando(true); setErro(null)
     try {
       await createAppointment({
-        clinicId, patientId, professionalId, procedimento,
+        clinicId, patientId, professionalId: professionalId || null, procedimento,
         inicio: toISO(data, horaInicio),
         fim: horaFim ? toISO(data, horaFim) : null,
         observacoes: obs,
@@ -141,6 +153,13 @@ function AgendamentoModal({ clinicId, professionalId, onClose, onSaved }: {
           <select className={field} value={patientId} onChange={(e) => setPatientId(e.target.value)}>
             <option value="">Selecione…</option>
             {pacientes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Profissional</label>
+          <select className={field} value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
+            <option value="">— Não atribuído —</option>
+            {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
         </div>
         <div>

@@ -10,6 +10,7 @@ import PatientDetail from '@/pages/clinic/PatientDetail'
 import Inventory from '@/pages/clinic/Inventory'
 import Agenda from '@/pages/clinic/Agenda'
 import Finance from '@/pages/clinic/Finance'
+import Reports from '@/pages/clinic/Reports'
 import Settings from '@/pages/clinic/Settings'
 import Templates from '@/pages/clinic/Templates'
 import PatientHome from '@/pages/patient/PatientHome'
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="documentos" element={<Templates />} />
             <Route path="estoque" element={<Inventory />} />
             <Route path="financeiro" element={<Finance />} />
+            <Route path="relatorios" element={<Reports />} />
             <Route path="configuracoes" element={<Settings />} />
           </Route>
         ) : (

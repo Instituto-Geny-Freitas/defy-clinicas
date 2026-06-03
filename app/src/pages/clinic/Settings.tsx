@@ -3,8 +3,11 @@ import { useAuth } from '@/auth/AuthProvider'
 import { useThemeReload } from '@/theme/ThemeProvider'
 import {
   createProfessional,
+  createSnippet,
+  deleteSnippet,
   getClinic,
   getIntegration,
+  listAllSnippets,
   listProfessionals,
   provisionStaffAccess,
   updateClinic,
@@ -13,11 +16,12 @@ import {
   type ClinicFull,
   type IntegrationSetting,
   type ProfessionalInput,
+  type Snippet,
 } from '@/lib/settings'
 import { gerarSenhaProvisoria } from '@/lib/patients'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -41,6 +45,7 @@ export default function Settings() {
           { k: 'visual', l: 'Identidade visual' },
           { k: 'equipe', l: 'Equipe' },
           { k: 'integracoes', l: 'Integrações' },
+          { k: 'textos', l: 'Textos-padrão' },
           { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
           <button
@@ -58,7 +63,64 @@ export default function Settings() {
       {sec === 'visual' && <VisualSection />}
       {sec === 'equipe' && <EquipeSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
+      {sec === 'textos' && <TextosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
+    </div>
+  )
+}
+
+// --- Textos-padrão ----------------------------------------------------------
+function TextosSection({ clinicId }: { clinicId: string }) {
+  const [snippets, setSnippets] = useState<Snippet[]>([])
+  const [categoria, setCategoria] = useState('plano')
+  const [titulo, setTitulo] = useState('')
+  const [conteudo, setConteudo] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listAllSnippets().then(setSnippets).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!titulo.trim() || !conteudo.trim()) return
+    setSalvando(true)
+    try { await createSnippet(clinicId, { categoria, titulo, conteudo }); setTitulo(''); setConteudo(''); recarregar() }
+    finally { setSalvando(false) }
+  }
+  async function remover(id: string) { if (confirm('Excluir este texto-padrão?')) { await deleteSnippet(id); recarregar() } }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo texto-padrão</h3>
+        <p className="mb-3 text-xs text-texto/50">Usados como base no Plano de Tratamento e em outras telas (por categoria).</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Categoria</label>
+            <select className={field} value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+              <option value="plano">Plano de tratamento</option>
+              <option value="orientacao">Orientação</option>
+              <option value="exames_lab">Exames</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Título</label><input className={field} value={titulo} onChange={(e) => setTitulo(e.target.value)} /></div>
+        </div>
+        <div className="mt-3"><label className="mb-1 block text-sm text-texto/70">Conteúdo</label><textarea rows={4} className={field} value={conteudo} onChange={(e) => setConteudo(e.target.value)} /></div>
+        <div className="mt-3 flex justify-end"><button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Adicionar'}</button></div>
+      </div>
+
+      <div className="space-y-2">
+        {snippets.map((s) => (
+          <div key={s.id} className="rounded-xl border border-black/5 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-texto">{s.titulo} <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/50">{s.categoria}</span></div>
+              <button onClick={() => remover(s.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-texto/60">{s.conteudo}</p>
+          </div>
+        ))}
+        {snippets.length === 0 && <p className="text-sm text-texto/50">Nenhum texto-padrão cadastrado.</p>}
+      </div>
     </div>
   )
 }

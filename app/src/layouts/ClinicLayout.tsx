@@ -10,6 +10,7 @@ const NAV = [
   { to: '/clinica/documentos', label: 'Modelos de Documentos' },
   { to: '/clinica/estoque', label: 'Estoque' },
   { to: '/clinica/financeiro', label: 'Financeiro' },
+  { to: '/clinica/relatorios', label: 'Relatórios' },
   { to: '/clinica/configuracoes', label: 'Configurações' },
 ]
 
