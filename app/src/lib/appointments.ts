@@ -17,13 +17,14 @@ export interface Appointment {
   professionals?: { nome: string } | null
 }
 
-/** Agendamentos da clínica a partir de uma data (com nome do paciente e profissional). */
-export async function listAppointments(desde?: string, professionalId?: string): Promise<Appointment[]> {
+/** Agendamentos da clínica (com nome do paciente e profissional). Pode limitar por período/profissional. */
+export async function listAppointments(desde?: string, professionalId?: string, ate?: string): Promise<Appointment[]> {
   let q = supabase
     .from('appointments')
     .select('*, patients(nome, whatsapp), professionals(nome)')
     .order('inicio', { ascending: true })
   if (desde) q = q.gte('inicio', desde)
+  if (ate) q = q.lte('inicio', ate)
   if (professionalId) q = q.eq('professional_id', professionalId)
   const { data, error } = await q
   if (error) throw error

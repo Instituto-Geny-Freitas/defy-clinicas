@@ -30,20 +30,39 @@ export default function Agenda() {
   const [appts, setAppts] = useState<Appointment[]>([])
   const [profissionais, setProfissionais] = useState<Professional[]>([])
   const [filtroProf, setFiltroProf] = useState('')
+  const [dataFiltro, setDataFiltro] = useState<string | null>(null) // YYYY-MM-DD
+  const [mostrarCal, setMostrarCal] = useState(false)
+  const [diasComAgenda, setDiasComAgenda] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [remarcando, setRemarcando] = useState<Appointment | null>(null)
 
   function recarregar() {
-    const ontem = new Date(Date.now() - 86400000).toISOString()
-    listAppointments(ontem, filtroProf || undefined).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
+    let desde: string, ate: string | undefined
+    if (dataFiltro) {
+      desde = new Date(`${dataFiltro}T00:00:00`).toISOString()
+      ate = new Date(`${dataFiltro}T23:59:59`).toISOString()
+    } else {
+      desde = new Date(Date.now() - 86400000).toISOString()
+    }
+    listAppointments(desde, filtroProf || undefined, ate).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
   }
-  useEffect(recarregar, [filtroProf])
+  useEffect(recarregar, [filtroProf, dataFiltro])
   useEffect(() => { listProfessionals().then((p) => setProfissionais(p.filter((x) => x.ativo))).catch(() => {}) }, [])
+
+  // Marca no calendário os dias que têm agendamento (janela ampla, independe do filtro).
+  function carregarMarcados() {
+    const desde = new Date(Date.now() - 31 * 86400000).toISOString()
+    listAppointments(desde, filtroProf || undefined)
+      .then((all) => setDiasComAgenda(new Set(all.map((a) => a.inicio.slice(0, 10)))))
+      .catch(() => {})
+  }
+  useEffect(carregarMarcados, [filtroProf])
 
   async function mudarStatus(id: string, status: AppointmentStatus) {
     await updateAppointmentStatus(id, status)
     recarregar()
+    carregarMarcados()
   }
 
   const grupos = appts.reduce<Record<string, Appointment[]>>((acc, a) => {
@@ -65,17 +84,43 @@ export default function Agenda() {
         </div>
       </div>
 
+      {/* Busca por data + calendário visual */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="date"
+          value={dataFiltro ?? ''}
+          onChange={(e) => setDataFiltro(e.target.value || null)}
+          className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria"
+        />
+        <button onClick={() => setMostrarCal((v) => !v)} className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5">
+          {mostrarCal ? 'Ocultar calendário' : '📅 Ver calendário'}
+        </button>
+        {dataFiltro && (
+          <button onClick={() => { setDataFiltro(null); setMostrarCal(false) }} className="rounded-lg bg-black/5 px-3 py-2 text-sm text-texto/70 hover:bg-black/10">
+            Limpar data
+          </button>
+        )}
+      </div>
+      {mostrarCal && (
+        <div className="mt-3 max-w-sm">
+          <MonthCalendar value={dataFiltro} onChange={(d) => { setDataFiltro(d); setMostrarCal(false) }} marcados={diasComAgenda} />
+          <p className="mt-1 text-xs text-texto/40">• dias com agendamento marcados</p>
+        </div>
+      )}
+
       {modal && clinicId && (
-        <AgendamentoModal clinicId={clinicId} profissionais={profissionais} defaultProf={profile?.professional?.id} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
+        <AgendamentoModal clinicId={clinicId} profissionais={profissionais} defaultProf={profile?.professional?.id} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar(); carregarMarcados() }} />
       )}
       {remarcando && (
-        <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar() }} />
+        <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar(); carregarMarcados() }} />
       )}
 
       {carregando ? (
         <p className="mt-4 text-sm text-texto/50">Carregando…</p>
       ) : appts.length === 0 ? (
-        <p className="mt-4 rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum agendamento.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">
+          {dataFiltro ? `Nenhum agendamento em ${new Date(dataFiltro + 'T12:00:00').toLocaleDateString('pt-BR')}.` : 'Nenhum agendamento.'}
+        </p>
       ) : (
         <div className="mt-6 space-y-6">
           {Object.entries(grupos).map(([dia, lista]) => (
