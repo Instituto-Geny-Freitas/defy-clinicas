@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getPatient } from '@/lib/patients'
+import { getPatient, calcAge } from '@/lib/patients'
+import PatientFormModal from './PatientFormModal'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Patient } from '@/lib/types'
 import AnamnesisForm from '@/forms/AnamnesisForm'
@@ -36,14 +37,16 @@ export default function PatientDetail() {
   const [aba, setAba] = useState<Aba>('resumo')
   const [tipoAval, setTipoAval] = useState<AssessmentType>('dermato')
   const [carregando, setCarregando] = useState(true)
+  const [editando, setEditando] = useState(false)
 
-  useEffect(() => {
+  function recarregar() {
     if (!id) return
     getPatient(id)
       .then(setPaciente)
       .catch(() => {})
       .finally(() => setCarregando(false))
-  }, [id])
+  }
+  useEffect(recarregar, [id])
 
   if (carregando) return <p className="text-sm text-texto/50">Carregando…</p>
   if (!paciente) return <p className="text-sm text-texto/50">Paciente não encontrado.</p>
@@ -53,10 +56,26 @@ export default function PatientDetail() {
       <Link to="/clinica/pacientes" className="text-sm text-primaria hover:underline">
         ← Pacientes
       </Link>
-      <h1 className="mt-1 text-2xl font-semibold text-texto">{paciente.nome}</h1>
-      <p className="text-sm text-texto/60">
-        {paciente.cpf ?? 'CPF não informado'} · {paciente.whatsapp ?? 'sem WhatsApp'}
-      </p>
+      <div className="mt-1 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-texto">{paciente.nome}</h1>
+          <p className="text-sm text-texto/60">
+            {paciente.cpf ?? 'CPF não informado'} · {paciente.whatsapp ?? 'sem WhatsApp'}
+          </p>
+        </div>
+        <button onClick={() => setEditando(true)} className="rounded-lg border border-black/10 px-3 py-1.5 text-sm hover:bg-black/5">
+          Editar
+        </button>
+      </div>
+
+      {editando && (
+        <PatientFormModal
+          clinicId={paciente.clinic_id}
+          patient={paciente}
+          onClose={() => setEditando(false)}
+          onSaved={() => { setEditando(false); recarregar() }}
+        />
+      )}
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-black/5">
         {ABAS.map((a) => (
@@ -76,10 +95,19 @@ export default function PatientDetail() {
 
       <div className="mt-6">
         {aba === 'resumo' && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Info label="Data de nascimento" valor={paciente.nascimento ? new Date(paciente.nascimento).toLocaleDateString('pt-BR') : null} />
+            <Info label="Idade" valor={calcAge(paciente.nascimento) != null ? `${calcAge(paciente.nascimento)} anos` : null} />
+            <Info label="CPF" valor={paciente.cpf} />
             <Info label="E-mail" valor={paciente.email} />
             <Info label="WhatsApp" valor={paciente.whatsapp} />
-            <Info label="CPF" valor={paciente.cpf} />
+            <Info label="Profissão" valor={paciente.profissao} />
+            <Info label="Estilo de trabalho" valor={paciente.estilo_trabalho === 'sentado' ? 'Sentado' : paciente.estilo_trabalho === 'em_pe_ativo' ? 'Em pé / Ativo' : null} />
+            <Info label="Alergias" valor={paciente.alergias} />
+            <Info
+              label="Consentimento LGPD"
+              valor={paciente.consentimento_lgpd_em ? `Sim — ${new Date(paciente.consentimento_lgpd_em).toLocaleDateString('pt-BR')} (v${paciente.consentimento_lgpd_versao ?? '?'})` : 'Pendente'}
+            />
           </div>
         )}
 
@@ -132,7 +160,7 @@ export default function PatientDetail() {
         )}
         {aba === 'documentos' && (
           <DocumentsPanel
-            patientId={paciente.id}
+            patient={paciente}
             clinicId={paciente.clinic_id}
             professionalId={profile?.professional?.id}
           />

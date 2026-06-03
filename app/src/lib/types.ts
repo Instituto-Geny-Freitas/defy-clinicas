@@ -23,8 +23,17 @@ export interface Patient {
   auth_user_id: string | null
   nome: string
   cpf: string | null
+  nascimento: string | null
+  sexo: string | null
   email: string | null
   whatsapp: string | null
+  telefone: string | null
+  profissao: string | null
+  estilo_trabalho: string | null
+  alergias: string | null
+  observacoes: string | null
+  consentimento_lgpd_em: string | null
+  consentimento_lgpd_versao: string | null
 }
 
 export interface ClinicTheme {

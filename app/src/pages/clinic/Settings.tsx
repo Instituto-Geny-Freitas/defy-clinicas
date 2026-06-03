@@ -15,7 +15,7 @@ import {
 } from '@/lib/settings'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes'
+type Sec = 'visual' | 'equipe' | 'integracoes' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -39,6 +39,7 @@ export default function Settings() {
           { k: 'visual', l: 'Identidade visual' },
           { k: 'equipe', l: 'Equipe' },
           { k: 'integracoes', l: 'Integrações' },
+          { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
           <button
             key={t.k}
@@ -55,6 +56,63 @@ export default function Settings() {
       {sec === 'visual' && <VisualSection />}
       {sec === 'equipe' && <EquipeSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
+      {sec === 'lgpd' && <LgpdSection />}
+    </div>
+  )
+}
+
+// --- LGPD -------------------------------------------------------------------
+function LgpdSection() {
+  const [clinic, setClinic] = useState<ClinicFull | null>(null)
+  const [texto, setTexto] = useState('')
+  const [versao, setVersao] = useState('1')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    getClinic().then((c) => {
+      setClinic(c)
+      const l = (c?.dados_empresa as { lgpd?: { texto?: string; versao?: string } })?.lgpd
+      setTexto(l?.texto || 'Autorizo o tratamento dos meus dados pessoais e de saúde para fins do meu atendimento, nos termos da Lei 13.709/2018 (LGPD).')
+      setVersao(l?.versao || '1')
+    }).catch(() => {})
+  }, [])
+
+  async function salvar() {
+    if (!clinic) return
+    setSalvando(true); setMsg(null)
+    try {
+      const dados = { ...(clinic.dados_empresa ?? {}), lgpd: { texto, versao, atualizado_em: new Date().toISOString() } }
+      await updateClinic(clinic.id, { dados_empresa: dados })
+      setMsg('Termo LGPD salvo.')
+    } catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Termo de Consentimento (LGPD)</h3>
+        <p className="mb-4 text-xs text-texto/50">
+          Texto apresentado ao registrar o consentimento do paciente (Lei 13.709/2018). Ao alterar a versão,
+          consentimentos antigos continuam registrados com a versão em que foram aceitos.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-1">
+            <label className="mb-1 block text-sm text-texto/70">Versão</label>
+            <input className={field} value={versao} onChange={(e) => setVersao(e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-sm text-texto/70">Texto do consentimento</label>
+          <textarea rows={5} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
     </div>
   )
 }

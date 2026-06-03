@@ -80,6 +80,7 @@ function DocumentViewer({
   onAccepted: () => void
 }) {
   const clinic = useClinic()
+  const { profile } = useAuth()
   const requerAssinatura = inst.document_templates?.requer_assinatura ?? false
   const jaConcluido = inst.status === 'assinado' || inst.status === 'lido'
   const [aceito, setAceito] = useState(false)
@@ -114,6 +115,7 @@ function DocumentViewer({
               printDocument(
                 { nome: inst.document_templates?.nome ?? 'Documento', corpo_final: inst.corpo_final, status: inst.status, assinado_em: inst.assinado_em, lido_em: inst.lido_em, content_hash: inst.content_hash, uso_imagem_autorizado: inst.uso_imagem_autorizado },
                 clinic,
+                { patient: profile?.patient ? { nome: profile.patient.nome, cpf: profile.patient.cpf, nascimento: profile.patient.nascimento } : null },
               )
             }
             className="mt-3 text-sm font-medium text-primaria hover:underline"

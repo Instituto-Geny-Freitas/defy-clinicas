@@ -69,6 +69,31 @@ export async function listActiveTemplates(): Promise<DocTemplate[]> {
   return data ?? []
 }
 
+export async function getTemplate(id: string): Promise<DocTemplate | null> {
+  const { data, error } = await supabase
+    .from('document_templates')
+    .select('id, clinic_id, tipo, nome, descricao, procedimento_rel, schema, corpo, versao, requer_assinatura')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+/** Atualiza os dados de um documento emitido, re-renderizando corpo e hash. */
+export async function updateDocumentInstance(
+  id: string,
+  template: DocTemplate,
+  dados: FormValues,
+): Promise<void> {
+  const corpoFinal = renderCorpo(template.corpo, dados)
+  const contentHash = await sha256Hex(corpoFinal + JSON.stringify(dados))
+  const { error } = await supabase
+    .from('document_instances')
+    .update({ dados, corpo_final: corpoFinal, content_hash: contentHash })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function listPatientDocuments(patientId: string): Promise<DocInstance[]> {
   const { data, error } = await supabase
     .from('document_instances')

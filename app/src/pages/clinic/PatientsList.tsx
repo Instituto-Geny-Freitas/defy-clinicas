@@ -44,7 +44,7 @@ export default function PatientsList() {
         <PatientFormModal
           clinicId={clinicId}
           onClose={() => setModalAberto(false)}
-          onCreated={(id) => {
+          onSaved={(id) => {
             setModalAberto(false)
             navigate(`/clinica/pacientes/${id}`)
           }}

@@ -69,6 +69,15 @@ export async function createAppointment(args: CreateArgs): Promise<Appointment> 
   return data
 }
 
+/** Remarca um agendamento para nova data/hora (zera o lembrete enviado). */
+export async function rescheduleAppointment(id: string, inicio: string, fim?: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('appointments')
+    .update({ inicio, fim: fim ?? null, lembrete_enviado_em: null })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {
   const patch: Record<string, unknown> = { status }
   if (status === 'confirmado') patch.confirmado_em = new Date().toISOString()

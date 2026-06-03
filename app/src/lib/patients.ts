@@ -16,10 +16,7 @@ export interface PatientInput {
 }
 
 export async function listPatients(): Promise<Patient[]> {
-  const { data, error } = await supabase
-    .from('patients')
-    .select('id, clinic_id, auth_user_id, nome, cpf, email, whatsapp')
-    .order('nome')
+  const { data, error } = await supabase.from('patients').select('*').order('nome')
   if (error) throw error
   return data ?? []
 }
@@ -39,4 +36,29 @@ export async function createPatient(clinicId: string, input: PatientInput): Prom
   const { data, error } = await supabase.from('patients').insert(payload).select().single()
   if (error) throw error
   return data
+}
+
+export interface PatientUpdate extends Partial<PatientInput> {
+  consentimento_lgpd_em?: string | null
+  consentimento_lgpd_versao?: string | null
+}
+
+export async function updatePatient(id: string, patch: PatientUpdate): Promise<Patient> {
+  const body = { ...patch }
+  if (body.cpf) body.cpf = digitsOnly(body.cpf)
+  const { data, error } = await supabase.from('patients').update(body).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+/** Idade em anos a partir da data de nascimento (ISO). null se inválida. */
+export function calcAge(nascimento?: string | null): number | null {
+  if (!nascimento) return null
+  const b = new Date(nascimento)
+  if (isNaN(b.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - b.getFullYear()
+  const m = now.getMonth() - b.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--
+  return age >= 0 && age < 150 ? age : null
 }
