@@ -80,6 +80,26 @@ export async function rescheduleAppointment(id: string, inicio: string, fim?: st
   if (error) throw error
 }
 
+/** Solicitação de horário feita pelo próprio paciente (origem = paciente). */
+export async function requestAppointment(args: {
+  clinicId: string
+  patientId: string
+  inicio: string
+  procedimento?: string | null
+  observacoes?: string | null
+}): Promise<void> {
+  const { error } = await supabase.from('appointments').insert({
+    clinic_id: args.clinicId,
+    patient_id: args.patientId,
+    procedimento: args.procedimento ?? null,
+    inicio: args.inicio,
+    status: 'agendado',
+    origem: 'paciente',
+    observacoes: args.observacoes ?? null,
+  })
+  if (error) throw error
+}
+
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {
   const patch: Record<string, unknown> = { status }
   if (status === 'confirmado') patch.confirmado_em = new Date().toISOString()
