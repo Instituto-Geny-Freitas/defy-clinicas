@@ -11,14 +11,26 @@ import DocumentsPanel from './DocumentsPanel'
 import ProceduresPanel from './ProceduresPanel'
 import FinancePanel from './FinancePanel'
 import PhotosPanel from './PhotosPanel'
+import TreatmentPlansPanel from './TreatmentPlansPanel'
+import SupplementationsPanel from './SupplementationsPanel'
+import FormulationsPanel from './FormulationsPanel'
+import LabsPanel from './LabsPanel'
+import MeasurementsPanel from './MeasurementsPanel'
 
-type Aba = 'resumo' | 'anamnese' | 'avaliacoes' | 'procedimentos' | 'fotos' | 'documentos' | 'financeiro'
+type Aba =
+  | 'resumo' | 'anamnese' | 'avaliacoes' | 'plano' | 'procedimentos' | 'medidas'
+  | 'suplementacao' | 'manipulacao' | 'exames' | 'fotos' | 'documentos' | 'financeiro'
 
 const ABAS: { key: Aba; label: string }[] = [
   { key: 'resumo', label: 'Resumo' },
   { key: 'anamnese', label: 'Anamnese' },
   { key: 'avaliacoes', label: 'Avaliações' },
+  { key: 'plano', label: 'Plano' },
   { key: 'procedimentos', label: 'Procedimentos' },
+  { key: 'medidas', label: 'Medidas' },
+  { key: 'suplementacao', label: 'Suplementação' },
+  { key: 'manipulacao', label: 'Manipulação' },
+  { key: 'exames', label: 'Exames' },
   { key: 'fotos', label: 'Fotos' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'financeiro', label: 'Financeiro' },
@@ -151,6 +163,11 @@ export default function PatientDetail() {
             professionalId={profile?.professional?.id}
           />
         )}
+        {aba === 'plano' && <TreatmentPlansPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
+        {aba === 'medidas' && <MeasurementsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
+        {aba === 'suplementacao' && <SupplementationsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
+        {aba === 'manipulacao' && <FormulationsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
+        {aba === 'exames' && <LabsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
         {aba === 'fotos' && (
           <PhotosPanel
             patientId={paciente.id}
