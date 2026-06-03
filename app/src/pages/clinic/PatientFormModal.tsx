@@ -35,12 +35,13 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
   const [lgpd, setLgpd] = useState<{ texto: string; versao: string }>({ texto: '', versao: '1' })
   const [senhaAcesso, setSenhaAcesso] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [provisionando, setProvisionando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   // resultado do provisionamento (mostra login + senha para entregar ao paciente)
   const [resultado, setResultado] = useState<{ id: string; login: string; senha: string; aviso?: string } | null>(null)
 
   useEffect(() => {
-    if (!editando) setSenhaAcesso(gerarSenhaProvisoria())
+    setSenhaAcesso(gerarSenhaProvisoria())
     getClinic()
       .then((c) => {
         const l = (c?.dados_empresa as { lgpd?: { texto?: string; versao?: string } })?.lgpd
@@ -57,6 +58,21 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
   }
 
   const idade = calcAge(form.nascimento)
+
+  async function handleRedefinirAcesso() {
+    if (!patient) return
+    if (!patient.cpf && !patient.email) { setErro('O paciente precisa de CPF ou e-mail para ter login.'); return }
+    if (senhaAcesso.length < 6) { setErro('A senha de acesso deve ter ao menos 6 caracteres.'); return }
+    setProvisionando(true)
+    setErro(null)
+    try {
+      const { login } = await provisionPatientAccess(patient.id, senhaAcesso)
+      setResultado({ id: patient.id, login, senha: senhaAcesso })
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível redefinir o acesso.')
+      setProvisionando(false)
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -164,17 +180,38 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
           <input className={field} value={form.alergias ?? ''} onChange={(e) => set('alergias', e.target.value)} />
         </div>
 
-        {/* Acesso do paciente (só no cadastro) */}
-        {!editando && (
-          <div className="sm:col-span-2 rounded-xl border border-primaria/20 bg-primaria/5 p-3">
-            <div className="mb-1 text-sm font-medium text-texto/80">Acesso ao sistema</div>
-            <p className="mb-2 text-xs text-texto/60">Senha provisória — o paciente será obrigado a trocá-la no 1º acesso. (Login por Google não exige senha.)</p>
-            <div className="flex gap-2">
-              <input className={field} value={senhaAcesso} onChange={(e) => setSenhaAcesso(e.target.value)} />
-              <button type="button" onClick={() => setSenhaAcesso(gerarSenhaProvisoria())} className="shrink-0 rounded-lg border border-black/10 px-3 text-sm hover:bg-black/5">Gerar</button>
-            </div>
+        {/* Acesso do paciente */}
+        <div className="sm:col-span-2 rounded-xl border border-primaria/20 bg-primaria/5 p-3">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-sm font-medium text-texto/80">Acesso ao sistema</span>
+            {editando && (
+              <span className={`text-xs ${patient?.auth_user_id ? 'text-emerald-600' : 'text-texto/50'}`}>
+                {patient?.auth_user_id ? 'login ativo' : 'sem login'}
+              </span>
+            )}
           </div>
-        )}
+          <p className="mb-2 text-xs text-texto/60">
+            {editando
+              ? patient?.auth_user_id
+                ? 'Redefina a senha de acesso — o paciente será obrigado a trocá-la no próximo login por senha.'
+                : 'Este paciente ainda não tem login. Provisione o acesso definindo uma senha.'
+              : 'Senha provisória — o paciente será obrigado a trocá-la no 1º acesso. (Login por Google não exige senha.)'}
+          </p>
+          <div className="flex gap-2">
+            <input className={field} value={senhaAcesso} onChange={(e) => setSenhaAcesso(e.target.value)} />
+            <button type="button" onClick={() => setSenhaAcesso(gerarSenhaProvisoria())} className="shrink-0 rounded-lg border border-black/10 px-3 text-sm hover:bg-black/5">Gerar</button>
+          </div>
+          {editando && (
+            <button
+              type="button"
+              onClick={handleRedefinirAcesso}
+              disabled={provisionando}
+              className="mt-2 rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {provisionando ? 'Processando…' : patient?.auth_user_id ? 'Redefinir senha de acesso' : 'Provisionar acesso'}
+            </button>
+          )}
+        </div>
 
         {/* Consentimento LGPD */}
         <div className="sm:col-span-2 rounded-xl border border-black/5 bg-black/[0.02] p-3">
