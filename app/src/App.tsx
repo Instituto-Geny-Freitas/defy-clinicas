@@ -1,0 +1,74 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useAuth } from '@/auth/AuthProvider'
+import Login from '@/pages/Login'
+import ClinicLayout from '@/layouts/ClinicLayout'
+import PatientLayout from '@/layouts/PatientLayout'
+import Dashboard from '@/pages/clinic/Dashboard'
+import PatientsList from '@/pages/clinic/PatientsList'
+import PatientDetail from '@/pages/clinic/PatientDetail'
+import Inventory from '@/pages/clinic/Inventory'
+import Agenda from '@/pages/clinic/Agenda'
+import Finance from '@/pages/clinic/Finance'
+import Settings from '@/pages/clinic/Settings'
+import PatientHome from '@/pages/patient/PatientHome'
+import Anamnese from '@/pages/patient/Anamnese'
+import PatientDocuments from '@/pages/patient/PatientDocuments'
+import PatientAppointments from '@/pages/patient/PatientAppointments'
+import PatientFinance from '@/pages/patient/PatientFinance'
+import PatientEvolution from '@/pages/patient/PatientEvolution'
+import Placeholder from '@/components/Placeholder'
+
+function FullScreen({ children }: { children: React.ReactNode }) {
+  return <div className="flex min-h-full items-center justify-center text-sm text-texto/60">{children}</div>
+}
+
+export default function App() {
+  const { session, profile, loading } = useAuth()
+
+  if (loading) return <FullScreen>Carregando…</FullScreen>
+  if (!session) return <Login />
+
+  // Conta autenticada mas ainda não vinculada a profissional/paciente.
+  if (profile?.kind === 'unknown') {
+    return (
+      <FullScreen>
+        <div className="max-w-sm rounded-xl border border-black/5 bg-white p-6 text-center">
+          <p className="text-texto">Sua conta ainda não está vinculada à clínica.</p>
+          <p className="mt-1 text-sm text-texto/60">Entre em contato com a recepção para concluir o cadastro.</p>
+        </div>
+      </FullScreen>
+    )
+  }
+
+  const isStaff = profile?.kind === 'staff'
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {isStaff ? (
+          <Route path="/clinica" element={<ClinicLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="agenda" element={<Agenda />} />
+            <Route path="pacientes" element={<PatientsList />} />
+            <Route path="pacientes/:id" element={<PatientDetail />} />
+            <Route path="documentos" element={<Placeholder titulo="Modelos de Documentos" descricao="CRUD de termos e orientações dinâmicos." />} />
+            <Route path="estoque" element={<Inventory />} />
+            <Route path="financeiro" element={<Finance />} />
+            <Route path="configuracoes" element={<Settings />} />
+          </Route>
+        ) : (
+          <Route path="/portal" element={<PatientLayout />}>
+            <Route index element={<PatientHome />} />
+            <Route path="agendamentos" element={<PatientAppointments />} />
+            <Route path="anamnese" element={<Anamnese />} />
+            <Route path="documentos" element={<PatientDocuments />} />
+            <Route path="evolucao" element={<PatientEvolution />} />
+            <Route path="financeiro" element={<PatientFinance />} />
+          </Route>
+        )}
+
+        <Route path="*" element={<Navigate to={isStaff ? '/clinica' : '/portal'} replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}

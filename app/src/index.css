@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Cores padrão (white-label) — sobrescritas em runtime pelo ThemeProvider
+   a partir de clinics.tema_cores. Formato: canais RGB separados por espaço.
+   Paleta profissional de dashboard: neutros slate + acento teal. */
+:root {
+  --cor-primaria: 15 118 110;   /* #0f766e teal-700 (acento) */
+  --cor-secundaria: 225 29 72;  /* #e11d48 rose-600 (alertas/destrutivo) */
+  --cor-fundo: 248 250 252;     /* #f8fafc slate-50 (fundo da página) */
+  --cor-texto: 15 23 42;        /* #0f172a slate-900 (texto) */
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: rgb(var(--cor-fundo));
+  color: rgb(var(--cor-texto));
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
