@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listDueNotifications, markNotificationRead, type AppNotification } from '@/lib/notifications'
+import { enablePush, pushSupported } from '@/lib/push'
 
 export default function PatientHome() {
   const { profile } = useAuth()
@@ -9,12 +10,19 @@ export default function PatientHome() {
   const patientId = profile?.patient?.id
   const wpp = clinic?.whatsapp?.replace(/\D/g, '')
   const [avisos, setAvisos] = useState<AppNotification[]>([])
+  const [pushMsg, setPushMsg] = useState<string | null>(null)
 
   function recarregar() {
     if (!patientId) return
     listDueNotifications(patientId).then(setAvisos).catch(() => {})
   }
   useEffect(recarregar, [patientId])
+
+  async function ativarPush() {
+    setPushMsg(null)
+    const r = await enablePush()
+    setPushMsg(r.ok ? 'Notificações ativadas neste aparelho! ✅' : r.motivo ?? 'Não foi possível ativar.')
+  }
 
   const naoLidos = avisos.filter((a) => a.status !== 'lido')
 
@@ -48,6 +56,17 @@ export default function PatientHome() {
         <h2 className="text-sm font-semibold text-texto">Próxima consulta</h2>
         <p className="mt-1 text-sm text-texto/60">Veja em “Agenda”.</p>
       </section>
+
+      {pushSupported() && (
+        <section className="rounded-xl border border-black/5 p-4">
+          <h2 className="text-sm font-semibold text-texto">Notificações</h2>
+          <p className="mt-1 text-sm text-texto/60">Receba avisos de cuidados e lembretes mesmo com o app fechado.</p>
+          <button onClick={ativarPush} className="mt-2 rounded-lg border border-primaria/30 px-3 py-2 text-sm font-medium text-primaria hover:bg-primaria/5">
+            Ativar notificações neste aparelho
+          </button>
+          {pushMsg && <p className="mt-2 text-sm text-texto/70">{pushMsg}</p>}
+        </section>
+      )}
 
       {wpp && (
         <a

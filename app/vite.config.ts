@@ -8,8 +8,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['favicon.svg'],
+      injectManifest: { globPatterns: ['**/*.{js,css,html,svg,png}'] },
       manifest: {
         name: 'Instituto Geny Freitas',
         short_name: 'Geny',
