@@ -1,0 +1,269 @@
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/auth/AuthProvider'
+import {
+  createTemplate,
+  listTemplates,
+  setTemplateActive,
+  slugify,
+  updateTemplate,
+  type DocumentTemplate,
+  type ReminderItem,
+  type TemplateField,
+  type TemplateInput,
+} from '@/lib/templates'
+import type { FieldType } from '@/forms/types'
+
+const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
+  { v: 'text', l: 'Texto' },
+  { v: 'textarea', l: 'Texto longo' },
+  { v: 'number', l: 'Número' },
+  { v: 'date', l: 'Data' },
+  { v: 'boolean', l: 'Sim/Não' },
+]
+
+export default function Templates() {
+  const { profile } = useAuth()
+  const clinicId = profile?.professional?.clinic_id
+  const [templates, setTemplates] = useState<DocumentTemplate[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [editando, setEditando] = useState<DocumentTemplate | 'novo' | null>(null)
+
+  function recarregar() {
+    listTemplates().then(setTemplates).catch(() => {}).finally(() => setCarregando(false))
+  }
+  useEffect(recarregar, [])
+
+  async function toggleAtivo(t: DocumentTemplate) {
+    await setTemplateActive(t.id, !t.ativo)
+    recarregar()
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-texto">Modelos de Documentos</h1>
+        <button onClick={() => setEditando('novo')} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+          + Novo modelo
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-texto/60">Termos e orientações com campos dinâmicos (CRUD).</p>
+
+      {editando && clinicId && (
+        <Editor
+          clinicId={clinicId}
+          createdBy={profile?.professional?.id}
+          template={editando === 'novo' ? null : editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => { setEditando(null); recarregar() }}
+        />
+      )}
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-black/5 bg-white">
+        {carregando ? (
+          <p className="p-6 text-sm text-texto/50">Carregando…</p>
+        ) : templates.length === 0 ? (
+          <p className="p-6 text-sm text-texto/50">Nenhum modelo. Crie o primeiro.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-black/[0.02] text-left text-texto/60">
+              <tr>
+                <th className="px-4 py-2 font-medium">Nome</th>
+                <th className="px-4 py-2 font-medium">Tipo</th>
+                <th className="px-4 py-2 font-medium">Versão</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {templates.map((t) => (
+                <tr key={t.id} className="border-t border-black/5">
+                  <td className="px-4 py-2 text-texto">{t.nome}</td>
+                  <td className="px-4 py-2 capitalize text-texto/70">{t.tipo}</td>
+                  <td className="px-4 py-2 text-texto/60">v{t.versao}</td>
+                  <td className="px-4 py-2">
+                    {t.ativo ? <span className="text-emerald-600">ativo</span> : <span className="text-texto/40">inativo</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => setEditando(t)} className="mr-3 text-xs font-medium text-primaria hover:underline">Editar</button>
+                    <button onClick={() => toggleAtivo(t)} className="text-xs font-medium text-texto/50 hover:underline">
+                      {t.ativo ? 'Desativar' : 'Ativar'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Editor({
+  clinicId,
+  createdBy,
+  template,
+  onClose,
+  onSaved,
+}: {
+  clinicId: string
+  createdBy?: string | null
+  template: DocumentTemplate | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [tipo, setTipo] = useState<TemplateInput['tipo']>(template?.tipo ?? 'termo')
+  const [nome, setNome] = useState(template?.nome ?? '')
+  const [procedimento, setProcedimento] = useState(template?.procedimento_rel ?? '')
+  const [requerAssinatura, setRequerAssinatura] = useState(template?.requer_assinatura ?? true)
+  const [corpo, setCorpo] = useState(template?.corpo ?? '')
+  const [campos, setCampos] = useState<TemplateField[]>(template?.schema ?? [])
+  const [lembretes, setLembretes] = useState<ReminderItem[]>(template?.reminder_schedule ?? [])
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  function addCampo() {
+    setCampos((c) => [...c, { key: '', label: '', type: 'text', required: false }])
+  }
+  function setCampo(i: number, patch: Partial<TemplateField>) {
+    setCampos((arr) => arr.map((f, idx) => {
+      if (idx !== i) return f
+      const next = { ...f, ...patch }
+      // auto-gera a chave a partir do rótulo se a chave ainda não foi editada
+      if (patch.label !== undefined && (!f.key || f.key === slugify(f.label))) next.key = slugify(patch.label)
+      return next
+    }))
+  }
+  function addLembrete() {
+    setLembretes((l) => [...l, { mensagem: '', offset_horas: 0 }])
+  }
+  function setLembrete(i: number, patch: Partial<ReminderItem>) {
+    setLembretes((arr) => arr.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+  }
+
+  async function salvar() {
+    if (!nome.trim()) { setErro('Informe o nome.'); return }
+    const camposValidos = campos.filter((c) => c.label.trim()).map((c) => ({ ...c, key: c.key || slugify(c.label) }))
+    const input: TemplateInput = {
+      tipo,
+      nome,
+      procedimento_rel: procedimento || null,
+      schema: camposValidos,
+      corpo,
+      reminder_schedule: tipo === 'orientacao' ? lembretes.filter((l) => l.mensagem.trim()) : [],
+      requer_assinatura: tipo === 'termo' ? requerAssinatura : false,
+    }
+    setSalvando(true)
+    setErro(null)
+    try {
+      if (template) await updateTemplate(template.id, template.versao, input)
+      else await createTemplate(clinicId, input, createdBy)
+      onSaved()
+    } catch {
+      setErro('Não foi possível salvar.')
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-texto">{template ? 'Editar modelo' : 'Novo modelo'}</h2>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Tipo</label>
+              <select className={field} value={tipo} onChange={(e) => setTipo(e.target.value as TemplateInput['tipo'])}>
+                <option value="termo">Termo (consentimento)</option>
+                <option value="orientacao">Orientação (cuidados)</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Nome *</label>
+              <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Procedimento relacionado (opcional)</label>
+              <input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} placeholder="ex.: toxina_botulinica" />
+            </div>
+            {tipo === 'termo' && (
+              <label className="mt-6 flex items-center gap-2 text-sm text-texto/80">
+                <input type="checkbox" checked={requerAssinatura} onChange={(e) => setRequerAssinatura(e.target.checked)} />
+                Exige assinatura do paciente
+              </label>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Corpo do documento</label>
+            <textarea rows={5} className={field} value={corpo} onChange={(e) => setCorpo(e.target.value)} placeholder="Use {{chave}} para inserir os campos dinâmicos." />
+            <p className="mt-1 text-xs text-texto/50">Placeholders: escreva <code>{'{{chave}}'}</code> para inserir o valor de um campo.</p>
+          </div>
+
+          {/* Campos dinâmicos */}
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-sm font-medium text-texto/80">Campos dinâmicos</label>
+              <button onClick={addCampo} className="text-xs font-medium text-primaria hover:underline">+ Adicionar campo</button>
+            </div>
+            {campos.length === 0 && <p className="text-xs text-texto/40">Sem campos (documento de texto fixo).</p>}
+            <div className="space-y-2">
+              {campos.map((c, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/5 p-2">
+                  <input className="flex-1 rounded-lg border border-black/10 px-2 py-1.5 text-sm" placeholder="Rótulo" value={c.label} onChange={(e) => setCampo(i, { label: e.target.value })} />
+                  <input className="w-32 rounded-lg border border-black/10 px-2 py-1.5 text-xs text-texto/60" placeholder="chave" value={c.key} onChange={(e) => setCampo(i, { key: e.target.value })} />
+                  <select className="rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.type} onChange={(e) => setCampo(i, { type: e.target.value as FieldType })}>
+                    {TIPOS_CAMPO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                  </select>
+                  <label className="flex items-center gap-1 text-xs text-texto/60">
+                    <input type="checkbox" checked={!!c.required} onChange={(e) => setCampo(i, { required: e.target.checked })} /> obrig.
+                  </label>
+                  <button onClick={() => setCampos((a) => a.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Lembretes (só orientação) */}
+          {tipo === 'orientacao' && (
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="text-sm font-medium text-texto/80">Lembretes automáticos</label>
+                <button onClick={addLembrete} className="text-xs font-medium text-primaria hover:underline">+ Adicionar lembrete</button>
+              </div>
+              {lembretes.length === 0 && <p className="text-xs text-texto/40">Sem lembretes programados.</p>}
+              <div className="space-y-2">
+                {lembretes.map((r, i) => (
+                  <div key={i} className="space-y-2 rounded-lg border border-black/5 p-2">
+                    <textarea rows={2} className={field} placeholder="Mensagem do lembrete" value={r.mensagem} onChange={(e) => setLembrete(i, { mensagem: e.target.value })} />
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-texto/60">
+                      <span>Após (horas):</span>
+                      <input type="number" className="w-20 rounded-lg border border-black/10 px-2 py-1" value={r.offset_horas ?? 0} onChange={(e) => setLembrete(i, { offset_horas: Number(e.target.value) })} />
+                      <span>ou repetir por (dias):</span>
+                      <input type="number" className="w-20 rounded-lg border border-black/10 px-2 py-1" value={r.por_dias ?? 0} onChange={(e) => setLembrete(i, { por_dias: Number(e.target.value) || undefined, repetir: e.target.value ? 'diario' : undefined })} />
+                      <button onClick={() => setLembretes((a) => a.filter((_, idx) => idx !== i))} className="ml-auto px-1 text-texto/40 hover:text-secundaria">remover</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {erro && <p className="text-sm text-secundaria">{erro}</p>}
+
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+              {salvando ? 'Salvando…' : 'Salvar modelo'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -10,13 +10,13 @@ import Inventory from '@/pages/clinic/Inventory'
 import Agenda from '@/pages/clinic/Agenda'
 import Finance from '@/pages/clinic/Finance'
 import Settings from '@/pages/clinic/Settings'
+import Templates from '@/pages/clinic/Templates'
 import PatientHome from '@/pages/patient/PatientHome'
 import Anamnese from '@/pages/patient/Anamnese'
 import PatientDocuments from '@/pages/patient/PatientDocuments'
 import PatientAppointments from '@/pages/patient/PatientAppointments'
 import PatientFinance from '@/pages/patient/PatientFinance'
 import PatientEvolution from '@/pages/patient/PatientEvolution'
-import Placeholder from '@/components/Placeholder'
 
 function FullScreen({ children }: { children: React.ReactNode }) {
   return <div className="flex min-h-full items-center justify-center text-sm text-texto/60">{children}</div>
@@ -51,7 +51,7 @@ export default function App() {
             <Route path="agenda" element={<Agenda />} />
             <Route path="pacientes" element={<PatientsList />} />
             <Route path="pacientes/:id" element={<PatientDetail />} />
-            <Route path="documentos" element={<Placeholder titulo="Modelos de Documentos" descricao="CRUD de termos e orientações dinâmicos." />} />
+            <Route path="documentos" element={<Templates />} />
             <Route path="estoque" element={<Inventory />} />
             <Route path="financeiro" element={<Finance />} />
             <Route path="configuracoes" element={<Settings />} />
