@@ -117,6 +117,8 @@ Menu lateral (no celular, abre pelo ☰):
   - **Acesso ao sistema:** defina a **senha provisória** (botão "Gerar"). Ao salvar,
     o sistema cria o login do paciente e mostra **login + senha** para você entregar.
   - **Consentimento LGPD:** marque quando o paciente consentir (registra data e versão).
+  - **Limite de relatórios** (ao editar): quantos relatórios o paciente pode manter
+    armazenados — controle de armazenamento (o paciente não pode alterar esse limite).
 
 ### 5.2 Ficha do paciente (abas)
 Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro
@@ -136,6 +138,7 @@ Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro
 | **Fotos** | Fotos clínicas antes/depois/evolução (bucket privado) |
 | **Documentos** | Emitir termos/orientações, **assinar**, **gerar PDF** e **editar** |
 | **Financeiro** | Orçamentos (**vinculados a um Plano**), pagamentos, saldo e **produtos utilizados** |
+| **Relatórios** | Relatórios que o **paciente gerou** (procedimentos, manipulações, medidas, suplementações) — **visualizar e baixar** |
 
 ### 5.3 Encadeamento Plano → Orçamento → Procedimento
 Para manter a integridade dos dados, o fluxo recomendado é:
@@ -216,6 +219,9 @@ Indicadores do **mês atual** e visão geral:
 - **Anamnese:** preencher a própria ficha antes da consulta.
 - **Documentos:** ler e **assinar** termos; dar ciência em orientações; gerar PDF.
 - **Evolução:** gráfico de medidas, **enviar resultados de exame** e ver fotos.
+- **Relatórios:** escolhe **seções** (procedimentos, manipulações, medidas, suplementações)
+  e **período**, gera um **PDF** (download + guardado no perfil) e gerencia os anteriores.
+  Limitado pela quantidade definida pelo admin.
 - **Financeiro:** orçamentos, saldos e produtos utilizados.
 
 ---
