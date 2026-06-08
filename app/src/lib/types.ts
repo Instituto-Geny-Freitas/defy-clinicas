@@ -37,6 +37,7 @@ export interface Patient {
   consentimento_lgpd_em: string | null
   consentimento_lgpd_versao: string | null
   senha_provisoria: boolean
+  limite_relatorios: number
 }
 
 export interface ClinicTheme {

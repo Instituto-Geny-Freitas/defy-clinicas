@@ -8,6 +8,7 @@ const NAV = [
   { to: '/portal/anamnese', label: 'Anamnese' },
   { to: '/portal/documentos', label: 'Documentos' },
   { to: '/portal/evolucao', label: 'Evolução' },
+  { to: '/portal/relatorios', label: 'Relatórios' },
   { to: '/portal/financeiro', label: 'Financeiro' },
 ]
 

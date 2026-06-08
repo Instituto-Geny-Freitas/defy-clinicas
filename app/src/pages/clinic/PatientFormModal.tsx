@@ -34,6 +34,7 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
   const [consentido, setConsentido] = useState(!!patient?.consentimento_lgpd_em)
   const [lgpd, setLgpd] = useState<{ texto: string; versao: string }>({ texto: '', versao: '1' })
   const [senhaAcesso, setSenhaAcesso] = useState('')
+  const [limite, setLimite] = useState(patient?.limite_relatorios ?? 10)
   const [salvando, setSalvando] = useState(false)
   const [provisionando, setProvisionando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -91,7 +92,7 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
           : {}
     try {
       if (editando && patient) {
-        await updatePatient(patient.id, { ...form, ...consentPatch })
+        await updatePatient(patient.id, { ...form, ...consentPatch, limite_relatorios: limite })
         onSaved(patient.id)
         return
       }
@@ -212,6 +213,15 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
             </button>
           )}
         </div>
+
+        {/* Gestão (admin) */}
+        {editando && (
+          <div className="sm:col-span-2 rounded-xl border border-black/5 bg-black/[0.02] p-3">
+            <label className="mb-1 block text-sm font-medium text-texto/80">Limite de relatórios</label>
+            <p className="mb-2 text-xs text-texto/60">Quantos relatórios o paciente pode manter armazenados (controle de armazenamento).</p>
+            <input type="number" min={0} className="w-28 rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" value={limite} onChange={(e) => setLimite(Number(e.target.value))} />
+          </div>
+        )}
 
         {/* Consentimento LGPD */}
         <div className="sm:col-span-2 rounded-xl border border-black/5 bg-black/[0.02] p-3">

@@ -16,10 +16,11 @@ import SupplementationsPanel from './SupplementationsPanel'
 import FormulationsPanel from './FormulationsPanel'
 import LabsPanel from './LabsPanel'
 import MeasurementsPanel from './MeasurementsPanel'
+import PatientReportsPanel from './PatientReportsPanel'
 
 type Aba =
   | 'resumo' | 'anamnese' | 'avaliacoes' | 'plano' | 'procedimentos' | 'medidas'
-  | 'suplementacao' | 'manipulacao' | 'exames' | 'fotos' | 'documentos' | 'financeiro'
+  | 'suplementacao' | 'manipulacao' | 'exames' | 'fotos' | 'documentos' | 'financeiro' | 'relatorios'
 
 const ABAS: { key: Aba; label: string }[] = [
   { key: 'resumo', label: 'Resumo' },
@@ -34,6 +35,7 @@ const ABAS: { key: Aba; label: string }[] = [
   { key: 'fotos', label: 'Fotos' },
   { key: 'documentos', label: 'Documentos' },
   { key: 'financeiro', label: 'Financeiro' },
+  { key: 'relatorios', label: 'Relatórios' },
 ]
 
 const TIPOS_AVALIACAO: { key: AssessmentType; label: string }[] = [
@@ -189,6 +191,7 @@ export default function PatientDetail() {
             professionalId={profile?.professional?.id}
           />
         )}
+        {aba === 'relatorios' && <PatientReportsPanel patientId={paciente.id} />}
       </div>
     </div>
   )
