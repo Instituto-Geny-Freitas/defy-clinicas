@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
   createTreatmentPlan,
+  deleteTreatmentPlan,
   listSnippets,
   listTreatmentPlans,
   suggestPlanIA,
+  updateTreatmentPlan,
   type TextSnippet,
   type TreatmentPlan,
 } from '@/lib/treatmentPlans'
@@ -15,7 +17,7 @@ const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outlin
 export default function TreatmentPlansPanel({ patientId, clinicId, professionalId }: Props) {
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [carregando, setCarregando] = useState(true)
-  const [modal, setModal] = useState(false)
+  const [editando, setEditando] = useState<TreatmentPlan | 'novo' | null>(null)
 
   function recarregar() {
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {}).finally(() => setCarregando(false))
@@ -26,9 +28,16 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-semibold text-texto">Planos de tratamento</h3>
-        <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo plano</button>
+        <button onClick={() => setEditando('novo')} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo plano</button>
       </div>
-      {modal && <Modal clinicId={clinicId} patientId={patientId} professionalId={professionalId} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
+      {editando && (
+        <Modal
+          clinicId={clinicId} patientId={patientId} professionalId={professionalId}
+          plano={editando === 'novo' ? null : editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => { setEditando(null); recarregar() }}
+        />
+      )}
       {carregando ? <p className="text-sm text-texto/50">Carregando…</p> : planos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum plano de tratamento.</p>
       ) : (
@@ -37,7 +46,11 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
               <div className="flex items-center justify-between">
                 <div className="font-medium text-texto">{p.titulo || 'Plano de tratamento'}</div>
-                <div className="text-xs text-texto/50">{new Date(p.data).toLocaleDateString('pt-BR')}</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-texto/50">{new Date(p.data).toLocaleDateString('pt-BR')}</div>
+                  <button onClick={() => setEditando(p)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
+                  <button onClick={async () => { if (confirm('Excluir este plano?')) { await deleteTreatmentPlan(p.id); recarregar() } }} className="text-xs text-secundaria hover:underline">Excluir</button>
+                </div>
               </div>
               {p.texto && <p className="mt-1 whitespace-pre-wrap text-sm text-texto/70">{p.texto}</p>}
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-texto/50">
@@ -53,12 +66,13 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
   )
 }
 
-function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; onClose: () => void; onSaved: () => void }) {
-  const [titulo, setTitulo] = useState('')
-  const [texto, setTexto] = useState('')
-  const [sessoes, setSessoes] = useState('')
-  const [freq, setFreq] = useState('')
-  const [valor, setValor] = useState('')
+function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; plano?: TreatmentPlan | null; onClose: () => void; onSaved: () => void }) {
+  const editando = !!plano
+  const [titulo, setTitulo] = useState(plano?.titulo ?? '')
+  const [texto, setTexto] = useState(plano?.texto ?? '')
+  const [sessoes, setSessoes] = useState(plano?.num_sessoes != null ? String(plano.num_sessoes) : '')
+  const [freq, setFreq] = useState(plano?.frequencia ?? '')
+  const [valor, setValor] = useState(plano?.valor_total != null ? String(plano.valor_total) : '')
   const [snippets, setSnippets] = useState<TextSnippet[]>([])
   const [salvando, setSalvando] = useState(false)
   const [iaInstrucao, setIaInstrucao] = useState('')
@@ -88,17 +102,19 @@ function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clin
   async function salvar() {
     if (!texto.trim()) return
     setSalvando(true)
+    const dados = {
+      titulo: titulo || null, texto,
+      num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null, valor_total: valor ? Number(valor) : null,
+    }
     try {
-      await createTreatmentPlan({
-        clinicId, patientId, professionalId, titulo: titulo || null, texto,
-        num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null, valor_total: valor ? Number(valor) : null,
-      })
+      if (editando && plano) await updateTreatmentPlan(plano.id, dados)
+      else await createTreatmentPlan({ clinicId, patientId, professionalId, ...dados, texto })
       onSaved()
     } catch { setSalvando(false) }
   }
 
   return (
-    <Shell titulo="Novo plano de tratamento" onClose={onClose}>
+    <Shell titulo={editando ? 'Editar plano de tratamento' : 'Novo plano de tratamento'} onClose={onClose}>
       <div className="space-y-3">
         <div><label className="mb-1 block text-sm text-texto/70">Título</label><input className={field} value={titulo} onChange={(e) => setTitulo(e.target.value)} /></div>
         {snippets.length > 0 && (

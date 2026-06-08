@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { listProcedures, createProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, type InventoryItem } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
+import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
+import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 
 interface Props {
   patientId: string
@@ -84,23 +86,37 @@ function RegistrarModal({
 }) {
   const [estoque, setEstoque] = useState<InventoryItem[]>([])
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
+  const [planos, setPlanos] = useState<TreatmentPlan[]>([])
+  const [tipos, setTipos] = useState<ProcedureType[]>([])
+  const [planoId, setPlanoId] = useState('')
   const [quoteId, setQuoteId] = useState('')
+  const [procSelect, setProcSelect] = useState('') // valor do select de tipo
   const [procedimento, setProcedimento] = useState('')
   const [data, setData] = useState(new Date().toISOString().slice(0, 10))
   const [regiao, setRegiao] = useState('')
   const [obs, setObs] = useState('')
   const [produtos, setProdutos] = useState<UsedProduct[]>([])
   const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     listInventory().then(setEstoque).catch(() => {})
-    listQuotes(patientId)
-      .then((qs) => {
-        setOrcamentos(qs)
-        if (qs.length > 0) setQuoteId(qs[0].id) // pré-seleciona o mais recente
-      })
-      .catch(() => {})
+    listProcedureTypes().then(setTipos).catch(() => {})
+    listTreatmentPlans(patientId).then((ps) => { setPlanos(ps); if (ps.length) setPlanoId(ps[0].id) }).catch(() => {})
+    listQuotes(patientId).then(setOrcamentos).catch(() => {})
   }, [patientId])
+
+  // Orçamentos do plano selecionado (ou todos, se nenhum plano escolhido).
+  const orcamentosDoPlano = planoId ? orcamentos.filter((q) => q.treatment_plan_id === planoId) : orcamentos
+  // Mantém o orçamento selecionado coerente com o plano.
+  useEffect(() => {
+    if (quoteId && !orcamentosDoPlano.some((q) => q.id === quoteId)) setQuoteId('')
+    if (!quoteId && orcamentosDoPlano.length === 1) setQuoteId(orcamentosDoPlano[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planoId, orcamentos])
+
+  const planoSel = planos.find((p) => p.id === planoId)
+  const orcSel = orcamentos.find((q) => q.id === quoteId)
 
   function addProduto() {
     setProdutos((p) => [...p, { inventory_id: '', produto: '', qtd: 1 }])
@@ -119,7 +135,9 @@ function RegistrarModal({
   }
 
   async function salvar() {
-    if (!procedimento.trim()) return
+    setErro(null)
+    if (!procedimento.trim()) { setErro('Informe o procedimento.'); return }
+    if (orcamentos.length > 0 && !quoteId) { setErro('Selecione o orçamento (de um plano) ao qual este procedimento pertence.'); return }
     setSalvando(true)
     try {
       await createProcedure({
@@ -152,24 +170,56 @@ function RegistrarModal({
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-sm text-texto/70">Procedimento *</label>
-            <input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} placeholder="Ex.: Toxina botulínica" />
+            <select
+              className={field}
+              value={procSelect}
+              onChange={(e) => {
+                setProcSelect(e.target.value)
+                setProcedimento(e.target.value === '__outro__' ? '' : e.target.value)
+              }}
+            >
+              <option value="">Selecione…</option>
+              {tipos.map((t) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
+              <option value="__outro__">Outro (digitar)…</option>
+            </select>
+            {procSelect === '__outro__' && (
+              <input className={`${field} mt-2`} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} placeholder="Descreva o procedimento" />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className="mb-1 block text-sm text-texto/70">Data</label><input type="date" className={field} value={data} onChange={(e) => setData(e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Região</label><input className={field} value={regiao} onChange={(e) => setRegiao(e.target.value)} /></div>
           </div>
-          <div>
-            <label className="mb-1 block text-sm text-texto/70">Orçamento relacionado</label>
-            <select className={field} value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
-              <option value="">— Sem vínculo —</option>
-              {orcamentos.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {new Date(q.created_at).toLocaleDateString('pt-BR')} · {brl(q.valor_total)}
-                  {q.itens?.[0] ? ` · ${q.itens[0].descricao}` : ''}
-                </option>
-              ))}
-            </select>
-            {orcamentos.length === 0 && <p className="mt-1 text-xs text-texto/40">Nenhum orçamento. Crie um na aba Financeiro para vincular.</p>}
+
+          {/* Vínculo: Plano -> Orçamento */}
+          <div className="rounded-xl border border-primaria/20 bg-primaria/5 p-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm text-texto/70">Plano de tratamento</label>
+                <select className={field} value={planoId} onChange={(e) => setPlanoId(e.target.value)}>
+                  <option value="">— Todos —</option>
+                  {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {new Date(p.data).toLocaleDateString('pt-BR')}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-texto/70">Orçamento *</label>
+                <select className={field} value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
+                  <option value="">— Selecione —</option>
+                  {orcamentosDoPlano.map((q) => (
+                    <option key={q.id} value={q.id}>
+                      {new Date(q.created_at).toLocaleDateString('pt-BR')} · {brl(q.valor_total)}{q.itens?.[0] ? ` · ${q.itens[0].descricao}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-texto/70">
+              {orcSel
+                ? <>Registrando em: <strong>{planoSel?.titulo || (orcSel.treatment_plan_id ? 'Plano vinculado' : 'Sem plano')}</strong> › Orçamento de {new Date(orcSel.created_at).toLocaleDateString('pt-BR')} ({brl(orcSel.valor_total)})</>
+                : orcamentos.length === 0
+                  ? 'Nenhum orçamento. Crie um Plano e um Orçamento (aba Financeiro) para vincular.'
+                  : 'Selecione o orçamento ao qual este procedimento pertence.'}
+            </p>
           </div>
           <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
 
@@ -207,6 +257,7 @@ function RegistrarModal({
             </div>
           </div>
 
+          {erro && <p className="text-sm text-secundaria">{erro}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
             <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">

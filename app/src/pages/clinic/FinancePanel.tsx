@@ -13,6 +13,7 @@ import {
   type QuoteItem,
 } from '@/lib/finance'
 import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
+import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 
 interface Props {
   patientId: string
@@ -134,7 +135,13 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
 }) {
   const [itens, setItens] = useState<QuoteItem[]>([{ descricao: '', qtd: 1, valor_unit: 0, total: 0 }])
   const [desconto, setDesconto] = useState(0)
+  const [planos, setPlanos] = useState<TreatmentPlan[]>([])
+  const [planoId, setPlanoId] = useState('')
   const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    listTreatmentPlans(patientId).then((ps) => { setPlanos(ps); if (ps.length) setPlanoId(ps[0].id) }).catch(() => {})
+  }, [patientId])
 
   const bruto = calcItensTotal(itens)
   const total = Math.max(0, bruto - desconto)
@@ -148,7 +155,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
     if (validos.length === 0) return
     setSalvando(true)
     try {
-      await createQuote({ clinicId, patientId, professionalId, itens: validos, desconto })
+      await createQuote({ clinicId, patientId, professionalId, treatmentPlanId: planoId || null, itens: validos, desconto })
       onSaved()
     } catch {
       setSalvando(false)
@@ -161,6 +168,15 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-texto">Novo orçamento</h2>
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+
+        <div className="mb-3">
+          <label className="mb-1 block text-sm text-texto/70">Plano de tratamento (vínculo)</label>
+          <select className={field} value={planoId} onChange={(e) => setPlanoId(e.target.value)}>
+            <option value="">— Sem vínculo —</option>
+            {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {new Date(p.data).toLocaleDateString('pt-BR')}</option>)}
+          </select>
+          {planos.length === 0 && <p className="mt-1 text-xs text-texto/40">Crie um plano na aba "Plano" para vincular.</p>}
         </div>
 
         <div className="space-y-2">

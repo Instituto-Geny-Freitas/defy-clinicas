@@ -62,6 +62,19 @@ export async function suggestPlanIA(patientId: string, instrucao?: string): Prom
   return (data as { texto: string }).texto
 }
 
+export async function updateTreatmentPlan(
+  id: string,
+  patch: { titulo?: string | null; texto?: string; num_sessoes?: number | null; frequencia?: string | null; valor_total?: number | null },
+): Promise<void> {
+  const { error } = await supabase.from('treatment_plans').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteTreatmentPlan(id: string): Promise<void> {
+  const { error } = await supabase.from('treatment_plans').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createTreatmentPlan(args: CreateArgs): Promise<TreatmentPlan> {
   const { data, error } = await supabase
     .from('treatment_plans')

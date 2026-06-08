@@ -8,6 +8,7 @@ import {
   type FormulationPrescription,
 } from '@/lib/formulations'
 import { Shell, Footer } from './TreatmentPlansPanel'
+import { ATIVO_CATEGORIAS, listActiveIngredients, type ActiveIngredient, type AtivoCategoria } from '@/lib/domains'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -57,9 +58,16 @@ function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clin
   const [salvarBib, setSalvarBib] = useState(false)
   const [nomeBib, setNomeBib] = useState('')
   const [biblioteca, setBiblioteca] = useState<FormulationLib[]>([])
+  const [catalogo, setCatalogo] = useState<ActiveIngredient[]>([])
+  const [catFiltro, setCatFiltro] = useState<AtivoCategoria | ''>('')
   const [salvando, setSalvando] = useState(false)
 
-  useEffect(() => { listFormulationLibrary().then(setBiblioteca).catch(() => {}) }, [])
+  useEffect(() => {
+    listFormulationLibrary().then(setBiblioteca).catch(() => {})
+    listActiveIngredients().then(setCatalogo).catch(() => {})
+  }, [])
+
+  const ativosFiltrados = catalogo.filter((a) => !catFiltro || a.categoria === catFiltro)
 
   function carregarDaBiblioteca(id: string) {
     const f = biblioteca.find((x) => x.id === id)
@@ -94,10 +102,23 @@ function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clin
             <label className="text-sm text-texto/70">Composição</label>
             <button onClick={() => setAtivos((a) => [...a, { ativo: '', quantidade: '', unidade: 'mg' }])} className="text-xs font-medium text-primaria hover:underline">+ Ativo</button>
           </div>
+          {catalogo.length > 0 && (
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-xs text-texto/50">Filtrar ativos:</span>
+              <select className="rounded-lg border border-black/10 px-2 py-1 text-xs" value={catFiltro} onChange={(e) => setCatFiltro(e.target.value as AtivoCategoria | '')}>
+                <option value="">Todas as categorias</option>
+                {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+              </select>
+            </div>
+          )}
+          {/* Lista de ativos do catálogo, filtrada pela categoria escolhida */}
+          <datalist id="ativos-catalogo">
+            {ativosFiltrados.map((a) => <option key={a.id} value={a.nome} />)}
+          </datalist>
           <div className="space-y-2">
             {ativos.map((a, i) => (
               <div key={i} className="flex gap-2">
-                <input className={field} placeholder="Ativo" value={a.ativo} onChange={(e) => setAtivo(i, { ativo: e.target.value })} />
+                <input list="ativos-catalogo" className={field} placeholder="Ativo (escolha ou digite)" value={a.ativo} onChange={(e) => setAtivo(i, { ativo: e.target.value })} />
                 <input className="w-24 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Qtd" value={a.quantidade} onChange={(e) => setAtivo(i, { quantidade: e.target.value })} />
                 <input className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="un." value={a.unidade} onChange={(e) => setAtivo(i, { unidade: e.target.value })} />
                 <button onClick={() => setAtivos((arr) => arr.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>

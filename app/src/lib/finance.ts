@@ -15,6 +15,7 @@ export interface Quote {
   id: string
   clinic_id: string
   patient_id: string
+  treatment_plan_id: string | null
   numero: string | null
   itens: QuoteItem[]
   valor_bruto: number
@@ -69,6 +70,7 @@ interface CreateQuoteArgs {
   clinicId: string
   patientId: string
   professionalId?: string | null
+  treatmentPlanId?: string | null
   itens: QuoteItem[]
   desconto: number
 }
@@ -83,6 +85,7 @@ export async function createQuote(args: CreateQuoteArgs): Promise<Quote> {
       clinic_id: args.clinicId,
       patient_id: args.patientId,
       professional_id: args.professionalId ?? null,
+      treatment_plan_id: args.treatmentPlanId ?? null,
       itens,
       valor_bruto,
       desconto: args.desconto || 0,

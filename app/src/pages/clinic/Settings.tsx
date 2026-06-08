@@ -19,9 +19,21 @@ import {
   type Snippet,
 } from '@/lib/settings'
 import { gerarSenhaProvisoria } from '@/lib/patients'
+import {
+  ATIVO_CATEGORIAS,
+  createActiveIngredient,
+  createProcedureType,
+  deleteActiveIngredient,
+  deleteProcedureType,
+  listActiveIngredients,
+  listProcedureTypes,
+  type ActiveIngredient,
+  type AtivoCategoria,
+  type ProcedureType,
+} from '@/lib/domains'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'procedimentos' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -46,6 +58,8 @@ export default function Settings() {
           { k: 'equipe', l: 'Equipe' },
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
+          { k: 'ativos', l: 'Ativos' },
+          { k: 'procedimentos', l: 'Procedimentos' },
           { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
           <button
@@ -64,7 +78,120 @@ export default function Settings() {
       {sec === 'equipe' && <EquipeSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
       {sec === 'textos' && <TextosSection clinicId={clinicId} />}
+      {sec === 'ativos' && <AtivosSection clinicId={clinicId} />}
+      {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
+    </div>
+  )
+}
+
+// --- Ativos de composição ---------------------------------------------------
+function AtivosSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<ActiveIngredient[]>([])
+  const [filtro, setFiltro] = useState<AtivoCategoria | ''>('')
+  const [busca, setBusca] = useState('')
+  const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'gerais' as AtivoCategoria, apresentacao: '' })
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listActiveIngredients().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  const visiveis = itens.filter((a) => (!filtro || a.categoria === filtro) && a.nome.toLowerCase().includes(busca.toLowerCase()))
+
+  async function salvar() {
+    if (!form.nome.trim()) return
+    setSalvando(true)
+    try { await createActiveIngredient(clinicId, form); setForm({ codigo: '', nome: '', categoria: form.categoria, apresentacao: '' }); recarregar() }
+    finally { setSalvando(false) }
+  }
+  async function remover(id: string) { if (confirm('Excluir este ativo?')) { await deleteActiveIngredient(id); recarregar() } }
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo ativo</h3>
+        <p className="mb-3 text-xs text-texto/50">Usados na composição das fórmulas manipuladas (com filtro por categoria).</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div><label className="mb-1 block text-sm text-texto/70">Código</label><input className={field} value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} /></div>
+          <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Nome / composição *</label><input className={field} value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Categoria</label>
+            <select className={field} value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value as AtivoCategoria })}>
+              {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-4"><label className="mb-1 block text-sm text-texto/70">Apresentação / via</label><input className={field} value={form.apresentacao} onChange={(e) => setForm({ ...form, apresentacao: e.target.value })} /></div>
+        </div>
+        <div className="mt-3 flex justify-end"><button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Adicionar'}</button></div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={filtro} onChange={(e) => setFiltro(e.target.value as AtivoCategoria | '')}>
+          <option value="">Todas as categorias</option>
+          {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+        </select>
+        <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm" placeholder="Buscar ativo…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <span className="text-xs text-texto/40">{visiveis.length} itens</span>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-black/[0.02] text-left text-texto/60"><tr><th className="px-3 py-2 font-medium">Cód</th><th className="px-3 py-2 font-medium">Nome</th><th className="px-3 py-2 font-medium">Categoria</th><th className="px-3 py-2"></th></tr></thead>
+          <tbody>
+            {visiveis.slice(0, 200).map((a) => (
+              <tr key={a.id} className="border-t border-black/5">
+                <td className="px-3 py-1.5 text-texto/50">{a.codigo ?? '—'}</td>
+                <td className="px-3 py-1.5 text-texto">{a.nome}</td>
+                <td className="px-3 py-1.5 text-texto/60">{ATIVO_CATEGORIAS.find((c) => c.v === a.categoria)?.l}</td>
+                <td className="px-3 py-1.5 text-right"><button onClick={() => remover(a.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// --- Tipos de procedimento --------------------------------------------------
+function ProcedimentosSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<ProcedureType[]>([])
+  const [nome, setNome] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listProcedureTypes().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    try { await createProcedureType(clinicId, nome); setNome(''); recarregar() } finally { setSalvando(false) }
+  }
+  async function remover(id: string) { if (confirm('Excluir este tipo de procedimento?')) { await deleteProcedureType(id); recarregar() } }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo tipo de procedimento</h3>
+        <p className="mb-3 text-xs text-texto/50">Usados no campo Procedimento ao registrar um atendimento.</p>
+        <div className="flex gap-2">
+          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Skinbooster PDRN" />
+          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <tbody>
+            {itens.map((p) => (
+              <tr key={p.id} className="border-t border-black/5 first:border-t-0">
+                <td className="px-4 py-2 text-texto">{p.nome}</td>
+                <td className="px-4 py-2 text-right"><button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+              </tr>
+            ))}
+            {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
