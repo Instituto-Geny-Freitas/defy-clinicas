@@ -62,7 +62,17 @@ Acesse **Configurações** (menu lateral, somente admin). Há 5 abas:
 - Crie/edite **modelos de texto** por categoria (ex.: Plano de tratamento). Eles
   ficam disponíveis para inserir com um clique ao montar planos e documentos.
 
-### 2.5 LGPD
+### 2.5 Ativos (composição de fórmulas)
+- Catálogo de **ativos** usados na composição das fórmulas manipuladas, classificados em
+  **Ativos Gerais, Vitaminas, Esclerosantes e Anestésicos**.
+- Cadastre/exclua ativos e use o **filtro por categoria** + busca. O catálogo já vem
+  pré-carregado; ajuste conforme sua necessidade.
+
+### 2.6 Tipos de Procedimento
+- Lista dos **procedimentos** oferecidos (ex.: Skinbooster PDRN, Toxina botulínica…),
+  usada como domínio ao registrar um atendimento. Cadastre/exclua livremente.
+
+### 2.7 LGPD
 - Edite o **texto** e a **versão** do termo de consentimento de tratamento de dados,
   apresentado no cadastro do paciente.
 
@@ -117,15 +127,26 @@ Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro
 | **Resumo** | Dados pessoais, idade, status do consentimento LGPD |
 | **Anamnese** | Ficha clínica e estética (também pode ser preenchida pelo paciente no portal) |
 | **Avaliações** | Fichas **Dermato Funcional**, **Capilar** e **Corporal** (com escalas e perimetria) |
-| **Plano** | Plano de tratamento — texto livre, **textos-padrão** e **✨ Sugerir com IA** |
-| **Procedimentos** | Registra o atendimento; ao escolher **produtos utilizados**, dá **baixa no estoque** e vincula ao **orçamento** |
+| **Plano** | Plano de tratamento — texto livre, **textos-padrão** e **✨ Sugerir com IA**. Permite **editar** e **excluir** planos |
+| **Procedimentos** | Registra o atendimento; o **Procedimento** vem do domínio; **vincula a um Orçamento de um Plano** e dá **baixa no estoque** |
 | **Medidas** | Peso, IMC, gordura etc. por sessão, com **gráfico de evolução** |
 | **Suplementação** | Suplementos prescritos (medicação, via, validade, lote) |
-| **Manipulação** | Fórmulas manipuladas (composição de ativos + posologia + biblioteca) |
+| **Manipulação** | Fórmulas manipuladas — composição via **catálogo de ativos com filtro por categoria** + posologia + biblioteca |
 | **Exames** | Requisição (painel padrão de 40 exames + extras) e resultados enviados |
 | **Fotos** | Fotos clínicas antes/depois/evolução (bucket privado) |
 | **Documentos** | Emitir termos/orientações, **assinar**, **gerar PDF** e **editar** |
-| **Financeiro** | Orçamentos, pagamentos, saldo e **produtos utilizados** por orçamento |
+| **Financeiro** | Orçamentos (**vinculados a um Plano**), pagamentos, saldo e **produtos utilizados** |
+
+### 5.3 Encadeamento Plano → Orçamento → Procedimento
+Para manter a integridade dos dados, o fluxo recomendado é:
+1. **Crie o Plano** de tratamento (aba Plano).
+2. **Crie o Orçamento** (aba Financeiro) e **vincule-o ao Plano**.
+3. Ao **Registrar o Procedimento**, escolha o **Plano** e o **Orçamento** correspondente
+   (o orçamento é obrigatório quando já existe algum). O sistema mostra
+   *"Registrando em: Plano X › Orçamento Y"*.
+
+Assim, cada procedimento (e os produtos utilizados nele) fica ligado a um orçamento,
+que por sua vez pertence a um plano — e tudo aparece no **Financeiro** do paciente.
 
 ---
 
