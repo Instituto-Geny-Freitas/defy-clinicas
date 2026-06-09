@@ -21,19 +21,31 @@ import {
 import { gerarSenhaProvisoria } from '@/lib/patients'
 import {
   ATIVO_CATEGORIAS,
+  calcVendaComMargem,
   createActiveIngredient,
   createProcedureType,
+  createRoute,
+  createSupplier,
   deleteActiveIngredient,
   deleteProcedureType,
+  deleteRoute,
+  deleteSupplier,
   listActiveIngredients,
   listProcedureTypes,
+  listRoutes,
+  listSuppliers,
+  updateActiveIngredient,
   type ActiveIngredient,
   type AtivoCategoria,
+  type AtivoInput,
+  type DomainItem,
   type ProcedureType,
+  type Supplier,
 } from '@/lib/domains'
+import { brl } from '@/lib/finance'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'procedimentos' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'procedimentos' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -59,6 +71,8 @@ export default function Settings() {
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
           { k: 'ativos', l: 'Ativos' },
+          { k: 'vias', l: 'Vias' },
+          { k: 'fornecedores', l: 'Fornecedores' },
           { k: 'procedimentos', l: 'Procedimentos' },
           { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
@@ -79,6 +93,8 @@ export default function Settings() {
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
       {sec === 'textos' && <TextosSection clinicId={clinicId} />}
       {sec === 'ativos' && <AtivosSection clinicId={clinicId} />}
+      {sec === 'vias' && <ViasSection clinicId={clinicId} />}
+      {sec === 'fornecedores' && <FornecedoresSection clinicId={clinicId} />}
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
     </div>
@@ -90,64 +106,197 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
   const [itens, setItens] = useState<ActiveIngredient[]>([])
   const [filtro, setFiltro] = useState<AtivoCategoria | ''>('')
   const [busca, setBusca] = useState('')
-  const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'gerais' as AtivoCategoria, apresentacao: '' })
-  const [salvando, setSalvando] = useState(false)
+  const [editando, setEditando] = useState<ActiveIngredient | 'novo' | null>(null)
 
   function recarregar() { listActiveIngredients().then(setItens).catch(() => {}) }
   useEffect(recarregar, [])
 
   const visiveis = itens.filter((a) => (!filtro || a.categoria === filtro) && a.nome.toLowerCase().includes(busca.toLowerCase()))
-
-  async function salvar() {
-    if (!form.nome.trim()) return
-    setSalvando(true)
-    try { await createActiveIngredient(clinicId, form); setForm({ codigo: '', nome: '', categoria: form.categoria, apresentacao: '' }); recarregar() }
-    finally { setSalvando(false) }
-  }
   async function remover(id: string) { if (confirm('Excluir este ativo?')) { await deleteActiveIngredient(id); recarregar() } }
 
   return (
-    <div className="max-w-3xl space-y-5">
-      <div className="rounded-xl border border-black/5 bg-white p-5">
-        <h3 className="mb-1 font-semibold text-texto">Novo ativo</h3>
-        <p className="mb-3 text-xs text-texto/50">Usados na composição das fórmulas manipuladas (com filtro por categoria).</p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <div><label className="mb-1 block text-sm text-texto/70">Código</label><input className={field} value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} /></div>
-          <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Nome / composição *</label><input className={field} value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></div>
-          <div>
-            <label className="mb-1 block text-sm text-texto/70">Categoria</label>
-            <select className={field} value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value as AtivoCategoria })}>
-              {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
-            </select>
-          </div>
-          <div className="sm:col-span-4"><label className="mb-1 block text-sm text-texto/70">Apresentação / via</label><input className={field} value={form.apresentacao} onChange={(e) => setForm({ ...form, apresentacao: e.target.value })} /></div>
-        </div>
-        <div className="mt-3 flex justify-end"><button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Adicionar'}</button></div>
-      </div>
-
+    <div className="max-w-4xl space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={filtro} onChange={(e) => setFiltro(e.target.value as AtivoCategoria | '')}>
           <option value="">Todas as categorias</option>
           {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
         </select>
         <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm" placeholder="Buscar ativo…" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        <span className="text-xs text-texto/40">{visiveis.length} itens</span>
+        <span className="text-xs text-texto/40">{visiveis.length}</span>
+        <button onClick={() => setEditando('novo')} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo</button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+      {editando && (
+        <AtivoModal clinicId={clinicId} ativo={editando === 'novo' ? null : editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
+      )}
+
+      <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-black/[0.02] text-left text-texto/60"><tr><th className="px-3 py-2 font-medium">Cód</th><th className="px-3 py-2 font-medium">Nome</th><th className="px-3 py-2 font-medium">Categoria</th><th className="px-3 py-2"></th></tr></thead>
+          <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+            <th className="px-3 py-2 font-medium">Nome</th><th className="px-3 py-2 font-medium">Categoria</th>
+            <th className="px-3 py-2 font-medium">Via</th><th className="px-3 py-2 font-medium">Fornecedor</th>
+            <th className="px-3 py-2 font-medium">Aquisição</th><th className="px-3 py-2 font-medium">Margem</th><th className="px-3 py-2 font-medium">Venda</th><th className="px-3 py-2"></th>
+          </tr></thead>
           <tbody>
             {visiveis.slice(0, 200).map((a) => (
               <tr key={a.id} className="border-t border-black/5">
-                <td className="px-3 py-1.5 text-texto/50">{a.codigo ?? '—'}</td>
                 <td className="px-3 py-1.5 text-texto">{a.nome}</td>
                 <td className="px-3 py-1.5 text-texto/60">{ATIVO_CATEGORIAS.find((c) => c.v === a.categoria)?.l}</td>
-                <td className="px-3 py-1.5 text-right"><button onClick={() => remover(a.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+                <td className="px-3 py-1.5 text-texto/60">{a.via ?? '—'}</td>
+                <td className="px-3 py-1.5 text-texto/60">{a.fornecedor ?? '—'}</td>
+                <td className="px-3 py-1.5 text-texto/60">{brl(a.preco_aquisicao)}</td>
+                <td className="px-3 py-1.5 text-texto/60">{a.margem_pct}%</td>
+                <td className="px-3 py-1.5 font-medium text-texto">{brl(a.preco_venda)}</td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                  <button onClick={() => setEditando(a)} className="mr-3 text-xs font-medium text-primaria hover:underline">Editar</button>
+                  <button onClick={() => remover(a.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; ativo: ActiveIngredient | null; onClose: () => void; onSaved: () => void }) {
+  const editando = !!ativo
+  const [f, setF] = useState<AtivoInput>({
+    codigo: ativo?.codigo ?? '', nome: ativo?.nome ?? '', categoria: ativo?.categoria ?? 'gerais',
+    apresentacao: ativo?.apresentacao ?? '', via: ativo?.via ?? '', fornecedor: ativo?.fornecedor ?? '',
+    preco_aquisicao: ativo?.preco_aquisicao ?? 0, margem_pct: ativo?.margem_pct ?? 0,
+  })
+  const [vias, setVias] = useState<DomainItem[]>([])
+  const [forns, setForns] = useState<Supplier[]>([])
+  const [salvando, setSalvando] = useState(false)
+  useEffect(() => { listRoutes().then(setVias).catch(() => {}); listSuppliers().then(setForns).catch(() => {}) }, [])
+
+  const venda = calcVendaComMargem(f.preco_aquisicao ?? 0, f.margem_pct ?? 0)
+  const set = <K extends keyof AtivoInput>(k: K, v: AtivoInput[K]) => setF((s) => ({ ...s, [k]: v }))
+
+  async function salvar() {
+    if (!f.nome?.trim()) return
+    setSalvando(true)
+    const payload = { ...f, preco_venda: venda }
+    try {
+      if (editando && ativo) await updateActiveIngredient(ativo.id, payload)
+      else await createActiveIngredient(clinicId, payload)
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-texto">{editando ? 'Editar ativo' : 'Novo ativo'}</h2>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div><label className="mb-1 block text-sm text-texto/70">Código</label><input className={field} value={f.codigo ?? ''} onChange={(e) => set('codigo', e.target.value)} /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Categoria</label>
+            <select className={field} value={f.categoria} onChange={(e) => set('categoria', e.target.value as AtivoCategoria)}>
+              {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Nome / composição *</label><input className={field} value={f.nome} onChange={(e) => set('nome', e.target.value)} /></div>
+          <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Apresentação</label><input className={field} value={f.apresentacao ?? ''} onChange={(e) => set('apresentacao', e.target.value)} placeholder="Ex.: AMP 2ml" /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Via de aplicação</label>
+            <select className={field} value={f.via ?? ''} onChange={(e) => set('via', e.target.value)}>
+              <option value="">—</option>
+              {vias.map((v) => <option key={v.id} value={v.nome}>{v.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
+            <select className={field} value={f.fornecedor ?? ''} onChange={(e) => set('fornecedor', e.target.value)}>
+              <option value="">—</option>
+              {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+            </select>
+          </div>
+          <div><label className="mb-1 block text-sm text-texto/70">Preço de aquisição (R$)</label><input type="number" step="0.01" className={field} value={f.preco_aquisicao ?? 0} onChange={(e) => set('preco_aquisicao', Number(e.target.value))} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input type="number" step="0.01" className={field} value={f.margem_pct ?? 0} onChange={(e) => set('margem_pct', Number(e.target.value))} /></div>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm text-texto/70">Venda com margem (calculado)</label>
+            <div className="rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2 text-sm font-medium text-texto">{brl(venda)}</div>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Vias de administração ---------------------------------------------------
+function ViasSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<DomainItem[]>([])
+  const [nome, setNome] = useState('')
+  function recarregar() { listRoutes().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  async function salvar() { if (!nome.trim()) return; await createRoute(clinicId, nome); setNome(''); recarregar() }
+  async function remover(id: string) { if (confirm('Excluir esta via?')) { await deleteRoute(id); recarregar() } }
+  return (
+    <div className="max-w-md space-y-4">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Nova via de administração</h3>
+        <p className="mb-3 text-xs text-texto/50">Usada no campo "Via" dos ativos (ex.: Oral, Endovenosa).</p>
+        <div className="flex gap-2">
+          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Intramuscular" />
+          <button onClick={salvar} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Adicionar</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm"><tbody>
+          {itens.map((v) => (
+            <tr key={v.id} className="border-t border-black/5 first:border-t-0">
+              <td className="px-4 py-2 text-texto">{v.nome}</td>
+              <td className="px-4 py-2 text-right"><button onClick={() => remover(v.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+            </tr>
+          ))}
+          {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhuma via.</td></tr>}
+        </tbody></table>
+      </div>
+    </div>
+  )
+}
+
+// --- Fornecedores ------------------------------------------------------------
+function FornecedoresSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<Supplier[]>([])
+  const [nome, setNome] = useState('')
+  const [contato, setContato] = useState('')
+  function recarregar() { listSuppliers().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  async function salvar() { if (!nome.trim()) return; await createSupplier(clinicId, { nome, contato }); setNome(''); setContato(''); recarregar() }
+  async function remover(id: string) { if (confirm('Excluir este fornecedor?')) { await deleteSupplier(id); recarregar() } }
+  return (
+    <div className="max-w-xl space-y-4">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo fornecedor</h3>
+        <p className="mb-3 text-xs text-texto/50">Usado no campo "Fornecedor" dos ativos.</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do fornecedor" />
+          <input className={field} value={contato} onChange={(e) => setContato(e.target.value)} placeholder="Contato (opcional)" />
+        </div>
+        <div className="mt-2 flex justify-end"><button onClick={salvar} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Adicionar</button></div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm"><tbody>
+          {itens.map((s) => (
+            <tr key={s.id} className="border-t border-black/5 first:border-t-0">
+              <td className="px-4 py-2 text-texto">{s.nome}</td>
+              <td className="px-4 py-2 text-texto/60">{s.contato ?? '—'}</td>
+              <td className="px-4 py-2 text-right"><button onClick={() => remover(s.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+            </tr>
+          ))}
+          {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum fornecedor.</td></tr>}
+        </tbody></table>
       </div>
     </div>
   )
