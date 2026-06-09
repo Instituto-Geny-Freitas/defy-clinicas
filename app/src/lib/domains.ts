@@ -18,6 +18,8 @@ export interface ActiveIngredient {
   apresentacao: string | null
   via: string | null
   fornecedor: string | null
+  lote: string | null
+  validade: string | null
   preco_aquisicao: number
   margem_pct: number
   preco_venda: number
@@ -31,6 +33,8 @@ export interface AtivoInput {
   apresentacao?: string | null
   via?: string | null
   fornecedor?: string | null
+  lote?: string | null
+  validade?: string | null
   preco_aquisicao?: number
   margem_pct?: number
   preco_venda?: number

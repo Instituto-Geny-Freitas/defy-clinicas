@@ -43,9 +43,18 @@ import {
   type Supplier,
 } from '@/lib/domains'
 import { brl } from '@/lib/finance'
+import {
+  createFormulation,
+  deleteFormulation,
+  listFormulationLibrary,
+  updateFormulation,
+  type Ativo,
+  type FormulaInput,
+  type FormulationLib,
+} from '@/lib/formulations'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'procedimentos' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -73,6 +82,7 @@ export default function Settings() {
           { k: 'ativos', l: 'Ativos' },
           { k: 'vias', l: 'Vias' },
           { k: 'fornecedores', l: 'Fornecedores' },
+          { k: 'formulas', l: 'Fórmulas' },
           { k: 'procedimentos', l: 'Procedimentos' },
           { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
@@ -95,6 +105,7 @@ export default function Settings() {
       {sec === 'ativos' && <AtivosSection clinicId={clinicId} />}
       {sec === 'vias' && <ViasSection clinicId={clinicId} />}
       {sec === 'fornecedores' && <FornecedoresSection clinicId={clinicId} />}
+      {sec === 'formulas' && <FormulasSection clinicId={clinicId} />}
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
     </div>
@@ -165,6 +176,7 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
   const [f, setF] = useState<AtivoInput>({
     codigo: ativo?.codigo ?? '', nome: ativo?.nome ?? '', categoria: ativo?.categoria ?? 'gerais',
     apresentacao: ativo?.apresentacao ?? '', via: ativo?.via ?? '', fornecedor: ativo?.fornecedor ?? '',
+    lote: ativo?.lote ?? '', validade: ativo?.validade ?? '',
     preco_aquisicao: ativo?.preco_aquisicao ?? 0, margem_pct: ativo?.margem_pct ?? 0,
   })
   const [vias, setVias] = useState<DomainItem[]>([])
@@ -217,6 +229,8 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
               {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
             </select>
           </div>
+          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={f.lote ?? ''} onChange={(e) => set('lote', e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={f.validade ?? ''} onChange={(e) => set('validade', e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Preço de aquisição (R$)</label><input type="number" step="0.01" className={field} value={f.preco_aquisicao ?? 0} onChange={(e) => set('preco_aquisicao', Number(e.target.value))} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input type="number" step="0.01" className={field} value={f.margem_pct ?? 0} onChange={(e) => set('margem_pct', Number(e.target.value))} /></div>
           <div className="sm:col-span-2">
@@ -303,6 +317,120 @@ function FornecedoresSection({ clinicId }: { clinicId: string }) {
             {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum fornecedor.</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// --- Biblioteca de fórmulas (CRUD) ------------------------------------------
+function FormulasSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<FormulationLib[]>([])
+  const [editando, setEditando] = useState<FormulationLib | 'novo' | null>(null)
+  function recarregar() { listFormulationLibrary().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  async function remover(id: string) { if (confirm('Excluir esta fórmula?')) { await deleteFormulation(id); recarregar() } }
+
+  return (
+    <div className="max-w-3xl space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-texto/60">Fórmulas da biblioteca — designadas aos pacientes na aba Manipulação.</p>
+        <button onClick={() => setEditando('novo')} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Nova fórmula</button>
+      </div>
+      {editando && <FormulaModal clinicId={clinicId} formula={editando === 'novo' ? null : editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />}
+      {itens.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma fórmula cadastrada.</p>
+      ) : (
+        <div className="space-y-2">
+          {itens.map((f) => (
+            <div key={f.id} className="rounded-xl border border-black/5 bg-white p-4">
+              <div className="flex items-center justify-between">
+                <div className="font-medium text-texto">{f.nome}{f.forma && <span className="ml-2 text-xs text-texto/50">({f.forma})</span>}</div>
+                <div className="flex gap-3">
+                  <button onClick={() => setEditando(f)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
+                  <button onClick={() => remover(f.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+                </div>
+              </div>
+              <ul className="mt-1 text-sm text-texto/70">
+                {(f.composicao ?? []).map((a, i) => <li key={i}>• {a.ativo} — {a.quantidade}{a.unidade}</li>)}
+              </ul>
+              {f.posologia && <p className="mt-1 text-sm text-texto/60">Posologia: {f.posologia}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FormulaModal({ clinicId, formula, onClose, onSaved }: { clinicId: string; formula: FormulationLib | null; onClose: () => void; onSaved: () => void }) {
+  const editando = !!formula
+  const [nome, setNome] = useState(formula?.nome ?? '')
+  const [forma, setForma] = useState(formula?.forma ?? '')
+  const [posologia, setPosologia] = useState(formula?.posologia ?? '')
+  const [ativos, setAtivos] = useState<Ativo[]>(formula?.composicao?.length ? formula.composicao : [{ ativo: '', quantidade: '', unidade: 'mg' }])
+  const [catalogo, setCatalogo] = useState<ActiveIngredient[]>([])
+  const [catFiltro, setCatFiltro] = useState<AtivoCategoria | ''>('')
+  const [salvando, setSalvando] = useState(false)
+  useEffect(() => { listActiveIngredients().then(setCatalogo).catch(() => {}) }, [])
+  const ativosFiltrados = catalogo.filter((a) => !catFiltro || a.categoria === catFiltro)
+  function setAtivo(i: number, patch: Partial<Ativo>) { setAtivos((arr) => arr.map((a, idx) => idx === i ? { ...a, ...patch } : a)) }
+
+  async function salvar() {
+    const comp = ativos.filter((a) => a.ativo.trim())
+    if (!nome.trim() || comp.length === 0) return
+    setSalvando(true)
+    const input: FormulaInput = { nome, forma: forma || null, composicao: comp, posologia: posologia || null }
+    try {
+      if (editando && formula) await updateFormulation(formula.id, input)
+      else await createFormulation(clinicId, input)
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-texto">{editando ? 'Editar fórmula' : 'Nova fórmula'}</h2>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><label className="mb-1 block text-sm text-texto/70">Nome *</label><input className={field} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
+            <div><label className="mb-1 block text-sm text-texto/70">Forma</label><input className={field} value={forma} onChange={(e) => setForma(e.target.value)} placeholder="cápsula, solução, bombom…" /></div>
+          </div>
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-sm text-texto/70">Composição</label>
+              <button onClick={() => setAtivos((a) => [...a, { ativo: '', quantidade: '', unidade: 'mg' }])} className="text-xs font-medium text-primaria hover:underline">+ Ativo</button>
+            </div>
+            {catalogo.length > 0 && (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs text-texto/50">Filtrar:</span>
+                <select className="rounded-lg border border-black/10 px-2 py-1 text-xs" value={catFiltro} onChange={(e) => setCatFiltro(e.target.value as AtivoCategoria | '')}>
+                  <option value="">Todas as categorias</option>
+                  {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
+                </select>
+              </div>
+            )}
+            <datalist id="ativos-formula">{ativosFiltrados.map((a) => <option key={a.id} value={a.nome} />)}</datalist>
+            <div className="space-y-2">
+              {ativos.map((a, i) => (
+                <div key={i} className="flex gap-2">
+                  <input list="ativos-formula" className={field} placeholder="Ativo" value={a.ativo} onChange={(e) => setAtivo(i, { ativo: e.target.value })} />
+                  <input className="w-24 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Qtd" value={a.quantidade} onChange={(e) => setAtivo(i, { quantidade: e.target.value })} />
+                  <input className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="un." value={a.unidade} onChange={(e) => setAtivo(i, { unidade: e.target.value })} />
+                  <button onClick={() => setAtivos((arr) => arr.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div><label className="mb-1 block text-sm text-texto/70">Posologia</label><textarea rows={2} className={field} value={posologia} onChange={(e) => setPosologia(e.target.value)} /></div>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+          </div>
+        </div>
       </div>
     </div>
   )

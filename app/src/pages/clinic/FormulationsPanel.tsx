@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react'
 import {
-  createPrescription,
+  deletePrescription,
   listFormulationLibrary,
   listPrescriptions,
-  type Ativo,
+  prescribeFormula,
   type FormulationLib,
   type FormulationPrescription,
 } from '@/lib/formulations'
-import { Shell, Footer } from './TreatmentPlansPanel'
-import { ATIVO_CATEGORIAS, listActiveIngredients, type ActiveIngredient, type AtivoCategoria } from '@/lib/domains'
 import { formatDateBR } from '@/lib/format'
+import { Shell, Footer } from './TreatmentPlansPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
-const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function FormulationsPanel({ patientId, clinicId, professionalId }: Props) {
   const [presc, setPresc] = useState<FormulationPrescription[]>([])
@@ -24,25 +22,36 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId 
   }
   useEffect(recarregar, [patientId])
 
+  async function remover(id: string) {
+    if (!confirm('Remover esta fórmula do paciente?')) return
+    await deletePrescription(id)
+    recarregar()
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold text-texto">Fórmulas manipuladas</h3>
-        <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Nova prescrição</button>
+        <h3 className="font-semibold text-texto">Fórmulas designadas</h3>
+        <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Designar fórmula</button>
       </div>
-      {modal && <Modal clinicId={clinicId} patientId={patientId} professionalId={professionalId} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
+      {modal && (
+        <DesignarModal clinicId={clinicId} patientId={patientId} professionalId={professionalId} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
+      )}
       {carregando ? <p className="text-sm text-texto/50">Carregando…</p> : presc.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma fórmula prescrita.</p>
+        <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma fórmula designada. Use "Designar fórmula" para escolher da biblioteca.</p>
       ) : (
         <div className="space-y-2">
           {presc.map((p) => (
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-texto">Fórmula manipulada</div>
-                <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
+                <div className="text-sm font-semibold text-texto">{p.formulations?.nome ?? 'Fórmula manipulada'}</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
+                  <button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Remover</button>
+                </div>
               </div>
               <ul className="mt-1 text-sm text-texto/80">
-                {p.composicao.map((a, i) => <li key={i}>• {a.ativo} — {a.quantidade}{a.unidade}</li>)}
+                {(p.composicao ?? []).map((a, i) => <li key={i}>• {a.ativo} — {a.quantidade}{a.unidade}</li>)}
               </ul>
               {p.posologia && <p className="mt-1 text-sm text-texto/60">Posologia: {p.posologia}</p>}
             </div>
@@ -53,86 +62,50 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId 
   )
 }
 
-function Modal({ clinicId, patientId, professionalId, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; onClose: () => void; onSaved: () => void }) {
-  const [ativos, setAtivos] = useState<Ativo[]>([{ ativo: '', quantidade: '', unidade: 'mg' }])
-  const [posologia, setPosologia] = useState('')
-  const [salvarBib, setSalvarBib] = useState(false)
-  const [nomeBib, setNomeBib] = useState('')
+function DesignarModal({ clinicId, patientId, professionalId, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; onClose: () => void; onSaved: () => void }) {
   const [biblioteca, setBiblioteca] = useState<FormulationLib[]>([])
-  const [catalogo, setCatalogo] = useState<ActiveIngredient[]>([])
-  const [catFiltro, setCatFiltro] = useState<AtivoCategoria | ''>('')
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [busca, setBusca] = useState('')
   const [salvando, setSalvando] = useState(false)
 
-  useEffect(() => {
-    listFormulationLibrary().then(setBiblioteca).catch(() => {})
-    listActiveIngredients().then(setCatalogo).catch(() => {})
-  }, [])
-
-  const ativosFiltrados = catalogo.filter((a) => !catFiltro || a.categoria === catFiltro)
-
-  function carregarDaBiblioteca(id: string) {
-    const f = biblioteca.find((x) => x.id === id)
-    if (f) { setAtivos(f.composicao.length ? f.composicao : [{ ativo: '', quantidade: '', unidade: 'mg' }]); setPosologia(f.posologia ?? '') }
-  }
-  function setAtivo(i: number, patch: Partial<Ativo>) { setAtivos((arr) => arr.map((a, idx) => idx === i ? { ...a, ...patch } : a)) }
+  useEffect(() => { listFormulationLibrary().then(setBiblioteca).catch(() => {}) }, [])
+  const visiveis = biblioteca.filter((f) => f.nome.toLowerCase().includes(busca.toLowerCase()))
+  function toggle(id: string) { setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n }) }
 
   async function salvar() {
-    const comp = ativos.filter((a) => a.ativo.trim())
-    if (comp.length === 0) return
+    if (sel.size === 0) return
     setSalvando(true)
     try {
-      await createPrescription({ clinicId, patientId, professionalId, composicao: comp, posologia, salvarBiblioteca: salvarBib, nomeBiblioteca: nomeBib })
+      for (const f of biblioteca.filter((x) => sel.has(x.id))) {
+        await prescribeFormula({ clinicId, patientId, professionalId, formula: f })
+      }
       onSaved()
     } catch { setSalvando(false) }
   }
 
   return (
-    <Shell titulo="Nova fórmula manipulada" onClose={onClose}>
+    <Shell titulo="Designar fórmulas" onClose={onClose}>
       <div className="space-y-3">
-        {biblioteca.length > 0 && (
-          <div>
-            <label className="mb-1 block text-sm text-texto/70">Carregar da biblioteca</label>
-            <select className={field} value="" onChange={(e) => { carregarDaBiblioteca(e.target.value); e.target.value = '' }}>
-              <option value="">Selecione uma fórmula salva…</option>
-              {biblioteca.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-            </select>
-          </div>
-        )}
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm text-texto/70">Composição</label>
-            <button onClick={() => setAtivos((a) => [...a, { ativo: '', quantidade: '', unidade: 'mg' }])} className="text-xs font-medium text-primaria hover:underline">+ Ativo</button>
-          </div>
-          {catalogo.length > 0 && (
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-xs text-texto/50">Filtrar ativos:</span>
-              <select className="rounded-lg border border-black/10 px-2 py-1 text-xs" value={catFiltro} onChange={(e) => setCatFiltro(e.target.value as AtivoCategoria | '')}>
-                <option value="">Todas as categorias</option>
-                {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
-              </select>
-            </div>
-          )}
-          {/* Lista de ativos do catálogo, filtrada pela categoria escolhida */}
-          <datalist id="ativos-catalogo">
-            {ativosFiltrados.map((a) => <option key={a.id} value={a.nome} />)}
-          </datalist>
-          <div className="space-y-2">
-            {ativos.map((a, i) => (
-              <div key={i} className="flex gap-2">
-                <input list="ativos-catalogo" className={field} placeholder="Ativo (escolha ou digite)" value={a.ativo} onChange={(e) => setAtivo(i, { ativo: e.target.value })} />
-                <input className="w-24 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Qtd" value={a.quantidade} onChange={(e) => setAtivo(i, { quantidade: e.target.value })} />
-                <input className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="un." value={a.unidade} onChange={(e) => setAtivo(i, { unidade: e.target.value })} />
-                <button onClick={() => setAtivos((arr) => arr.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
-              </div>
+        <input className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" placeholder="Buscar fórmula…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        {biblioteca.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-black/15 p-4 text-center text-sm text-texto/50">
+            Nenhuma fórmula na biblioteca. Cadastre em Configurações → Fórmulas.
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-2 overflow-auto">
+            {visiveis.map((f) => (
+              <label key={f.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-black/5 p-3 text-sm hover:bg-black/[0.02]">
+                <input type="checkbox" className="mt-0.5" checked={sel.has(f.id)} onChange={() => toggle(f.id)} />
+                <span>
+                  <span className="font-medium text-texto">{f.nome}</span>
+                  {f.forma && <span className="ml-1 text-xs text-texto/50">({f.forma})</span>}
+                  <span className="block text-xs text-texto/60">{(f.composicao ?? []).map((a) => `${a.ativo} ${a.quantidade}${a.unidade}`).join('; ')}</span>
+                </span>
+              </label>
             ))}
           </div>
-        </div>
-        <div><label className="mb-1 block text-sm text-texto/70">Posologia</label><textarea rows={2} className={field} value={posologia} onChange={(e) => setPosologia(e.target.value)} placeholder="Ex.: 1 dose ao dia, à noite, 60 caps." /></div>
-        <label className="flex items-center gap-2 text-sm text-texto/70">
-          <input type="checkbox" checked={salvarBib} onChange={(e) => setSalvarBib(e.target.checked)} /> Salvar na biblioteca de fórmulas
-        </label>
-        {salvarBib && <input className={field} placeholder="Nome da fórmula na biblioteca" value={nomeBib} onChange={(e) => setNomeBib(e.target.value)} />}
-        <Footer onClose={onClose} onSave={salvar} disabled={salvando} label={salvando ? 'Salvando…' : 'Prescrever'} />
+        )}
+        <Footer onClose={onClose} onSave={salvar} disabled={salvando || sel.size === 0} label={salvando ? 'Designando…' : `Designar (${sel.size})`} />
       </div>
     </Shell>
   )
