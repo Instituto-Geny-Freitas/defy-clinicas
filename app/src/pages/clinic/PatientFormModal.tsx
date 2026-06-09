@@ -8,6 +8,7 @@ import {
   type PatientInput,
 } from '@/lib/patients'
 import { getClinic } from '@/lib/settings'
+import { recordConsent } from '@/lib/lgpd'
 import type { Patient } from '@/lib/types'
 
 interface Props {
@@ -84,21 +85,20 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
     }
     setSalvando(true)
     setErro(null)
-    const consentPatch =
-      consentido && !patient?.consentimento_lgpd_em
-        ? { consentimento_lgpd_em: new Date().toISOString(), consentimento_lgpd_versao: lgpd.versao }
-        : !consentido && patient?.consentimento_lgpd_em
-          ? { consentimento_lgpd_em: null, consentimento_lgpd_versao: null }
-          : {}
+    const grantConsent = consentido && !patient?.consentimento_lgpd_em
+    const revokePatch = !consentido && patient?.consentimento_lgpd_em
+      ? { consentimento_lgpd_em: null, consentimento_lgpd_versao: null }
+      : {}
     try {
       if (editando && patient) {
-        await updatePatient(patient.id, { ...form, ...consentPatch, limite_relatorios: limite })
+        await updatePatient(patient.id, { ...form, ...revokePatch, limite_relatorios: limite })
+        if (grantConsent) await recordConsent({ patientId: patient.id, clinicId, versao: lgpd.versao, origem: 'profissional' })
         onSaved(patient.id)
         return
       }
       // criação + provisionamento de acesso
       const p = await createPatient(clinicId, form)
-      if (Object.keys(consentPatch).length) await updatePatient(p.id, consentPatch)
+      if (grantConsent) await recordConsent({ patientId: p.id, clinicId, versao: lgpd.versao, origem: 'profissional' })
       try {
         const { login } = await provisionPatientAccess(p.id, senhaAcesso)
         setResultado({ id: p.id, login, senha: senhaAcesso })

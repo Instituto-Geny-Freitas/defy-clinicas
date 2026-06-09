@@ -10,6 +10,7 @@ const NAV = [
   { to: '/portal/evolucao', label: 'Evolução' },
   { to: '/portal/relatorios', label: 'Relatórios' },
   { to: '/portal/financeiro', label: 'Financeiro' },
+  { to: '/portal/lgpd', label: 'LGPD' },
 ]
 
 export default function PatientLayout() {
@@ -38,14 +39,14 @@ export default function PatientLayout() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md justify-around border-t border-black/5 bg-white px-2 py-2">
+      <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md gap-1 overflow-x-auto border-t border-black/5 bg-white px-2 py-2">
         {NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `rounded-lg px-2 py-1 text-xs transition ${
+              `shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs transition ${
                 isActive ? 'font-semibold text-primaria' : 'text-texto/50'
               }`
             }

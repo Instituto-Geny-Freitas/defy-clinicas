@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPatient, calcAge } from '@/lib/patients'
 import { formatDateBR } from '@/lib/format'
+import { listConsentLogs, type ConsentLog } from '@/lib/lgpd'
 import PatientFormModal from './PatientFormModal'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Patient } from '@/lib/types'
@@ -53,6 +54,7 @@ export default function PatientDetail() {
   const [tipoAval, setTipoAval] = useState<AssessmentType>('dermato')
   const [carregando, setCarregando] = useState(true)
   const [editando, setEditando] = useState(false)
+  const [consentLogs, setConsentLogs] = useState<ConsentLog[]>([])
 
   function recarregar() {
     if (!id) return
@@ -60,6 +62,7 @@ export default function PatientDetail() {
       .then(setPaciente)
       .catch(() => {})
       .finally(() => setCarregando(false))
+    listConsentLogs(id).then(setConsentLogs).catch(() => {})
   }
   useEffect(recarregar, [id])
 
@@ -121,8 +124,20 @@ export default function PatientDetail() {
             <Info label="Alergias" valor={paciente.alergias} />
             <Info
               label="Consentimento LGPD"
-              valor={paciente.consentimento_lgpd_em ? `Sim — ${new Date(paciente.consentimento_lgpd_em).toLocaleDateString('pt-BR')} (v${paciente.consentimento_lgpd_versao ?? '?'})` : 'Pendente'}
+              valor={paciente.consentimento_lgpd_em ? `Sim — ${new Date(paciente.consentimento_lgpd_em).toLocaleString('pt-BR')} (v${paciente.consentimento_lgpd_versao ?? '?'})` : 'Pendente'}
             />
+            {consentLogs.length > 0 && (
+              <div className="rounded-xl border border-black/5 bg-white p-4 sm:col-span-2 lg:col-span-3">
+                <div className="text-xs uppercase tracking-wide text-texto/40">Histórico de consentimento LGPD</div>
+                <ul className="mt-2 space-y-1 text-sm text-texto/70">
+                  {consentLogs.map((l) => (
+                    <li key={l.id}>
+                      {new Date(l.created_at).toLocaleString('pt-BR')} — versão {l.versao ?? '?'} · por {l.origem}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

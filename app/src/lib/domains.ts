@@ -90,15 +90,16 @@ export interface Supplier {
   id: string
   nome: string
   contato: string | null
+  telefone: string | null
   ativo: boolean
 }
 
 export async function listSuppliers(): Promise<Supplier[]> {
-  const { data, error } = await supabase.from('suppliers').select('id, nome, contato, ativo').eq('ativo', true).order('nome')
+  const { data, error } = await supabase.from('suppliers').select('id, nome, contato, telefone, ativo').eq('ativo', true).order('nome')
   if (error) throw error
   return data ?? []
 }
-export async function createSupplier(clinicId: string, input: { nome: string; contato?: string }): Promise<void> {
+export async function createSupplier(clinicId: string, input: { nome: string; contato?: string; telefone?: string }): Promise<void> {
   const { error } = await supabase.from('suppliers').insert({ clinic_id: clinicId, ...input })
   if (error) throw error
 }

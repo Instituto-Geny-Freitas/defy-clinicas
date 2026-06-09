@@ -270,33 +270,39 @@ function ViasSection({ clinicId }: { clinicId: string }) {
 function FornecedoresSection({ clinicId }: { clinicId: string }) {
   const [itens, setItens] = useState<Supplier[]>([])
   const [nome, setNome] = useState('')
+  const [telefone, setTelefone] = useState('')
   const [contato, setContato] = useState('')
   function recarregar() { listSuppliers().then(setItens).catch(() => {}) }
   useEffect(recarregar, [])
-  async function salvar() { if (!nome.trim()) return; await createSupplier(clinicId, { nome, contato }); setNome(''); setContato(''); recarregar() }
+  async function salvar() { if (!nome.trim()) return; await createSupplier(clinicId, { nome, telefone, contato }); setNome(''); setTelefone(''); setContato(''); recarregar() }
   async function remover(id: string) { if (confirm('Excluir este fornecedor?')) { await deleteSupplier(id); recarregar() } }
   return (
-    <div className="max-w-xl space-y-4">
+    <div className="max-w-2xl space-y-4">
       <div className="rounded-xl border border-black/5 bg-white p-5">
         <h3 className="mb-1 font-semibold text-texto">Novo fornecedor</h3>
         <p className="mb-3 text-xs text-texto/50">Usado no campo "Fornecedor" dos ativos.</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do fornecedor" />
+          <input className={field} value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="Telefone / WhatsApp" />
           <input className={field} value={contato} onChange={(e) => setContato(e.target.value)} placeholder="Contato (opcional)" />
         </div>
         <div className="mt-2 flex justify-end"><button onClick={salvar} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Adicionar</button></div>
       </div>
-      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
-        <table className="w-full text-sm"><tbody>
-          {itens.map((s) => (
-            <tr key={s.id} className="border-t border-black/5 first:border-t-0">
-              <td className="px-4 py-2 text-texto">{s.nome}</td>
-              <td className="px-4 py-2 text-texto/60">{s.contato ?? '—'}</td>
-              <td className="px-4 py-2 text-right"><button onClick={() => remover(s.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
-            </tr>
-          ))}
-          {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum fornecedor.</td></tr>}
-        </tbody></table>
+      <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-black/[0.02] text-left text-texto/60"><tr><th className="px-4 py-2 font-medium">Nome</th><th className="px-4 py-2 font-medium">Telefone/WhatsApp</th><th className="px-4 py-2 font-medium">Contato</th><th className="px-4 py-2"></th></tr></thead>
+          <tbody>
+            {itens.map((s) => (
+              <tr key={s.id} className="border-t border-black/5">
+                <td className="px-4 py-2 text-texto">{s.nome}</td>
+                <td className="px-4 py-2 text-texto/60">{s.telefone ?? '—'}</td>
+                <td className="px-4 py-2 text-texto/60">{s.contato ?? '—'}</td>
+                <td className="px-4 py-2 text-right"><button onClick={() => remover(s.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+              </tr>
+            ))}
+            {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum fornecedor.</td></tr>}
+          </tbody>
+        </table>
       </div>
     </div>
   )
