@@ -4,6 +4,7 @@ import { listInventory, type InventoryItem } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
+import { formatDateBR } from '@/lib/format'
 
 interface Props {
   patientId: string
@@ -198,7 +199,7 @@ function RegistrarModal({
                 <label className="mb-1 block text-sm text-texto/70">Plano de tratamento</label>
                 <select className={field} value={planoId} onChange={(e) => setPlanoId(e.target.value)}>
                   <option value="">— Todos —</option>
-                  {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {new Date(p.data).toLocaleDateString('pt-BR')}</option>)}
+                  {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {formatDateBR(p.data)}</option>)}
                 </select>
               </div>
               <div>

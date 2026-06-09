@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createSupplementation, listSupplementations, type Supplementation } from '@/lib/supplementations'
+import { formatDateBR } from '@/lib/format'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
@@ -35,9 +36,9 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
                 <tr key={s.id} className="border-t border-black/5">
                   <td className="px-4 py-2 text-texto">{s.medicacao}</td>
                   <td className="px-4 py-2 text-texto/70">{s.via_adm ?? '—'}</td>
-                  <td className="px-4 py-2 text-texto/70">{s.validade ? new Date(s.validade).toLocaleDateString('pt-BR') : '—'}</td>
+                  <td className="px-4 py-2 text-texto/70">{s.validade ? formatDateBR(s.validade) : '—'}</td>
                   <td className="px-4 py-2 text-texto/70">{s.lote ?? '—'}</td>
-                  <td className="px-4 py-2 text-texto/60">{new Date(s.data).toLocaleDateString('pt-BR')}</td>
+                  <td className="px-4 py-2 text-texto/60">{formatDateBR(s.data)}</td>
                 </tr>
               ))}
             </tbody>

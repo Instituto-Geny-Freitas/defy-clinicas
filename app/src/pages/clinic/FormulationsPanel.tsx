@@ -9,6 +9,7 @@ import {
 } from '@/lib/formulations'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import { ATIVO_CATEGORIAS, listActiveIngredients, type ActiveIngredient, type AtivoCategoria } from '@/lib/domains'
+import { formatDateBR } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -38,7 +39,7 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId 
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold text-texto">Fórmula manipulada</div>
-                <div className="text-xs text-texto/50">{new Date(p.data).toLocaleDateString('pt-BR')}</div>
+                <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
               </div>
               <ul className="mt-1 text-sm text-texto/80">
                 {p.composicao.map((a, i) => <li key={i}>• {a.ativo} — {a.quantidade}{a.unidade}</li>)}

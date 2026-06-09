@@ -1,4 +1,5 @@
 import { supabase, digitsOnly } from '@/lib/supabase'
+import { parseLocalDate } from '@/lib/format'
 import type { Patient } from '@/lib/types'
 
 export interface PatientInput {
@@ -78,11 +79,11 @@ export function gerarSenhaProvisoria(): string {
   return `${pick(letras, 4)}${pick(nums, 4)}`
 }
 
-/** Idade em anos a partir da data de nascimento (ISO). null se inválida. */
+/** Idade em anos a partir da data de nascimento. Trata data-only sem shift de fuso. */
 export function calcAge(nascimento?: string | null): number | null {
   if (!nascimento) return null
-  const b = new Date(nascimento)
-  if (isNaN(b.getTime())) return null
+  const b = parseLocalDate(nascimento)
+  if (!b) return null
   const now = new Date()
   let age = now.getFullYear() - b.getFullYear()
   const m = now.getMonth() - b.getMonth()

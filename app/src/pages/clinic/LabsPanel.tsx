@@ -8,6 +8,7 @@ import {
   type LabResult,
 } from '@/lib/labs'
 import { Shell, Footer } from './TreatmentPlansPanel'
+import { formatDateBR } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 
@@ -40,7 +41,7 @@ export default function LabsPanel({ patientId, clinicId, professionalId }: Props
               <div className="space-y-2">
                 {orders.map((o) => (
                   <div key={o.id} className="rounded-xl border border-black/5 bg-white p-4">
-                    <div className="mb-1 text-xs text-texto/50">{new Date(o.data).toLocaleDateString('pt-BR')} · {o.exames.length} exames</div>
+                    <div className="mb-1 text-xs text-texto/50">{formatDateBR(o.data)} · {o.exames.length} exames</div>
                     <div className="flex flex-wrap gap-1.5">
                       {o.exames.map((e, i) => <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">{e}</span>)}
                     </div>

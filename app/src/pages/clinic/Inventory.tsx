@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
+import { formatDateBR } from '@/lib/format'
 import {
   addStockEntry,
   createInventoryItem,
@@ -74,7 +75,7 @@ export default function Inventory() {
                   <td className="px-4 py-2">
                     {i.validade ? (
                       <span className={validadeProxima(i) ? 'font-medium text-secundaria' : 'text-texto/60'}>
-                        {new Date(i.validade).toLocaleDateString('pt-BR')}
+                        {formatDateBR(i.validade)}
                       </span>
                     ) : '—'}
                   </td>

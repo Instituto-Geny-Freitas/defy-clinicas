@@ -10,6 +10,7 @@ import {
   type TreatmentPlan,
 } from '@/lib/treatmentPlans'
 import { brl } from '@/lib/finance'
+import { formatDateBR } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -47,7 +48,7 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
               <div className="flex items-center justify-between">
                 <div className="font-medium text-texto">{p.titulo || 'Plano de tratamento'}</div>
                 <div className="flex items-center gap-3">
-                  <div className="text-xs text-texto/50">{new Date(p.data).toLocaleDateString('pt-BR')}</div>
+                  <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
                   <button onClick={() => setEditando(p)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
                   <button onClick={async () => { if (confirm('Excluir este plano?')) { await deleteTreatmentPlan(p.id); recarregar() } }} className="text-xs text-secundaria hover:underline">Excluir</button>
                 </div>

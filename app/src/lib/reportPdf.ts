@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { formatDateBR } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 import type { ProcedureRecord } from '@/lib/procedures'
 import type { FormulationPrescription } from '@/lib/formulations'
@@ -13,7 +14,7 @@ export interface ReportData {
   suplementacoes?: Supplementation[]
 }
 
-const d = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—')
+const d = (iso: string | null) => formatDateBR(iso)
 const TEAL: [number, number, number] = [15, 118, 110]
 
 /** Monta o PDF do relatório do paciente e devolve { blob, filename }. */

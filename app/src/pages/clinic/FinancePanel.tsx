@@ -14,6 +14,7 @@ import {
 } from '@/lib/finance'
 import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
+import { formatDateBR } from '@/lib/format'
 
 interface Props {
   patientId: string
@@ -174,7 +175,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
           <label className="mb-1 block text-sm text-texto/70">Plano de tratamento (vínculo)</label>
           <select className={field} value={planoId} onChange={(e) => setPlanoId(e.target.value)}>
             <option value="">— Sem vínculo —</option>
-            {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {new Date(p.data).toLocaleDateString('pt-BR')}</option>)}
+            {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {formatDateBR(p.data)}</option>)}
           </select>
           {planos.length === 0 && <p className="mt-1 text-xs text-texto/40">Crie um plano na aba "Plano" para vincular.</p>}
         </div>

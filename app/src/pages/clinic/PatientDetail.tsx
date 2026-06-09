@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPatient, calcAge } from '@/lib/patients'
+import { formatDateBR } from '@/lib/format'
 import PatientFormModal from './PatientFormModal'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Patient } from '@/lib/types'
@@ -110,7 +111,7 @@ export default function PatientDetail() {
       <div className="mt-6">
         {aba === 'resumo' && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Info label="Data de nascimento" valor={paciente.nascimento ? new Date(paciente.nascimento).toLocaleDateString('pt-BR') : null} />
+            <Info label="Data de nascimento" valor={paciente.nascimento ? formatDateBR(paciente.nascimento) : null} />
             <Info label="Idade" valor={calcAge(paciente.nascimento) != null ? `${calcAge(paciente.nascimento)} anos` : null} />
             <Info label="CPF" valor={paciente.cpf} />
             <Info label="E-mail" valor={paciente.email} />

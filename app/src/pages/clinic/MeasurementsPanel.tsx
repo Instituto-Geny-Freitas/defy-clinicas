@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createMeasurement, listMeasurements, type BodyMeasurement, type MeasurementInput } from '@/lib/measurements'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import LineChart from '@/components/LineChart'
+import { formatDateBR } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -47,7 +48,7 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
                 {itens.map((m) => (
                   <tr key={m.id} className="border-t border-black/5">
                     <td className="px-3 py-2 text-texto">{m.sessao ?? '—'}</td>
-                    <td className="px-3 py-2 text-texto/60">{new Date(m.data).toLocaleDateString('pt-BR')}</td>
+                    <td className="px-3 py-2 text-texto/60">{formatDateBR(m.data)}</td>
                     <td className="px-3 py-2 text-texto/70">{m.peso_kg ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/70">{m.imc ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/70">{m.gordura_corporal_pct ?? '—'}</td>
