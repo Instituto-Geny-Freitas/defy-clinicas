@@ -44,7 +44,7 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId 
           {presc.map((p) => (
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-texto">{p.formulations?.nome ?? 'Fórmula manipulada'}</div>
+                <div className="text-sm font-semibold text-texto">{p.nome ?? p.formulations?.nome ?? 'Fórmula manipulada'}</div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
                   <button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Remover</button>

@@ -10,6 +10,7 @@ export interface FormulationPrescription {
   id: string
   patient_id: string
   formulation_id: string | null
+  nome: string | null
   composicao: Ativo[]
   posologia: string | null
   data: string
@@ -39,6 +40,7 @@ export async function prescribeFormula(args: {
     patient_id: args.patientId,
     professional_id: args.professionalId ?? null,
     formulation_id: args.formula.id,
+    nome: args.formula.nome,
     composicao: args.formula.composicao,
     posologia: args.formula.posologia,
   })

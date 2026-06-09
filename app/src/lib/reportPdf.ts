@@ -70,8 +70,8 @@ export function buildPatientReportPdf(args: {
   }
   if (args.data.manipulacoes?.length) {
     head('Fórmulas manipuladas')
-    autoTable(doc, { ...tableOpts(y + 6), head: [['Data', 'Composição', 'Posologia']],
-      body: args.data.manipulacoes.map((m) => [d(m.data),
+    autoTable(doc, { ...tableOpts(y + 6), head: [['Data', 'Fórmula', 'Composição', 'Posologia']],
+      body: args.data.manipulacoes.map((m) => [d(m.data), m.nome ?? m.formulations?.nome ?? '—',
         (m.composicao ?? []).map((a) => `${a.ativo} ${a.quantidade}${a.unidade}`).join('; '), m.posologia ?? '—']) })
     afterTable()
   }
