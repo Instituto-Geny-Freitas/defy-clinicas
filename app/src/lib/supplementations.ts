@@ -8,6 +8,7 @@ export interface Supplementation {
   validade: string | null
   lote: string | null
   observacoes: string | null
+  pago: boolean
   data: string
   created_at: string
 }
@@ -20,6 +21,23 @@ export async function listSupplementations(patientId: string): Promise<Supplemen
     .order('data', { ascending: false })
   if (error) throw error
   return data ?? []
+}
+
+/** Suplementações ainda não pagas (para importar no orçamento). */
+export async function listUnpaidSupplementations(patientId: string): Promise<Supplementation[]> {
+  const { data, error } = await supabase
+    .from('supplementations')
+    .select('*')
+    .eq('patient_id', patientId)
+    .eq('pago', false)
+    .order('data', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function setSupplementationPaid(id: string, pago: boolean): Promise<void> {
+  const { error } = await supabase.from('supplementations').update({ pago }).eq('id', id)
+  if (error) throw error
 }
 
 interface CreateArgs {

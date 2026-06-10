@@ -9,7 +9,7 @@ import {
   type TextSnippet,
   type TreatmentPlan,
 } from '@/lib/treatmentPlans'
-import { brl } from '@/lib/finance'
+import { brl, listQuotes, type Quote } from '@/lib/finance'
 import { formatDateBR } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
@@ -17,13 +17,19 @@ const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outlin
 
 export default function TreatmentPlansPanel({ patientId, clinicId, professionalId }: Props) {
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
+  const [orcamentos, setOrcamentos] = useState<Quote[]>([])
   const [carregando, setCarregando] = useState(true)
   const [editando, setEditando] = useState<TreatmentPlan | 'novo' | null>(null)
 
   function recarregar() {
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {}).finally(() => setCarregando(false))
+    listQuotes(patientId).then(setOrcamentos).catch(() => {})
   }
   useEffect(recarregar, [patientId])
+
+  // Valor do plano = soma dos orçamentos vinculados a ele.
+  const valorDoPlano = (planId: string) =>
+    orcamentos.filter((q) => q.treatment_plan_id === planId).reduce((s, q) => s + Number(q.valor_total), 0)
 
   return (
     <div>
@@ -57,7 +63,9 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-texto/50">
                 {p.num_sessoes != null && <span>{p.num_sessoes} sessões</span>}
                 {p.frequencia && <span>{p.frequencia}</span>}
-                {p.valor_total != null && <span>{brl(p.valor_total)}</span>}
+                {valorDoPlano(p.id) > 0
+                  ? <span className="font-medium text-texto/70">Orçamento: {brl(valorDoPlano(p.id))}</span>
+                  : <span className="text-texto/40">Aguardando orçamento</span>}
               </div>
             </div>
           ))}
@@ -73,7 +81,6 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
   const [texto, setTexto] = useState(plano?.texto ?? '')
   const [sessoes, setSessoes] = useState(plano?.num_sessoes != null ? String(plano.num_sessoes) : '')
   const [freq, setFreq] = useState(plano?.frequencia ?? '')
-  const [valor, setValor] = useState(plano?.valor_total != null ? String(plano.valor_total) : '')
   const [snippets, setSnippets] = useState<TextSnippet[]>([])
   const [salvando, setSalvando] = useState(false)
   const [iaInstrucao, setIaInstrucao] = useState('')
@@ -105,7 +112,7 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
     setSalvando(true)
     const dados = {
       titulo: titulo || null, texto,
-      num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null, valor_total: valor ? Number(valor) : null,
+      num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null,
     }
     try {
       if (editando && plano) await updateTreatmentPlan(plano.id, dados)
@@ -139,11 +146,11 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
           <p className="mt-1 text-xs text-texto/50">Usa anamnese e última avaliação do paciente. Revise antes de salvar.</p>
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Conteúdo *</label><textarea rows={6} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} /></div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <div><label className="mb-1 block text-sm text-texto/70">Sessões</label><input type="number" className={field} value={sessoes} onChange={(e) => setSessoes(e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Frequência</label><input className={field} value={freq} onChange={(e) => setFreq(e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Valor (R$)</label><input type="number" className={field} value={valor} onChange={(e) => setValor(e.target.value)} /></div>
         </div>
+        <p className="text-xs text-texto/50">O valor é definido depois, pela geração do orçamento vinculado a este plano (aba Financeiro).</p>
         <Footer onClose={onClose} onSave={salvar} disabled={salvando} label={salvando ? 'Salvando…' : 'Salvar plano'} />
       </div>
     </Shell>

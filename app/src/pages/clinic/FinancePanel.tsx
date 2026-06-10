@@ -14,6 +14,7 @@ import {
 } from '@/lib/finance'
 import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
+import { listUnpaidSupplementations } from '@/lib/supplementations'
 import { formatDateBR } from '@/lib/format'
 
 interface Props {
@@ -151,6 +152,13 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
     setItens((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
   }
 
+  async function importarSuplementacoes() {
+    const supl = await listUnpaidSupplementations(patientId)
+    if (supl.length === 0) { alert('Nenhuma suplementação não paga.'); return }
+    const novos = supl.map((s) => ({ descricao: `Suplementação: ${s.medicacao}`, qtd: 1, valor_unit: 0, total: 0 }))
+    setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
+  }
+
   async function salvar() {
     const validos = itens.filter((i) => i.descricao.trim())
     if (validos.length === 0) return
@@ -189,9 +197,14 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
               <button onClick={() => setItens((a) => a.filter((_, i) => i !== idx))} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
             </div>
           ))}
-          <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
-            + Adicionar item
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
+              + Adicionar item (Outros serviços)
+            </button>
+            <button onClick={importarSuplementacoes} className="text-xs font-medium text-primaria hover:underline">
+              + Importar suplementações não pagas
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-3 text-sm">

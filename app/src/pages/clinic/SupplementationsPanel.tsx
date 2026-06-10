@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createSupplementation, listSupplementations, type Supplementation } from '@/lib/supplementations'
+import { createSupplementation, listSupplementations, setSupplementationPaid, type Supplementation } from '@/lib/supplementations'
 import { formatDateBR } from '@/lib/format'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
@@ -16,6 +16,11 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
   }
   useEffect(recarregar, [patientId])
 
+  async function togglePago(s: Supplementation) {
+    await setSupplementationPaid(s.id, !s.pago)
+    recarregar()
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -29,7 +34,7 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
         <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-black/[0.02] text-left text-texto/60">
-              <tr><th className="px-4 py-2 font-medium">Medicação</th><th className="px-4 py-2 font-medium">Via/Local</th><th className="px-4 py-2 font-medium">Validade</th><th className="px-4 py-2 font-medium">Lote</th><th className="px-4 py-2 font-medium">Data</th></tr>
+              <tr><th className="px-4 py-2 font-medium">Medicação</th><th className="px-4 py-2 font-medium">Via/Local</th><th className="px-4 py-2 font-medium">Validade</th><th className="px-4 py-2 font-medium">Lote</th><th className="px-4 py-2 font-medium">Data</th><th className="px-4 py-2 font-medium">Pagamento</th></tr>
             </thead>
             <tbody>
               {itens.map((s) => (
@@ -39,6 +44,11 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
                   <td className="px-4 py-2 text-texto/70">{s.validade ? formatDateBR(s.validade) : '—'}</td>
                   <td className="px-4 py-2 text-texto/70">{s.lote ?? '—'}</td>
                   <td className="px-4 py-2 text-texto/60">{formatDateBR(s.data)}</td>
+                  <td className="px-4 py-2">
+                    <button onClick={() => togglePago(s)} className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.pago ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {s.pago ? 'Pago' : 'Não pago'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
