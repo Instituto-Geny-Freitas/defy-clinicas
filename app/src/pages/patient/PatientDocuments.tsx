@@ -36,7 +36,7 @@ export default function PatientDocuments() {
 
       {arquivos.length > 0 && (
         <div className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-texto/70">Receitas e arquivos</h2>
+          <h2 className="mb-2 text-sm font-semibold text-texto/70">Receitas, orçamentos e arquivos</h2>
           <div className="space-y-2">
             {arquivos.map((a) => (
               <a key={a.id} href={a.signedUrl} target="_blank" rel="noopener noreferrer"

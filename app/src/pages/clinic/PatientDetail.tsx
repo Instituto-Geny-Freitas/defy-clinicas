@@ -205,6 +205,7 @@ export default function PatientDetail() {
             patientId={paciente.id}
             clinicId={paciente.clinic_id}
             professionalId={profile?.professional?.id}
+            pacienteNome={paciente.nome}
           />
         )}
         {aba === 'relatorios' && <PatientReportsPanel patientId={paciente.id} />}

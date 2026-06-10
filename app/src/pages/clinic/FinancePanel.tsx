@@ -15,33 +15,66 @@ import {
 import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listUnpaidSupplementations } from '@/lib/supplementations'
+import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
+import { buildOrcamentoPdf } from '@/lib/orcamentoPdf'
+import { useClinic } from '@/theme/ThemeProvider'
 import { formatDateBR } from '@/lib/format'
 
 interface Props {
   patientId: string
   clinicId: string
   professionalId?: string | null
+  pacienteNome?: string
 }
 
-export default function FinancePanel({ patientId, clinicId, professionalId }: Props) {
+export default function FinancePanel({ patientId, clinicId, professionalId, pacienteNome }: Props) {
+  const clinic = useClinic()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [pagamentos, setPagamentos] = useState<Payment[]>([])
   const [procedimentos, setProcedimentos] = useState<ProcedureRecord[]>([])
+  const [compartilhados, setCompartilhados] = useState<SharedDocument[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modalOrc, setModalOrc] = useState(false)
   const [pagandoQuote, setPagandoQuote] = useState<Quote | null>(null)
+  const [enviando, setEnviando] = useState<string | null>(null)
 
   function recarregar() {
-    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId)])
-      .then(([q, p, proc]) => {
+    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId), listSharedDocuments(patientId)])
+      .then(([q, p, proc, sd]) => {
         setQuotes(q)
         setPagamentos(p)
         setProcedimentos(proc)
+        setCompartilhados(sd)
       })
       .catch(() => {})
       .finally(() => setCarregando(false))
   }
   useEffect(recarregar, [patientId])
+
+  /** Documento de orçamento já enviado ao paciente, se houver. */
+  function orcamentoEnviado(quoteId: string): SharedDocument | undefined {
+    return compartilhados.find((d) => d.quote_id === quoteId && d.enviado_paciente)
+  }
+
+  async function enviarOrcamento(q: Quote) {
+    setEnviando(q.id)
+    try {
+      const { blob } = buildOrcamentoPdf({ clinic, pacienteNome: pacienteNome ?? 'Paciente', quote: q })
+      await createSharedDocument({
+        clinicId, patientId, professionalId,
+        titulo: `Orçamento ${q.numero ?? new Date(q.created_at).toLocaleDateString('pt-BR')}`,
+        categoria: 'orcamento',
+        quoteId: q.id,
+        blob,
+        enviarPaciente: true,
+      })
+      recarregar()
+    } catch (e) {
+      alert((e as Error).message ?? 'Não foi possível gerar/enviar o orçamento.')
+    } finally {
+      setEnviando(null)
+    }
+  }
 
   if (carregando) return <p className="text-sm text-texto/50">Carregando…</p>
 
@@ -98,16 +131,31 @@ export default function FinancePanel({ patientId, clinicId, professionalId }: Pr
                     {q.desconto > 0 && <div className="text-xs text-texto/50">desc. {brl(q.desconto)}</div>}
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-3 text-sm">
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/5 pt-3 text-sm">
                   <span className="text-texto/60">Pago {brl(pago)}</span>
                   <span className={saldo > 0 ? 'font-semibold text-secundaria' : 'font-semibold text-emerald-600'}>
                     {saldo > 0 ? `Saldo ${brl(saldo)}` : 'Quitado'}
                   </span>
-                  {saldo > 0 && (
-                    <button onClick={() => setPagandoQuote(q)} className="rounded-md bg-primaria px-3 py-1 text-xs font-semibold text-white hover:opacity-90">
-                      Registrar pagamento
-                    </button>
-                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    {orcamentoEnviado(q.id) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        ✓ Orçamento enviado
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => enviarOrcamento(q)}
+                        disabled={enviando === q.id}
+                        className="rounded-md border border-primaria px-3 py-1 text-xs font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-50"
+                      >
+                        {enviando === q.id ? 'Enviando…' : 'Gerar e enviar orçamento'}
+                      </button>
+                    )}
+                    {saldo > 0 && (
+                      <button onClick={() => setPagandoQuote(q)} className="rounded-md bg-primaria px-3 py-1 text-xs font-semibold text-white hover:opacity-90">
+                        Registrar pagamento
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {produtos.length > 0 && (
                   <div className="mt-3 border-t border-black/5 pt-3">

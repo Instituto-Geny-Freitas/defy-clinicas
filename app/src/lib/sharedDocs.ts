@@ -9,6 +9,7 @@ export interface SharedDocument {
   categoria: string
   titulo: string
   arquivo_url: string
+  quote_id: string | null
   enviado_paciente: boolean
   fornecedor_nome: string | null
   fornecedor_whatsapp: string | null
@@ -24,10 +25,12 @@ export async function createSharedDocument(args: {
   professionalId?: string | null
   titulo: string
   categoria?: string
+  quoteId?: string | null
   blob: Blob
   enviarPaciente: boolean
 }): Promise<SharedDocument> {
-  const path = `${args.patientId}/manipulacoes/${crypto.randomUUID()}.pdf`
+  const pasta = args.categoria === 'orcamento' ? 'orcamentos' : 'manipulacoes'
+  const path = `${args.patientId}/${pasta}/${crypto.randomUUID()}.pdf`
   const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, args.blob, { contentType: 'application/pdf' })
   if (upErr) throw upErr
   const { data, error } = await supabase
@@ -39,6 +42,7 @@ export async function createSharedDocument(args: {
       categoria: args.categoria ?? 'manipulacao',
       titulo: args.titulo,
       arquivo_url: path,
+      quote_id: args.quoteId ?? null,
       enviado_paciente: args.enviarPaciente,
     })
     .select()
