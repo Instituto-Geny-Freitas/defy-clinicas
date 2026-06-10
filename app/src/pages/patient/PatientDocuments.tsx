@@ -8,18 +8,20 @@ import {
 import DocStatusBadge from '@/components/DocStatusBadge'
 import { printDocument } from '@/lib/printDoc'
 import { useClinic } from '@/theme/ThemeProvider'
+import { listSharedForPatient, type SharedDocument } from '@/lib/sharedDocs'
 
 export default function PatientDocuments() {
   const { profile } = useAuth()
   const patientId = profile?.patient?.id
   const [docs, setDocs] = useState<DocInstance[]>([])
+  const [arquivos, setArquivos] = useState<SharedDocument[]>([])
   const [carregando, setCarregando] = useState(true)
   const [aberto, setAberto] = useState<DocInstance | null>(null)
 
   function recarregar() {
     if (!patientId) return
-    listPatientDocuments(patientId)
-      .then(setDocs)
+    Promise.all([listPatientDocuments(patientId), listSharedForPatient(patientId)])
+      .then(([d, a]) => { setDocs(d); setArquivos(a) })
       .catch(() => {})
       .finally(() => setCarregando(false))
   }
@@ -30,7 +32,27 @@ export default function PatientDocuments() {
   return (
     <div>
       <h1 className="text-xl font-semibold text-texto">Meus Documentos</h1>
-      <p className="mt-1 mb-4 text-sm text-texto/60">Termos a assinar e orientações de cuidado.</p>
+      <p className="mt-1 mb-4 text-sm text-texto/60">Termos a assinar, orientações e receitas enviadas pela clínica.</p>
+
+      {arquivos.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-texto/70">Receitas e arquivos</h2>
+          <div className="space-y-2">
+            {arquivos.map((a) => (
+              <a key={a.id} href={a.signedUrl} target="_blank" rel="noopener noreferrer"
+                className={`flex w-full items-center justify-between rounded-xl border border-black/5 bg-white p-4 ${a.signedUrl ? 'hover:bg-black/[0.02]' : 'pointer-events-none opacity-60'}`}>
+                <div>
+                  <div className="text-sm font-medium text-texto">{a.titulo}</div>
+                  <div className="text-xs text-texto/50">{new Date(a.created_at).toLocaleDateString('pt-BR')}</div>
+                </div>
+                <span className="text-sm font-medium text-primaria">Abrir PDF</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {arquivos.length > 0 && <h2 className="mb-2 text-sm font-semibold text-texto/70">Termos e orientações</h2>}
 
       {docs.length === 0 ? (
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">

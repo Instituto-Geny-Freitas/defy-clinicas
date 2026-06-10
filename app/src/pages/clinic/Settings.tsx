@@ -905,12 +905,22 @@ function IntegracoesSection({ clinicId }: { clinicId: string }) {
   const [msg, setMsg] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
 
+  // WhatsApp (envio de receitas/documentos a fornecedores)
+  const [wa, setWa] = useState<IntegrationSetting>({
+    clinic_id: clinicId, categoria: 'whatsapp', provider: '', modo: 'producao', config_publica: {}, ativo: false,
+  })
+  const [waMsg, setWaMsg] = useState<string | null>(null)
+  const [waSalvando, setWaSalvando] = useState(false)
+
   useEffect(() => {
     getIntegration('pagamento').then((data) => { if (data) setS(data) }).catch(() => {})
+    getIntegration('whatsapp').then((data) => { if (data) setWa(data) }).catch(() => {})
   }, [])
 
   const cfg = (k: string) => (s.config_publica?.[k] as string) || ''
   const setCfg = (k: string, v: string) => setS({ ...s, config_publica: { ...s.config_publica, [k]: v } })
+  const waCfg = (k: string) => (wa.config_publica?.[k] as string) || ''
+  const setWaCfg = (k: string, v: string) => setWa({ ...wa, config_publica: { ...wa.config_publica, [k]: v } })
 
   async function salvar() {
     setSalvando(true)
@@ -922,6 +932,19 @@ function IntegracoesSection({ clinicId }: { clinicId: string }) {
       setMsg('Não foi possível salvar.')
     } finally {
       setSalvando(false)
+    }
+  }
+
+  async function salvarWa() {
+    setWaSalvando(true)
+    setWaMsg(null)
+    try {
+      await upsertIntegration(wa)
+      setWaMsg('Integração WhatsApp salva.')
+    } catch {
+      setWaMsg('Não foi possível salvar.')
+    } finally {
+      setWaSalvando(false)
     }
   }
 
@@ -962,6 +985,37 @@ function IntegracoesSection({ clinicId }: { clinicId: string }) {
           {salvando ? 'Salvando…' : 'Salvar'}
         </button>
         {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">WhatsApp (envio de receitas/documentos)</h3>
+        <p className="mb-4 text-xs text-texto/50">
+          Permite enviar receitas de manipulação a fornecedores por WhatsApp. Informe aqui apenas dados públicos do provedor.
+          O token/segredo de API deve ser configurado como segredo do servidor (Edge Function send-whatsapp), nunca aqui.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Provedor</label>
+            <select className={field} value={wa.provider ?? ''} onChange={(e) => setWa({ ...wa, provider: e.target.value })}>
+              <option value="">Selecione…</option>
+              <option value="meta">WhatsApp Cloud API (Meta)</option>
+              <option value="twilio">Twilio</option>
+              <option value="zapi">Z-API</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div><label className="mb-1 block text-sm text-texto/70">Número de envio (From)</label><input className={field} value={waCfg('from_number')} onChange={(e) => setWaCfg('from_number', e.target.value)} placeholder="Ex.: 5511999998888" /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">URL da API</label><input className={field} value={waCfg('api_url')} onChange={(e) => setWaCfg('api_url', e.target.value)} placeholder="https://…" /></div>
+          <label className="flex items-center gap-2 text-sm text-texto/80">
+            <input type="checkbox" checked={wa.ativo} onChange={(e) => setWa({ ...wa, ativo: e.target.checked })} /> Integração ativa
+          </label>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvarWa} disabled={waSalvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {waSalvando ? 'Salvando…' : 'Salvar WhatsApp'}
+        </button>
+        {waMsg && <span className="text-sm text-texto/60">{waMsg}</span>}
       </div>
     </div>
   )
