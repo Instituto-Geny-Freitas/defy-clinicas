@@ -52,9 +52,10 @@ import {
   type FormulaInput,
   type FormulationLib,
 } from '@/lib/formulations'
+import { createExpenseType, deleteExpenseType, listExpenseTypes, type ExpenseType } from '@/lib/cashflow'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -84,6 +85,7 @@ export default function Settings() {
           { k: 'fornecedores', l: 'Fornecedores' },
           { k: 'formulas', l: 'Fórmulas' },
           { k: 'procedimentos', l: 'Procedimentos' },
+          { k: 'despesas', l: 'Tipos de Despesa' },
           { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
           <button
@@ -107,6 +109,7 @@ export default function Settings() {
       {sec === 'fornecedores' && <FornecedoresSection clinicId={clinicId} />}
       {sec === 'formulas' && <FormulasSection clinicId={clinicId} />}
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
+      {sec === 'despesas' && <DespesasSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
     </div>
   )
@@ -459,6 +462,49 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
         <p className="mb-3 text-xs text-texto/50">Usados no campo Procedimento ao registrar um atendimento.</p>
         <div className="flex gap-2">
           <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Skinbooster PDRN" />
+          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <tbody>
+            {itens.map((p) => (
+              <tr key={p.id} className="border-t border-black/5 first:border-t-0">
+                <td className="px-4 py-2 text-texto">{p.nome}</td>
+                <td className="px-4 py-2 text-right"><button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+              </tr>
+            ))}
+            {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// --- Tipos de despesa -------------------------------------------------------
+function DespesasSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<ExpenseType[]>([])
+  const [nome, setNome] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listExpenseTypes().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    try { await createExpenseType(clinicId, nome.trim()); setNome(''); recarregar() } finally { setSalvando(false) }
+  }
+  async function remover(id: string) { if (confirm('Excluir este tipo de despesa?')) { await deleteExpenseType(id); recarregar() } }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo tipo de despesa</h3>
+        <p className="mb-3 text-xs text-texto/50">Usados ao registrar despesas no Financeiro (fluxo de caixa).</p>
+        <div className="flex gap-2">
+          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Aluguel, Insumos, Energia" />
           <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
         </div>
       </div>

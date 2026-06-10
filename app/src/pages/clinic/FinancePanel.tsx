@@ -155,7 +155,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   async function importarSuplementacoes() {
     const supl = await listUnpaidSupplementations(patientId)
     if (supl.length === 0) { alert('Nenhuma suplementação não paga.'); return }
-    const novos = supl.map((s) => ({ descricao: `Suplementação: ${s.medicacao}`, qtd: 1, valor_unit: 0, total: 0 }))
+    const novos = supl.map((s) => ({ descricao: `Suplementação: ${s.medicacao}`, qtd: 1, valor_unit: Number(s.valor_venda) || 0, total: Number(s.valor_venda) || 0 }))
     setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
   }
 

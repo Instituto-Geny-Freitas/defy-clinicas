@@ -7,6 +7,8 @@ export interface Supplementation {
   via_adm: string | null
   validade: string | null
   lote: string | null
+  fornecedor: string | null
+  valor_venda: number
   observacoes: string | null
   pago: boolean
   data: string
@@ -48,6 +50,8 @@ interface CreateArgs {
   via_adm?: string | null
   validade?: string | null
   lote?: string | null
+  fornecedor?: string | null
+  valor_venda?: number
   observacoes?: string | null
 }
 
@@ -60,6 +64,8 @@ export async function createSupplementation(args: CreateArgs): Promise<void> {
     via_adm: args.via_adm ?? null,
     validade: args.validade ?? null,
     lote: args.lote ?? null,
+    fornecedor: args.fornecedor ?? null,
+    valor_venda: args.valor_venda ?? 0,
     observacoes: args.observacoes ?? null,
   })
   if (error) throw error
