@@ -49,6 +49,26 @@ export async function createInventoryItem(clinicId: string, input: InventoryInpu
   return data as InventoryItem
 }
 
+/** Atualiza os dados cadastrais de um item (não altera a quantidade atual). */
+export async function updateInventoryItem(id: string, input: InventoryInput) {
+  const patch: Record<string, unknown> = { ...input }
+  delete patch.qtd_atual // quantidade é controlada por movimentações, não pela edição
+  const { data, error } = await supabase
+    .from('inventory')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as InventoryItem
+}
+
+/** Remove (desativa) um item do estoque — soft delete para preservar histórico. */
+export async function deleteInventoryItem(id: string) {
+  const { error } = await supabase.from('inventory').update({ ativo: false }).eq('id', id)
+  if (error) throw error
+}
+
 /** Lança uma entrada de estoque (o trigger soma em qtd_atual). */
 export async function addStockEntry(
   clinicId: string,

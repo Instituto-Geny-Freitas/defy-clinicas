@@ -4,8 +4,10 @@ import { formatDateBR } from '@/lib/format'
 import {
   addStockEntry,
   createInventoryItem,
+  deleteInventoryItem,
   estoqueBaixo,
   listInventory,
+  updateInventoryItem,
   validadeProxima,
   type InventoryInput,
   type InventoryItem,
@@ -20,6 +22,7 @@ export default function Inventory() {
   const [itens, setItens] = useState<InventoryItem[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
+  const [editando, setEditando] = useState<InventoryItem | null>(null)
 
   function recarregar() {
     listInventory().then(setItens).catch(() => {}).finally(() => setCarregando(false))
@@ -33,6 +36,12 @@ export default function Inventory() {
     recarregar()
   }
 
+  async function excluir(item: InventoryItem) {
+    if (!confirm(`Remover "${item.produto}" do estoque?`)) return
+    await deleteInventoryItem(item.id)
+    recarregar()
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -43,7 +52,10 @@ export default function Inventory() {
       </div>
 
       {modal && clinicId && (
-        <NovoProdutoModal clinicId={clinicId} onClose={() => setModal(false)} onCreated={() => { setModal(false); recarregar() }} />
+        <ProdutoModal clinicId={clinicId} item={null} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
+      )}
+      {editando && clinicId && (
+        <ProdutoModal clinicId={clinicId} item={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
       )}
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-black/5 bg-white">
@@ -87,9 +99,15 @@ export default function Inventory() {
                   </td>
                   <td className="px-4 py-2 text-texto/70">{brl(i.preco_venda)}</td>
                   <td className="px-4 py-2 text-texto/70">{brl(i.margem_unit)}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2 text-right whitespace-nowrap">
                     <button onClick={() => entrada(i)} className="text-xs font-medium text-primaria hover:underline">
                       + Entrada
+                    </button>
+                    <button onClick={() => setEditando(i)} className="ml-3 text-xs font-medium text-texto/60 hover:underline">
+                      Editar
+                    </button>
+                    <button onClick={() => excluir(i)} className="ml-3 text-xs font-medium text-secundaria hover:underline">
+                      Excluir
                     </button>
                   </td>
                 </tr>
@@ -102,8 +120,17 @@ export default function Inventory() {
   )
 }
 
-function NovoProdutoModal({ clinicId, onClose, onCreated }: { clinicId: string; onClose: () => void; onCreated: () => void }) {
-  const [f, setF] = useState<InventoryInput>({ produto: '', custo_unit: 0, preco_venda: 0, qtd_atual: 0, qtd_minima: 0 })
+function ProdutoModal({ clinicId, item, onClose, onSaved }: { clinicId: string; item: InventoryItem | null; onClose: () => void; onSaved: () => void }) {
+  const editar = !!item
+  const [f, setF] = useState<InventoryInput>(
+    item
+      ? {
+          produto: item.produto, marca: item.marca, lote: item.lote, validade: item.validade,
+          custo_unit: item.custo_unit, preco_venda: item.preco_venda, qtd_atual: item.qtd_atual,
+          qtd_minima: item.qtd_minima, unidade: item.unidade, categoria: item.categoria,
+        }
+      : { produto: '', custo_unit: 0, preco_venda: 0, qtd_atual: 0, qtd_minima: 0 },
+  )
   const [salvando, setSalvando] = useState(false)
   const set = <K extends keyof InventoryInput>(k: K, v: InventoryInput[K]) => setF((s) => ({ ...s, [k]: v }))
 
@@ -112,8 +139,9 @@ function NovoProdutoModal({ clinicId, onClose, onCreated }: { clinicId: string; 
     if (!f.produto.trim()) return
     setSalvando(true)
     try {
-      await createInventoryItem(clinicId, f)
-      onCreated()
+      if (item) await updateInventoryItem(item.id, f)
+      else await createInventoryItem(clinicId, f)
+      onSaved()
     } catch {
       setSalvando(false)
     }
@@ -123,7 +151,7 @@ function NovoProdutoModal({ clinicId, onClose, onCreated }: { clinicId: string; 
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
       <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-texto">Novo produto</h2>
+          <h2 className="text-lg font-semibold text-texto">{editar ? 'Editar produto' : 'Novo produto'}</h2>
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
         </div>
         <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -134,7 +162,15 @@ function NovoProdutoModal({ clinicId, onClose, onCreated }: { clinicId: string; 
           <div><label className="mb-1 block text-sm text-texto/70">Marca</label><input className={field} value={f.marca ?? ''} onChange={(e) => set('marca', e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={f.lote ?? ''} onChange={(e) => set('lote', e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={f.validade ?? ''} onChange={(e) => set('validade', e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Qtd inicial</label><input type="number" className={field} value={f.qtd_atual ?? 0} onChange={(e) => set('qtd_atual', Number(e.target.value))} /></div>
+          {editar ? (
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Qtd atual</label>
+              <input className={`${field} bg-black/[0.03]`} value={f.qtd_atual ?? 0} disabled readOnly />
+              <p className="mt-1 text-xs text-texto/40">Ajuste via "+ Entrada" (movimentações)</p>
+            </div>
+          ) : (
+            <div><label className="mb-1 block text-sm text-texto/70">Qtd inicial</label><input type="number" className={field} value={f.qtd_atual ?? 0} onChange={(e) => set('qtd_atual', Number(e.target.value))} /></div>
+          )}
           <div><label className="mb-1 block text-sm text-texto/70">Estoque mínimo</label><input type="number" className={field} value={f.qtd_minima ?? 0} onChange={(e) => set('qtd_minima', Number(e.target.value))} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Unidade</label><input className={field} placeholder="un, ml, cx…" value={f.unidade ?? ''} onChange={(e) => set('unidade', e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Custo unit. (R$)</label><input type="number" step="0.01" className={field} value={f.custo_unit ?? 0} onChange={(e) => set('custo_unit', Number(e.target.value))} /></div>
@@ -142,7 +178,7 @@ function NovoProdutoModal({ clinicId, onClose, onCreated }: { clinicId: string; 
           <div className="mt-2 flex justify-end gap-2 sm:col-span-2">
             <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
             <button type="submit" disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
-              {salvando ? 'Salvando…' : 'Cadastrar'}
+              {salvando ? 'Salvando…' : editar ? 'Salvar' : 'Cadastrar'}
             </button>
           </div>
         </form>
