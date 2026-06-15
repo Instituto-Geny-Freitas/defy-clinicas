@@ -10,11 +10,18 @@ const TEAL: [number, number, number] = [15, 118, 110]
  * fórmula, um bloco "FÓRMULA MANIPULADA:" com a composição em tópicos e a
  * posologia. Devolve { blob, filename }.
  */
+export interface ProfissionalReceita {
+  nome: string
+  conselho?: string | null      // ex.: "CRBM 12345-SP"
+  especialidade?: string | null
+}
+
 export function buildFormulaPdf(args: {
   clinic: Clinic | null
   pacienteNome: string
   pacienteWhatsapp?: string | null
   formulas: FormulationPrescription[]
+  profissional?: ProfissionalReceita | null
 }): { blob: Blob; filename: string } {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
@@ -70,7 +77,9 @@ export function buildFormulaPdf(args: {
       const txt = `${a.ativo}${a.quantidade ? `  ${a.quantidade}${a.unidade ?? ''}` : ''}`
       const linhas = doc.splitTextToSize(txt, maxW - 14)
       ensureSpace(linhas.length * 14)
-      doc.text('●', M, y)
+      // Marcador desenhado (evita problemas de codificação de glifos como "●").
+      doc.setFillColor(15, 118, 110)
+      doc.circle(M + 3, y - 3, 1.8, 'F')
       doc.text(linhas, M + 14, y)
       y += linhas.length * 14
     }
@@ -88,6 +97,30 @@ export function buildFormulaPdf(args: {
   if ((args.formulas ?? []).length === 0) {
     doc.setFontSize(10); doc.setTextColor(120)
     doc.text('Nenhuma fórmula selecionada.', M, y)
+  }
+
+  // Assinatura / dados da profissional que gerou a fórmula
+  const p = args.profissional
+  if (p?.nome) {
+    ensureSpace(70)
+    y = Math.max(y, H - 120)
+    const cx = W / 2
+    doc.setDrawColor(150)
+    doc.line(cx - 120, y, cx + 120, y)
+    y += 14
+    doc.setTextColor(40)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text(p.nome, cx, y, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(90)
+    doc.setFontSize(9)
+    const linha2 = [p.especialidade, p.conselho].filter(Boolean).join('  ·  ')
+    if (linha2) { y += 13; doc.text(linha2, cx, y, { align: 'center' }) }
+    y += 13
+    doc.setTextColor(120)
+    doc.setFontSize(8)
+    doc.text(`Emitido em ${new Date().toLocaleDateString('pt-BR')}`, cx, y, { align: 'center' })
   }
 
   const ts = new Date().toISOString().slice(0, 10)

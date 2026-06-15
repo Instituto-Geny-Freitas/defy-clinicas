@@ -1,15 +1,16 @@
 import { supabase } from '@/lib/supabase'
 
 // ---- Tipos de despesa -------------------------------------------------------
-export interface ExpenseType { id: string; nome: string; ativo: boolean }
+export type Classificacao = 'produto' | 'fixo'
+export interface ExpenseType { id: string; nome: string; tipo: Classificacao; ativo: boolean }
 
 export async function listExpenseTypes(): Promise<ExpenseType[]> {
-  const { data, error } = await supabase.from('expense_types').select('id, nome, ativo').eq('ativo', true).order('nome')
+  const { data, error } = await supabase.from('expense_types').select('id, nome, tipo, ativo').eq('ativo', true).order('nome')
   if (error) throw error
   return data ?? []
 }
-export async function createExpenseType(clinicId: string, nome: string): Promise<void> {
-  const { error } = await supabase.from('expense_types').insert({ clinic_id: clinicId, nome })
+export async function createExpenseType(clinicId: string, nome: string, tipo: Classificacao = 'fixo'): Promise<void> {
+  const { error } = await supabase.from('expense_types').insert({ clinic_id: clinicId, nome, tipo })
   if (error) throw error
 }
 export async function deleteExpenseType(id: string): Promise<void> {
@@ -18,6 +19,8 @@ export async function deleteExpenseType(id: string): Promise<void> {
 }
 
 // ---- Despesas ---------------------------------------------------------------
+export type FormaPagamento = 'pix' | 'cartao' | 'outro'
+
 export interface Expense {
   id: string
   expense_type_id: string | null
@@ -25,6 +28,10 @@ export interface Expense {
   valor: number
   data: string
   pago: boolean
+  classificacao: Classificacao
+  forma_pagamento: FormaPagamento | null
+  parcela_num: number | null
+  parcela_total: number | null
   recorrencia_grupo: string | null
   expense_types?: { nome: string } | null
 }
@@ -58,21 +65,56 @@ export async function createExpense(args: {
   valor: number
   data: string
   pago: boolean
+  classificacao: Classificacao
+  formaPagamento?: FormaPagamento | null
+  // Produto comprado parcelado: divide o valor total em N parcelas mensais.
+  parcelado?: boolean
+  parcelas?: number
+  // Gasto fixo recorrente: repete o valor cheio a cada período.
   recorrente?: boolean
   periodo?: Periodo
   repeticoes?: number
 }): Promise<void> {
-  const grupo = args.recorrente ? crypto.randomUUID() : null
-  const n = args.recorrente ? Math.max(1, args.repeticoes ?? 1) : 1
-  const rows = Array.from({ length: n }, (_, i) => ({
+  const base = {
     clinic_id: args.clinicId,
     expense_type_id: args.expenseTypeId ?? null,
     descricao: args.descricao ?? null,
-    valor: args.valor,
-    data: i === 0 ? args.data : addPeriodo(args.data, args.periodo ?? 'mensal', i),
-    pago: i === 0 ? args.pago : false,
-    recorrencia_grupo: grupo,
-  }))
+    classificacao: args.classificacao,
+    forma_pagamento: args.formaPagamento ?? null,
+  }
+
+  let rows: Record<string, unknown>[]
+
+  if (args.parcelado) {
+    // Parcelamento: valor total dividido em N parcelas mensais subsequentes.
+    const n = Math.max(1, args.parcelas ?? 1)
+    const grupo = crypto.randomUUID()
+    const cada = Math.round((args.valor / n) * 100) / 100
+    const ajuste = Math.round((args.valor - cada * n) * 100) / 100 // sobra de centavos na 1ª
+    rows = Array.from({ length: n }, (_, i) => ({
+      ...base,
+      valor: i === 0 ? cada + ajuste : cada,
+      data: i === 0 ? args.data : addPeriodo(args.data, 'mensal', i),
+      pago: i === 0 ? args.pago : false,
+      parcela_num: i + 1,
+      parcela_total: n,
+      recorrencia_grupo: grupo,
+    }))
+  } else if (args.recorrente) {
+    // Recorrência: valor cheio repetido a cada período.
+    const n = Math.max(1, args.repeticoes ?? 1)
+    const grupo = crypto.randomUUID()
+    rows = Array.from({ length: n }, (_, i) => ({
+      ...base,
+      valor: args.valor,
+      data: i === 0 ? args.data : addPeriodo(args.data, args.periodo ?? 'mensal', i),
+      pago: i === 0 ? args.pago : false,
+      recorrencia_grupo: grupo,
+    }))
+  } else {
+    rows = [{ ...base, valor: args.valor, data: args.data, pago: args.pago }]
+  }
+
   const { error } = await supabase.from('expenses').insert(rows)
   if (error) throw error
 }

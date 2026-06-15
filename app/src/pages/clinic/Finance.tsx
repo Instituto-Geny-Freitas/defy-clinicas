@@ -13,9 +13,11 @@ import {
   listMovements,
   listPaymentsPeriodo,
   setExpensePaid,
+  type Classificacao,
   type Expense,
   type ExpenseType,
   type FinancialMovement,
+  type FormaPagamento,
   type MovTipo,
   type PaymentRow,
   type Periodo,
@@ -404,9 +406,21 @@ function DespesasView(props: {
           <tbody>
             {lista.map((d) => (
               <tr key={d.id} className="border-t border-black/5">
-                <td className="px-4 py-2 text-texto/60">{formatDateBR(d.data)}{d.recorrencia_grupo && <span className="ml-1 text-[10px] text-primaria">↻</span>}</td>
-                <td className="px-4 py-2 text-texto">{d.expense_types?.nome ?? '—'}</td>
-                <td className="px-4 py-2 text-texto/60">{d.descricao ?? '—'}</td>
+                <td className="px-4 py-2 text-texto/60">
+                  {formatDateBR(d.data)}
+                  {d.parcela_total ? <span className="ml-1 text-[10px] text-primaria">{d.parcela_num}/{d.parcela_total}</span>
+                    : d.recorrencia_grupo ? <span className="ml-1 text-[10px] text-primaria">↻</span> : null}
+                </td>
+                <td className="px-4 py-2 text-texto">
+                  {d.expense_types?.nome ?? '—'}
+                  <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${d.classificacao === 'produto' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'}`}>
+                    {d.classificacao === 'produto' ? 'Produto' : 'Fixo'}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-texto/60">
+                  {d.descricao ?? '—'}
+                  {d.forma_pagamento && <span className="ml-1 text-[10px] uppercase text-texto/40">· {d.forma_pagamento === 'cartao' ? 'Cartão' : d.forma_pagamento}</span>}
+                </td>
                 <td className="px-4 py-2 text-right font-medium text-texto">{brl(Number(d.valor))}</td>
                 <td className="px-4 py-2 text-right">
                   <button onClick={() => alternarPago(d)} className="mr-3 text-xs text-primaria hover:underline">{d.pago ? 'Marcar não pago' : 'Marcar pago'}</button>
@@ -433,25 +447,51 @@ function DespesaModal(props: {
 }) {
   const { clinicId, tipos, dataPadrao, onClose, onSaved } = props
   const [tipoId, setTipoId] = useState('')
+  const [classificacao, setClassificacao] = useState<Classificacao>('fixo')
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState('')
   const [data, setData] = useState(dataPadrao)
   const [pago, setPago] = useState(false)
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('pix')
+  // Produto: à vista x parcelado
+  const [parcelado, setParcelado] = useState(false)
+  const [parcelas, setParcelas] = useState('2')
+  // Gasto fixo: recorrência
   const [recorrente, setRecorrente] = useState(false)
   const [periodo, setPeriodo] = useState<Periodo>('mensal')
   const [repeticoes, setRepeticoes] = useState('12')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
+  // Ao escolher um tipo de despesa, herda a natureza (produto/fixo).
+  function escolherTipo(id: string) {
+    setTipoId(id)
+    const t = tipos.find((x) => x.id === id)
+    if (t) setClassificacao(t.tipo)
+  }
+
+  const v = Number(valor) || 0
+  const nParcelas = Math.max(1, Number(parcelas) || 1)
+
   async function salvar() {
     setErro('')
-    const v = Number(valor)
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
     setSalvando(true)
     try {
       await createExpense({
-        clinicId, expenseTypeId: tipoId || null, descricao: descricao || null, valor: v, data, pago,
-        recorrente, periodo, repeticoes: Number(repeticoes) || 1,
+        clinicId,
+        expenseTypeId: tipoId || null,
+        descricao: descricao || null,
+        valor: v,
+        data,
+        pago,
+        classificacao,
+        formaPagamento,
+        parcelado: classificacao === 'produto' && parcelado,
+        parcelas: nParcelas,
+        recorrente: classificacao === 'fixo' && recorrente,
+        periodo,
+        repeticoes: Number(repeticoes) || 1,
       })
       onSaved()
     } catch (e) { setErro((e as Error).message ?? 'Erro ao salvar.') } finally { setSalvando(false) }
@@ -459,23 +499,36 @@ function DespesaModal(props: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[92vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-4 text-lg font-semibold text-texto">Nova despesa</h3>
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-texto/60">Tipo de despesa</label>
-            <select className={field} value={tipoId} onChange={(e) => setTipoId(e.target.value)}>
+            <select className={field} value={tipoId} onChange={(e) => escolherTipo(e.target.value)}>
               <option value="">Selecione…</option>
-              {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome} ({t.tipo === 'produto' ? 'Produto' : 'Gasto fixo'})</option>)}
             </select>
           </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Classificação</label>
+            <div className="flex gap-2">
+              {(['produto', 'fixo'] as Classificacao[]).map((c) => (
+                <button key={c} type="button" onClick={() => setClassificacao(c)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${classificacao === c ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
+                  {c === 'produto' ? 'Produto' : 'Gasto fixo'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-medium text-texto/60">Descrição</label>
             <input className={field} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Opcional" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-texto/60">Valor</label>
+              <label className="mb-1 block text-xs font-medium text-texto/60">Valor{classificacao === 'produto' && parcelado ? ' total' : ''}</label>
               <input className={field} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
             </div>
             <div>
@@ -483,29 +536,70 @@ function DespesaModal(props: {
               <input type="date" className={field} value={data} onChange={(e) => setData(e.target.value)} />
             </div>
           </div>
-          <label className="flex items-center gap-2 text-sm text-texto/70">
-            <input type="checkbox" checked={pago} onChange={(e) => setPago(e.target.checked)} /> Já está paga
-          </label>
-          <label className="flex items-center gap-2 text-sm text-texto/70">
-            <input type="checkbox" checked={recorrente} onChange={(e) => setRecorrente(e.target.checked)} /> Despesa recorrente
-          </label>
-          {recorrente && (
-            <div className="grid grid-cols-2 gap-3 rounded-lg bg-black/[0.02] p-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-texto/60">Repetir</label>
-                <select className={field} value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
-                  <option value="semanal">Semanalmente</option>
-                  <option value="quinzenal">Quinzenalmente</option>
-                  <option value="mensal">Mensalmente</option>
-                  <option value="anual">Anualmente</option>
-                </select>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Forma de pagamento</label>
+            <div className="flex gap-2">
+              {(['pix', 'cartao'] as FormaPagamento[]).map((fp) => (
+                <button key={fp} type="button" onClick={() => setFormaPagamento(fp)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${formaPagamento === fp ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
+                  {fp === 'pix' ? 'Pix' : 'Cartão'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Produto: à vista x parcelado */}
+          {classificacao === 'produto' && (
+            <div className="rounded-lg bg-black/[0.02] p-3">
+              <label className="mb-1 block text-xs font-medium text-texto/60">Pagamento</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setParcelado(false)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${!parcelado ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>À vista</button>
+                <button type="button" onClick={() => setParcelado(true)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${parcelado ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>Parcelado</button>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-texto/60">Nº de parcelas</label>
-                <input className={field} inputMode="numeric" value={repeticoes} onChange={(e) => setRepeticoes(e.target.value)} />
-              </div>
+              {parcelado && (
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-medium text-texto/60">Nº de parcelas</label>
+                  <input className={field} inputMode="numeric" value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
+                  {v > 0 && <p className="mt-1 text-xs text-texto/50">{nParcelas}× de {brl(Math.round((v / nParcelas) * 100) / 100)} (mensais, a partir da data)</p>}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Gasto fixo: recorrência */}
+          {classificacao === 'fixo' && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-texto/70">
+                <input type="checkbox" checked={recorrente} onChange={(e) => setRecorrente(e.target.checked)} /> Despesa recorrente
+              </label>
+              {recorrente && (
+                <div className="grid grid-cols-2 gap-3 rounded-lg bg-black/[0.02] p-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-texto/60">Repetir</label>
+                    <select className={field} value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
+                      <option value="semanal">Semanalmente</option>
+                      <option value="quinzenal">Quinzenalmente</option>
+                      <option value="mensal">Mensalmente</option>
+                      <option value="anual">Anualmente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-texto/60">Nº de ocorrências</label>
+                    <input className={field} inputMode="numeric" value={repeticoes} onChange={(e) => setRepeticoes(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <label className="flex items-center gap-2 text-sm text-texto/70">
+            <input type="checkbox" checked={pago} onChange={(e) => setPago(e.target.checked)} />
+            {classificacao === 'produto' && parcelado ? 'Primeira parcela já paga' : 'Já está paga'}
+          </label>
+
           {erro && <p className="text-sm text-secundaria">{erro}</p>}
         </div>
         <div className="mt-5 flex justify-end gap-2">

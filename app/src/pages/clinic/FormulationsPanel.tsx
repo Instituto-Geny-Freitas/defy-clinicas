@@ -8,9 +8,10 @@ import {
   type FormulationPrescription,
 } from '@/lib/formulations'
 import { listSuppliers, type Supplier } from '@/lib/domains'
-import { buildFormulaPdf } from '@/lib/formulaPdf'
+import { buildFormulaPdf, type ProfissionalReceita } from '@/lib/formulaPdf'
 import { createSharedDocument, enviarDocumentoFornecedor } from '@/lib/sharedDocs'
 import { formatDateBR } from '@/lib/format'
+import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
@@ -23,6 +24,11 @@ interface Props {
 }
 
 export default function FormulationsPanel({ patientId, clinicId, professionalId, pacienteNome, pacienteWhatsapp }: Props) {
+  const { profile } = useAuth()
+  const prof = profile?.professional
+  const profissional: ProfissionalReceita | null = prof
+    ? { nome: prof.nome, conselho: [prof.conselho_tipo, prof.conselho_numero].filter(Boolean).join(' ') || null }
+    : null
   const [presc, setPresc] = useState<FormulationPrescription[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
@@ -72,6 +78,7 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId,
           pacienteNome={pacienteNome ?? 'Paciente'}
           pacienteWhatsapp={pacienteWhatsapp}
           formulas={receita}
+          profissional={profissional}
           onClose={() => setReceita(null)}
         />
       )}
@@ -172,9 +179,10 @@ function ReceitaModal(props: {
   pacienteNome: string
   pacienteWhatsapp?: string | null
   formulas: FormulationPrescription[]
+  profissional?: ProfissionalReceita | null
   onClose: () => void
 }) {
-  const { clinicId, patientId, professionalId, pacienteNome, pacienteWhatsapp, formulas, onClose } = props
+  const { clinicId, patientId, professionalId, pacienteNome, pacienteWhatsapp, formulas, profissional, onClose } = props
   const clinic = useClinic()
   const [fornecedores, setFornecedores] = useState<Supplier[]>([])
   const [fornId, setFornId] = useState('')
@@ -186,7 +194,7 @@ function ReceitaModal(props: {
   useEffect(() => { listSuppliers().then(setFornecedores).catch(() => {}) }, [])
 
   function montarPdf() {
-    return buildFormulaPdf({ clinic, pacienteNome, pacienteWhatsapp, formulas })
+    return buildFormulaPdf({ clinic, pacienteNome, pacienteWhatsapp, formulas, profissional })
   }
 
   function baixar() {

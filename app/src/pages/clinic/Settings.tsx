@@ -486,6 +486,7 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
 function DespesasSection({ clinicId }: { clinicId: string }) {
   const [itens, setItens] = useState<ExpenseType[]>([])
   const [nome, setNome] = useState('')
+  const [tipo, setTipo] = useState<'produto' | 'fixo'>('fixo')
   const [salvando, setSalvando] = useState(false)
 
   function recarregar() { listExpenseTypes().then(setItens).catch(() => {}) }
@@ -494,7 +495,7 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
   async function salvar() {
     if (!nome.trim()) return
     setSalvando(true)
-    try { await createExpenseType(clinicId, nome.trim()); setNome(''); recarregar() } finally { setSalvando(false) }
+    try { await createExpenseType(clinicId, nome.trim(), tipo); setNome(''); recarregar() } finally { setSalvando(false) }
   }
   async function remover(id: string) { if (confirm('Excluir este tipo de despesa?')) { await deleteExpenseType(id); recarregar() } }
 
@@ -502,9 +503,13 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
     <div className="max-w-2xl space-y-5">
       <div className="rounded-xl border border-black/5 bg-white p-5">
         <h3 className="mb-1 font-semibold text-texto">Novo tipo de despesa</h3>
-        <p className="mb-3 text-xs text-texto/50">Usados ao registrar despesas no Financeiro (fluxo de caixa).</p>
-        <div className="flex gap-2">
-          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Aluguel, Insumos, Energia" />
+        <p className="mb-3 text-xs text-texto/50">Usados ao registrar despesas no Financeiro (fluxo de caixa). A natureza define se a despesa é um Produto ou um Gasto fixo.</p>
+        <div className="flex flex-wrap gap-2">
+          <input className={`${field} min-w-[12rem] flex-1`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Aluguel, Insumos, Energia" />
+          <select className={`${field} w-40 shrink-0`} value={tipo} onChange={(e) => setTipo(e.target.value as 'produto' | 'fixo')}>
+            <option value="fixo">Gasto fixo</option>
+            <option value="produto">Produto</option>
+          </select>
           <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
         </div>
       </div>
@@ -514,6 +519,11 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
             {itens.map((p) => (
               <tr key={p.id} className="border-t border-black/5 first:border-t-0">
                 <td className="px-4 py-2 text-texto">{p.nome}</td>
+                <td className="px-4 py-2">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.tipo === 'produto' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'}`}>
+                    {p.tipo === 'produto' ? 'Produto' : 'Gasto fixo'}
+                  </span>
+                </td>
                 <td className="px-4 py-2 text-right"><button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
               </tr>
             ))}
