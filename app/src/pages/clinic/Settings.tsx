@@ -13,7 +13,7 @@ import {
   listAllSnippets,
   listProfessionals,
   listTeamRoles,
-  provisionStaffAccess,
+  manageStaffAccess,
   updateClinic,
   updateProfessional,
   updateTeamRole,
@@ -810,8 +810,8 @@ function EquipeSection({ clinicId }: { clinicId: string }) {
                 <td className="px-4 py-2 text-texto/70">{p.conselho_tipo ? `${p.conselho_tipo} ${p.conselho_numero ?? ''}` : '—'}</td>
                 <td className="px-4 py-2">{p.auth_user_id ? <span className="text-emerald-600">ativo</span> : <span className="text-texto/40">sem login</span>}</td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
-                  <button onClick={() => setAcessoFor(p)} className="text-xs font-medium text-primaria hover:underline" disabled={!p.email} title={!p.email ? 'Cadastre um e-mail primeiro' : ''}>
-                    {p.auth_user_id ? 'Redefinir senha' : 'Provisionar acesso'}
+                  <button onClick={() => setAcessoFor(p)} className="text-xs font-medium text-primaria hover:underline" disabled={!p.email && !p.auth_user_id} title={!p.email && !p.auth_user_id ? 'Cadastre um e-mail primeiro' : ''}>
+                    {p.auth_user_id ? 'Gerenciar acesso' : 'Provisionar acesso'}
                   </button>
                   <button onClick={() => setEditando(p)} className="ml-3 text-xs font-medium text-texto/60 hover:underline">Editar</button>
                   <button onClick={() => excluir(p)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
@@ -887,33 +887,51 @@ function RolesSection({ clinicId }: { clinicId: string }) {
 }
 
 function AcessoStaffModal({ prof, onClose, onSaved }: { prof: Professional; onClose: () => void; onSaved: () => void }) {
+  const temLogin = !!prof.auth_user_id
   const [senha, setSenha] = useState(gerarSenhaProvisoria())
-  const [processando, setProcessando] = useState(false)
+  const [novoEmail, setNovoEmail] = useState(prof.email ?? '')
+  const [busy, setBusy] = useState<'senha' | 'email' | null>(null)
   const [resultado, setResultado] = useState<{ login: string; senha: string } | null>(null)
+  const [emailMsg, setEmailMsg] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
-  async function processar() {
+  async function aplicarSenha() {
     if (senha.length < 6) { setErro('Senha mínima de 6 caracteres.'); return }
-    setProcessando(true); setErro(null)
+    setBusy('senha'); setErro(null)
     try {
-      const { login } = await provisionStaffAccess(prof.id, senha)
+      const { login } = await manageStaffAccess({ professionalId: prof.id, password: senha })
       setResultado({ login, senha })
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível provisionar o acesso.')
-      setProcessando(false)
-    }
+      setErro(e instanceof Error ? e.message : 'Não foi possível aplicar a senha.')
+    } finally { setBusy(null) }
+  }
+
+  async function alterarEmail() {
+    const email = novoEmail.trim()
+    setErro(null); setEmailMsg(null)
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setErro('Informe um e-mail válido.'); return }
+    if (email.toLowerCase() === (prof.email ?? '').toLowerCase()) { setEmailMsg('Este já é o e-mail de login atual.'); return }
+    if (!confirm(`Alterar o e-mail de login de ${prof.nome} para ${email}? Os relacionamentos e o histórico são preservados.`)) return
+    setBusy('email')
+    try {
+      await manageStaffAccess({ professionalId: prof.id, novoEmail: email })
+      setEmailMsg('E-mail de login alterado com sucesso.')
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível alterar o e-mail.')
+    } finally { setBusy(null) }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="w-full max-w-md rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+      <div className="max-h-[92vh] w-full max-w-md overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-texto">Acesso de {prof.nome}</h2>
+          <h2 className="text-lg font-semibold text-texto">Gerenciar acesso — {prof.nome}</h2>
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
         </div>
+
         {resultado ? (
           <div>
-            <p className="text-sm text-texto/70">Credenciais para o profissional. No 1º acesso por senha, ele será obrigado a redefinir.</p>
+            <p className="text-sm text-texto/70">Entregue as credenciais ao profissional. No 1º acesso ele será obrigado a redefinir a senha.</p>
             <div className="mt-3 space-y-2 rounded-xl border border-black/5 bg-black/[0.02] p-4 text-sm">
               <div><span className="text-texto/50">Login:</span> <strong>{resultado.login}</strong></div>
               <div><span className="text-texto/50">Senha provisória:</span> <strong>{resultado.senha}</strong></div>
@@ -921,17 +939,45 @@ function AcessoStaffModal({ prof, onClose, onSaved }: { prof: Professional; onCl
             <div className="mt-5 flex justify-end"><button onClick={onSaved} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Concluir</button></div>
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-texto/60">{prof.auth_user_id ? 'Redefina a senha de acesso (login: ' + prof.email + ').' : 'Crie o acesso para ' + prof.email + '.'}</p>
-            <div className="flex gap-2">
-              <input className={field} value={senha} onChange={(e) => setSenha(e.target.value)} />
-              <button type="button" onClick={() => setSenha(gerarSenhaProvisoria())} className="shrink-0 rounded-lg border border-black/10 px-3 text-sm hover:bg-black/5">Gerar</button>
+          <div className="space-y-5">
+            {/* E-mail de login (chave de acesso) */}
+            <div className="rounded-xl border border-black/5 p-4">
+              <h3 className="mb-1 text-sm font-semibold text-texto">E-mail de login (chave de acesso)</h3>
+              <p className="mb-2 text-xs text-texto/50">
+                {temLogin
+                  ? 'Login atual: ' + (prof.email ?? '—') + '. Alterar troca a chave de acesso preservando todo o histórico.'
+                  : 'Defina o e-mail e provisione o acesso abaixo.'}
+              </p>
+              <div className="flex gap-2">
+                <input className={field} type="email" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} placeholder="novo@dominio.com.br" />
+                {temLogin && (
+                  <button type="button" onClick={alterarEmail} disabled={busy !== null}
+                    className="shrink-0 rounded-lg border border-primaria px-3 text-sm font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-50">
+                    {busy === 'email' ? '…' : 'Alterar'}
+                  </button>
+                )}
+              </div>
+              {emailMsg && <p className="mt-2 text-xs text-emerald-600">{emailMsg}</p>}
+              {!temLogin && <p className="mt-2 text-xs text-texto/50">Para criar o acesso, o e-mail acima será usado como login.</p>}
             </div>
+
+            {/* Senha */}
+            <div className="rounded-xl border border-black/5 p-4">
+              <h3 className="mb-1 text-sm font-semibold text-texto">{temLogin ? 'Forçar nova senha' : 'Senha provisória'}</h3>
+              <p className="mb-2 text-xs text-texto/50">Senha provisória — o profissional troca obrigatoriamente no 1º acesso.</p>
+              <div className="flex gap-2">
+                <input className={field} value={senha} onChange={(e) => setSenha(e.target.value)} />
+                <button type="button" onClick={() => setSenha(gerarSenhaProvisoria())} className="shrink-0 rounded-lg border border-black/10 px-3 text-sm hover:bg-black/5">Gerar</button>
+              </div>
+            </div>
+
             {erro && <p className="text-sm text-secundaria">{erro}</p>}
+
             <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
-              <button onClick={processar} disabled={processando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
-                {processando ? 'Processando…' : prof.auth_user_id ? 'Redefinir senha' : 'Provisionar acesso'}
+              <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Fechar</button>
+              <button onClick={aplicarSenha} disabled={busy !== null}
+                className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                {busy === 'senha' ? 'Processando…' : temLogin ? 'Forçar nova senha' : 'Provisionar acesso'}
               </button>
             </div>
           </div>
@@ -981,7 +1027,11 @@ function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; pro
         </div>
         <div className="space-y-3">
           <div><label className="mb-1 block text-sm text-texto/70">Nome *</label><input className={field} value={f.nome} onChange={(e) => set('nome', e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">E-mail (usado no login)</label><input className={field} value={f.email ?? ''} onChange={(e) => set('email', e.target.value)} /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">E-mail (usado no login)</label>
+            <input className={`${field} ${prof?.auth_user_id ? 'bg-black/[0.03] text-texto/60' : ''}`} value={f.email ?? ''} onChange={(e) => set('email', e.target.value)} disabled={!!prof?.auth_user_id} readOnly={!!prof?.auth_user_id} />
+            {prof?.auth_user_id && <p className="mt-1 text-xs text-texto/50">O acesso já está ativo. Para trocar a chave de login, use <strong>Gerenciar acesso</strong> (mantém o histórico).</p>}
+          </div>
           <div><label className="mb-1 block text-sm text-texto/70">Telefone</label><input className={field} value={f.telefone ?? ''} onChange={(e) => set('telefone', e.target.value)} /></div>
           <div>
             <label className="mb-1 block text-sm text-texto/70">Papel</label>

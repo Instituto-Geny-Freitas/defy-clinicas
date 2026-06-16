@@ -103,14 +103,27 @@ export async function deleteTeamRole(id: string): Promise<void> {
   if (error) throw error
 }
 
-/** Provisiona/redefine o login do profissional (Edge Function, server-side). */
-export async function provisionStaffAccess(professionalId: string, password: string): Promise<{ login: string }> {
+/**
+ * Gerencia o acesso do profissional via Edge Function (server-side):
+ * define/redefine senha e/ou altera o e-mail de login. A troca de e-mail não
+ * altera o auth_user_id, preservando todos os relacionamentos.
+ */
+export async function manageStaffAccess(args: {
+  professionalId: string
+  password?: string
+  novoEmail?: string
+}): Promise<{ login: string; mode: string }> {
   const { data, error } = await supabase.functions.invoke('provision-staff-access', {
-    body: { professional_id: professionalId, password },
+    body: { professional_id: args.professionalId, password: args.password, novo_email: args.novoEmail },
   })
   if (error) throw error
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error)
-  return data as { login: string }
+  return data as { login: string; mode: string }
+}
+
+/** Provisiona/redefine o login do profissional (compat: só senha). */
+export async function provisionStaffAccess(professionalId: string, password: string): Promise<{ login: string }> {
+  return manageStaffAccess({ professionalId, password })
 }
 
 // ---- Integrações (gateway de pagamento, etc.) ------------------------------
