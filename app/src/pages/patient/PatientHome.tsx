@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listDueNotifications, markNotificationRead, type AppNotification } from '@/lib/notifications'
+import { listPatientAppointments, type Appointment } from '@/lib/appointments'
 import { enablePush, pushSupported } from '@/lib/push'
+
+const fmtDataHora = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })
 
 export default function PatientHome() {
   const { profile } = useAuth()
@@ -10,11 +14,21 @@ export default function PatientHome() {
   const patientId = profile?.patient?.id
   const wpp = clinic?.whatsapp?.replace(/\D/g, '')
   const [avisos, setAvisos] = useState<AppNotification[]>([])
+  const [proxima, setProxima] = useState<Appointment | null>(null)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
   function recarregar() {
     if (!patientId) return
     listDueNotifications(patientId).then(setAvisos).catch(() => {})
+    listPatientAppointments(patientId)
+      .then((appts) => {
+        const agora = Date.now()
+        const futura = appts
+          .filter((a) => a.status !== 'cancelado' && a.status !== 'realizado' && new Date(a.inicio).getTime() >= agora)
+          .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime())[0]
+        setProxima(futura ?? null)
+      })
+      .catch(() => {})
   }
   useEffect(recarregar, [patientId])
 
@@ -54,7 +68,15 @@ export default function PatientHome() {
 
       <section className="rounded-xl border border-black/5 p-4">
         <h2 className="text-sm font-semibold text-texto">Próxima consulta</h2>
-        <p className="mt-1 text-sm text-texto/60">Veja em “Agenda”.</p>
+        {proxima ? (
+          <div className="mt-1">
+            <p className="text-sm font-medium capitalize text-texto">{fmtDataHora(proxima.inicio)}</p>
+            {proxima.procedimento && <p className="text-sm text-texto/60">{proxima.procedimento}</p>}
+            <p className="mt-0.5 text-xs text-texto/50">Situação: {proxima.status}</p>
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-texto/60">Nenhuma consulta agendada. Solicite em “Agenda”.</p>
+        )}
       </section>
 
       {pushSupported() && (

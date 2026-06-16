@@ -20,6 +20,7 @@ import PatientAppointments from '@/pages/patient/PatientAppointments'
 import PatientFinance from '@/pages/patient/PatientFinance'
 import PatientEvolution from '@/pages/patient/PatientEvolution'
 import PatientReports from '@/pages/patient/PatientReports'
+import PatientLabs from '@/pages/patient/PatientLabs'
 import PatientLgpd from '@/pages/patient/PatientLgpd'
 
 function FullScreen({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,7 @@ export default function App() {
             <Route path="agendamentos" element={<PatientAppointments />} />
             <Route path="anamnese" element={<Anamnese />} />
             <Route path="documentos" element={<PatientDocuments />} />
+            <Route path="exames" element={<PatientLabs />} />
             <Route path="evolucao" element={<PatientEvolution />} />
             <Route path="relatorios" element={<PatientReports />} />
             <Route path="lgpd" element={<PatientLgpd />} />

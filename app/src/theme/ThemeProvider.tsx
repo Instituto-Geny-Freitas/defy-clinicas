@@ -32,6 +32,63 @@ function applyTheme(tema: ClinicTheme) {
   }
 }
 
+function setMeta(name: string, content: string) {
+  let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null
+  if (!el) { el = document.createElement('meta'); el.name = name; document.head.appendChild(el) }
+  el.content = content
+}
+
+function setLink(rel: string, href: string) {
+  let el = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null
+  if (!el) { el = document.createElement('link'); el.rel = rel; document.head.appendChild(el) }
+  el.href = href
+}
+
+function mimeFromUrl(url: string): string {
+  const u = url.toLowerCase()
+  if (u.endsWith('.png')) return 'image/png'
+  if (u.endsWith('.svg')) return 'image/svg+xml'
+  if (u.endsWith('.webp')) return 'image/webp'
+  return 'image/jpeg'
+}
+
+let manifestUrl: string | null = null
+
+/** Aplica nome, ícone, theme-color e um manifest dinâmico (PWA white-label). */
+function applyBranding(clinic: Clinic) {
+  if (clinic.nome) document.title = clinic.nome
+  const primaria = clinic.tema_cores?.primaria
+  if (primaria) setMeta('theme-color', primaria)
+
+  if (clinic.logo_url) {
+    setLink('icon', clinic.logo_url)
+    setLink('apple-touch-icon', clinic.logo_url)
+  }
+
+  const icons = clinic.logo_url
+    ? [
+        { src: clinic.logo_url, sizes: '192x192', type: mimeFromUrl(clinic.logo_url), purpose: 'any' },
+        { src: clinic.logo_url, sizes: '512x512', type: mimeFromUrl(clinic.logo_url), purpose: 'any' },
+      ]
+    : []
+  const manifest = {
+    name: clinic.nome || 'Clínica',
+    short_name: clinic.nome || 'Clínica',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: clinic.tema_cores?.fundo || '#ffffff',
+    theme_color: primaria || '#0f766e',
+    icons,
+  }
+  try {
+    if (manifestUrl) URL.revokeObjectURL(manifestUrl)
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' })
+    manifestUrl = URL.createObjectURL(blob)
+    setLink('manifest', manifestUrl)
+  } catch { /* ignora ambientes sem suporte */ }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [clinic, setClinic] = useState<Clinic | null>(null)
 
@@ -48,6 +105,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (!data) return
         setClinic(data)
         if (data.tema_cores) applyTheme(data.tema_cores)
+        applyBranding(data)
       })
   }
 
