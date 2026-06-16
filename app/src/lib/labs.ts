@@ -93,3 +93,10 @@ export async function uploadLabResult(args: {
   })
   if (error) throw error
 }
+
+/** Remove um resultado de exame (arquivo + registro). */
+export async function deleteLabResult(r: LabResult): Promise<void> {
+  if (r.arquivo_url) await supabase.storage.from(BUCKET).remove([r.arquivo_url])
+  const { error } = await supabase.from('lab_results').delete().eq('id', r.id)
+  if (error) throw error
+}

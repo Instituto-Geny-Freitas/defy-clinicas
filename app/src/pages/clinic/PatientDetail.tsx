@@ -185,7 +185,7 @@ export default function PatientDetail() {
         {aba === 'medidas' && <MeasurementsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
         {aba === 'suplementacao' && <SupplementationsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
         {aba === 'manipulacao' && <FormulationsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} pacienteNome={paciente.nome} pacienteWhatsapp={paciente.whatsapp} />}
-        {aba === 'exames' && <LabsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
+        {aba === 'exames' && <LabsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} paciente={paciente} />}
         {aba === 'fotos' && (
           <PhotosPanel
             patientId={paciente.id}
