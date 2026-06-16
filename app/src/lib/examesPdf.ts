@@ -119,7 +119,7 @@ export function buildExamesPdf(args: ExamesPdfArgs): { blob: Blob; filename: str
     doc.text(linhas, M, y); y += linhas.length * 13
   }
 
-  // Rodapé: duas linhas para carimbo/assinatura
+  // Rodapé: duas linhas em branco para carimbo/assinatura (preenchido à mão)
   const baseY = H - 110
   doc.setDrawColor(120)
   doc.line(M, baseY, M + maxW * 0.62, baseY)
@@ -127,11 +127,6 @@ export function buildExamesPdf(args: ExamesPdfArgs): { blob: Blob; filename: str
   doc.setTextColor(110)
   doc.setFontSize(9)
   doc.text('Carimbo e assinatura do profissional', M, baseY + 50)
-  if (args.profissional?.nome) {
-    doc.setTextColor(60); doc.setFontSize(10)
-    doc.text(args.profissional.nome, M, baseY - 6)
-    if (args.profissional.conselho) { doc.setTextColor(110); doc.setFontSize(9); doc.text(args.profissional.conselho, M, baseY + 8) }
-  }
 
   const ts = new Date().toISOString().slice(0, 10)
   return { blob: doc.output('blob'), filename: `requisicao_exames_${args.paciente.nome.replace(/\s+/g, '_')}_${ts}.pdf` }
