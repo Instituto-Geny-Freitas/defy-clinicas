@@ -16,6 +16,7 @@ export interface Professional {
   role: UserRole
   conselho_tipo: string | null
   conselho_numero: string | null
+  conselho_uf: string | null
   ativo: boolean
   senha_provisoria: boolean
 }

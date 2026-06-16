@@ -947,7 +947,7 @@ function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; pro
   const [f, setF] = useState<ProfessionalInput>(
     prof
       ? { nome: prof.nome, email: prof.email, telefone: prof.telefone, role: prof.role,
-          conselho_tipo: prof.conselho_tipo, conselho_numero: prof.conselho_numero }
+          conselho_tipo: prof.conselho_tipo, conselho_numero: prof.conselho_numero, conselho_uf: prof.conselho_uf }
       : { nome: '', role: 'profissional' },
   )
   const [salvando, setSalvando] = useState(false)

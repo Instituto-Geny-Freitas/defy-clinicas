@@ -26,8 +26,15 @@ interface Props {
 export default function FormulationsPanel({ patientId, clinicId, professionalId, pacienteNome, pacienteWhatsapp }: Props) {
   const { profile } = useAuth()
   const prof = profile?.professional
+  const conselho = prof
+    ? (() => {
+        const tipoNum = [prof.conselho_tipo, prof.conselho_numero].filter(Boolean).join(' ')
+        if (!tipoNum) return null
+        return prof.conselho_uf ? `${tipoNum}-${prof.conselho_uf}` : tipoNum
+      })()
+    : null
   const profissional: ProfissionalReceita | null = prof
-    ? { nome: prof.nome, conselho: [prof.conselho_tipo, prof.conselho_numero].filter(Boolean).join(' ') || null }
+    ? { nome: prof.nome, conselho }
     : null
   const [presc, setPresc] = useState<FormulationPrescription[]>([])
   const [carregando, setCarregando] = useState(true)
