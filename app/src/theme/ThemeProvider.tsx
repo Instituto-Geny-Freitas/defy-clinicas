@@ -36,10 +36,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [clinic, setClinic] = useState<Clinic | null>(null)
 
   function load() {
-    // A leitura da clínica é liberada para autenticados (RLS). Antes do login,
-    // mantém-se o tema padrão definido no index.css.
+    // Lê apenas os dados de marca pela view pública (v_clinic_branding), que é
+    // acessível por anônimos — assim a tela de login já aparece com logo, nome
+    // e cores da clínica, antes mesmo do login.
     supabase
-      .from('clinics')
+      .from('v_clinic_branding')
       .select('id, nome, logo_url, tema_cores, whatsapp')
       .limit(1)
       .maybeSingle()
