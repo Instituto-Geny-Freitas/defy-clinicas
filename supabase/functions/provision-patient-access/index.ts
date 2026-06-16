@@ -46,17 +46,25 @@ Deno.serve(async (req) => {
     const { data: pat } = await admin.from('patients').select('id, email, cpf, auth_user_id').eq('id', patient_id).single()
     if (!pat) return json({ error: 'paciente não encontrado' }, 404)
 
+    // Prefere o e-mail cadastrado; só usa o login sintético por CPF se não houver e-mail.
     const domain = Deno.env.get('CPF_EMAIL_DOMAIN') ?? 'geny.local'
-    const loginEmail = pat.cpf ? `${String(pat.cpf).replace(/\D/g, '')}@${domain}` : pat.email
-    if (!loginEmail) return json({ error: 'paciente sem CPF nem e-mail para login' }, 400)
+    const cpfLogin = pat.cpf ? `${String(pat.cpf).replace(/\D/g, '')}@${domain}` : null
+    const emailCadastrado = pat.email ? String(pat.email).trim() : ''
+    const loginEmail = emailCadastrado || cpfLogin
+    if (!loginEmail) return json({ error: 'paciente sem e-mail nem CPF para login' }, 400)
 
-    // 3a) Já tem login → REDEFINE a senha (e remarca provisória).
+    // 3a) Já tem login → REDEFINE a senha (e atualiza o e-mail de login se mudou).
     if (pat.auth_user_id) {
-      const { error: upErr } = await admin.auth.admin.updateUserById(pat.auth_user_id, { password })
+      const patch: { password: string; email?: string; email_confirm?: boolean } = { password }
+      const { data: atual } = await admin.auth.admin.getUserById(pat.auth_user_id)
+      if (atual?.user?.email && atual.user.email.toLowerCase() !== loginEmail.toLowerCase()) {
+        patch.email = loginEmail
+        patch.email_confirm = true
+      }
+      const { error: upErr } = await admin.auth.admin.updateUserById(pat.auth_user_id, patch)
       if (upErr) return json({ error: upErr.message }, 400)
       await admin.from('patients').update({ senha_provisoria: true }).eq('id', patient_id)
-      const { data: u2 } = await admin.auth.admin.getUserById(pat.auth_user_id)
-      return json({ ok: true, mode: 'reset', login: u2?.user?.email ?? loginEmail })
+      return json({ ok: true, mode: 'reset', login: loginEmail })
     }
 
     // 3b) Sem login → CRIA o usuário (confirmado) com a senha provisória.
