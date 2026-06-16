@@ -17,9 +17,15 @@ export interface PatientInput {
 }
 
 export async function listPatients(): Promise<Patient[]> {
-  const { data, error } = await supabase.from('patients').select('*').order('nome')
+  const { data, error } = await supabase.from('patients').select('*').eq('ativo', true).order('nome')
   if (error) throw error
   return data ?? []
+}
+
+/** Remove (desativa) um paciente — soft delete para preservar histórico/relacionamentos. */
+export async function deletePatient(id: string): Promise<void> {
+  const { error } = await supabase.from('patients').update({ ativo: false }).eq('id', id)
+  if (error) throw error
 }
 
 export async function getPatient(id: string): Promise<Patient | null> {

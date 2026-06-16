@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listPatients } from '@/lib/patients'
+import { deletePatient, listPatients } from '@/lib/patients'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Patient } from '@/lib/types'
 import PatientFormModal from './PatientFormModal'
@@ -12,8 +12,15 @@ export default function PatientsList() {
   const [busca, setBusca] = useState('')
   const [carregando, setCarregando] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
+  const [editando, setEditando] = useState<Patient | null>(null)
 
   const clinicId = profile?.professional?.clinic_id
+
+  async function excluir(p: Patient) {
+    if (!confirm(`Remover o paciente "${p.nome}"? O histórico é preservado, mas ele deixa de aparecer na lista.`)) return
+    await deletePatient(p.id)
+    recarregar()
+  }
 
   function recarregar() {
     listPatients()
@@ -51,6 +58,15 @@ export default function PatientsList() {
         />
       )}
 
+      {editando && clinicId && (
+        <PatientFormModal
+          clinicId={clinicId}
+          patient={editando}
+          onClose={() => setEditando(null)}
+          onSaved={() => { setEditando(null); recarregar() }}
+        />
+      )}
+
       <input
         value={busca}
         onChange={(e) => setBusca(e.target.value)}
@@ -70,6 +86,7 @@ export default function PatientsList() {
                 <th className="px-4 py-2 font-medium">Nome</th>
                 <th className="px-4 py-2 font-medium">CPF</th>
                 <th className="px-4 py-2 font-medium">WhatsApp</th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +99,11 @@ export default function PatientsList() {
                   <td className="px-4 py-2 text-texto">{p.nome}</td>
                   <td className="px-4 py-2 text-texto/70">{p.cpf ?? '—'}</td>
                   <td className="px-4 py-2 text-texto/70">{p.whatsapp ?? '—'}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => navigate(`/clinica/pacientes/${p.id}`)} className="text-xs font-medium text-primaria hover:underline">Abrir</button>
+                    <button onClick={() => setEditando(p)} className="ml-3 text-xs font-medium text-texto/60 hover:underline">Editar</button>
+                    <button onClick={() => excluir(p)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
