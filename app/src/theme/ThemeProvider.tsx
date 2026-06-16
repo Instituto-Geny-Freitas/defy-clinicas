@@ -50,7 +50,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       })
   }
 
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+    // A leitura de clinics é gated por RLS (apenas autenticados). Como o provider
+    // monta antes do login, recarrega sempre que a sessão muda (login/refresh),
+    // garantindo logo + nome no sidebar logo após autenticar.
+    const { data: sub } = supabase.auth.onAuthStateChange(() => load())
+    return () => sub.subscription.unsubscribe()
+  }, [])
 
   return <ThemeContext.Provider value={{ clinic, reload: load }}>{children}</ThemeContext.Provider>
 }
