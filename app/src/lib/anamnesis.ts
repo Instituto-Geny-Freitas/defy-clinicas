@@ -47,6 +47,19 @@ interface SaveArgs {
   consentir?: boolean
 }
 
+/**
+ * Sincroniza no cadastro do paciente os campos da anamnese que também vivem
+ * em `patients` (ex.: estilo de trabalho, exibido no Resumo). Não-fatal.
+ */
+async function syncPatientFields(patientId: string, values: FormValues): Promise<void> {
+  const patch: Record<string, unknown> = {}
+  if (values.estilo_trabalho === 'sentado' || values.estilo_trabalho === 'em_pe_ativo') {
+    patch.estilo_trabalho = values.estilo_trabalho
+  }
+  if (Object.keys(patch).length === 0) return
+  await supabase.from('patients').update(patch).eq('id', patientId)
+}
+
 /** Cria ou atualiza a anamnese (upsert manual: update se id, senão insert). */
 export async function saveAnamnesis(args: SaveArgs): Promise<AnamnesisRecord> {
   const payload = {
@@ -70,10 +83,12 @@ export async function saveAnamnesis(args: SaveArgs): Promise<AnamnesisRecord> {
       .select()
       .single()
     if (error) throw error
+    await syncPatientFields(args.patientId, args.values).catch(() => {})
     return data
   }
 
   const { data, error } = await supabase.from('anamnesis').insert(payload).select().single()
   if (error) throw error
+  await syncPatientFields(args.patientId, args.values).catch(() => {})
   return data
 }

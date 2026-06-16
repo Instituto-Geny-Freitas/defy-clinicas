@@ -75,6 +75,15 @@ export const anamnesisSchema: FormSchema = {
     {
       title: 'Estilo de Vida e Hábitos',
       fields: [
+        {
+          key: 'estilo_trabalho',
+          label: 'Estilo de trabalho (no dia a dia)',
+          type: 'radio',
+          options: [
+            { value: 'sentado', label: 'Sentado' },
+            { value: 'em_pe_ativo', label: 'Em pé / Ativo' },
+          ],
+        },
         { key: 'sono_horas', label: 'Horas de sono por noite', type: 'number', suffix: 'h' },
         { key: 'sono_reparador', label: 'O sono é reparador?', type: 'boolean' },
         { key: 'ingesta_hidrica', label: 'Ingesta hídrica diária', type: 'number', suffix: 'ml' },

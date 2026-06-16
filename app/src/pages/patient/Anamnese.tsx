@@ -19,6 +19,7 @@ export default function Anamnese() {
         clinicId={patient.clinic_id}
         preenchidoPor="paciente"
         withConsent
+        prefill={patient.estilo_trabalho ? { estilo_trabalho: patient.estilo_trabalho } : undefined}
       />
     </div>
   )
