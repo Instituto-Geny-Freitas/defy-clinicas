@@ -19,6 +19,61 @@ export interface RelatorioPdfData {
   porForma: { rotulo: string; valor: number }[]
   porTipo: { nome: string; lanc: number; itens: number; valor: number }[]
   serie?: { mes: string; receita: number; despesa: number }[]
+  serieAno?: number
+}
+
+const GREEN: [number, number, number] = [16, 185, 129]
+const RED: [number, number, number] = [225, 29, 72]
+const fmtK = (v: number) => (Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))
+
+/** Desenha um gráfico de linhas (receita × despesa) com primitivas do jsPDF. */
+function drawLineChart(
+  doc: jsPDF,
+  x: number, y: number, w: number, h: number,
+  serie: { mes: string; receita: number; despesa: number }[],
+) {
+  const padL = 34, padB = 16
+  const innerW = w - padL
+  const innerH = h - padB
+  const max = Math.max(1, ...serie.map((s) => Math.max(s.receita, s.despesa)))
+  const px = (i: number) => x + padL + (innerW / serie.length) * (i + 0.5)
+  const py = (v: number) => y + innerH - (v / max) * innerH
+
+  // Grades horizontais + rótulos do eixo Y
+  doc.setFontSize(7)
+  for (const f of [0, 0.5, 1]) {
+    const yy = y + innerH - f * innerH
+    doc.setDrawColor(229, 231, 235)
+    doc.line(x + padL, yy, x + w, yy)
+    doc.setTextColor(156, 163, 175)
+    doc.text(fmtK(max * f), x + padL - 4, yy + 2, { align: 'right' })
+  }
+
+  // Linhas das séries
+  const drawSerie = (sel: (s: { receita: number; despesa: number }) => number, cor: [number, number, number]) => {
+    doc.setDrawColor(...cor)
+    doc.setLineWidth(1.2)
+    for (let i = 0; i < serie.length - 1; i++) {
+      doc.line(px(i), py(sel(serie[i])), px(i + 1), py(sel(serie[i + 1])))
+    }
+    doc.setFillColor(...cor)
+    for (let i = 0; i < serie.length; i++) doc.circle(px(i), py(sel(serie[i])), 1.4, 'F')
+  }
+  drawSerie((s) => s.receita, GREEN)
+  drawSerie((s) => s.despesa, RED)
+  doc.setLineWidth(0.2)
+
+  // Rótulos dos meses
+  doc.setFontSize(7)
+  doc.setTextColor(107, 114, 128)
+  serie.forEach((s, i) => doc.text(s.mes, px(i), y + h, { align: 'center' }))
+
+  // Legenda
+  doc.setFontSize(8)
+  doc.setFillColor(...GREEN); doc.rect(x + padL, y - 8, 8, 4, 'F')
+  doc.setTextColor(80); doc.text('Receitas', x + padL + 12, y - 5)
+  doc.setFillColor(...RED); doc.rect(x + padL + 64, y - 8, 8, 4, 'F')
+  doc.text('Despesas', x + padL + 76, y - 5)
 }
 
 /** Monta o PDF do relatório financeiro de despesas e comparativo receita × despesa. */
@@ -87,8 +142,18 @@ export function buildRelatorioFinanceiroPdf(d: RelatorioPdfData): { blob: Blob; 
   })
 
   if (d.serie && d.serie.length > 0) {
+    const H = doc.internal.pageSize.getHeight()
+    let y = finalY() + 24
+    const chartH = 150
+    if (y + chartH + 30 > H - 40) { doc.addPage(); y = 50 }
+    doc.setTextColor(15, 118, 110)
+    doc.setFontSize(11)
+    doc.text(`Evolução mês a mês${d.serieAno ? ` — ${d.serieAno}` : ''}`, M, y)
+    y += 10
+    drawLineChart(doc, M, y, W - M * 2, chartH, d.serie)
+
     autoTable(doc, {
-      ...tableOpts(finalY() + 18),
+      ...tableOpts(y + chartH + 24),
       head: [['Mês', 'Receitas', 'Despesas', 'Resultado']],
       body: d.serie.map((s) => [s.mes, brl(s.receita), brl(s.despesa), brl(s.receita - s.despesa)]),
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },

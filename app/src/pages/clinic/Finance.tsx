@@ -833,7 +833,8 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
       porClassificacao: porClassificacao.map((r) => ({ rotulo: r.rotulo, valor: r.valor })),
       porForma: porForma.map((r) => ({ rotulo: r.rotulo, valor: r.valor })),
       porTipo,
-      serie: modo === 'anual' ? serie : undefined,
+      serie,
+      serieAno: ano,
     })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
