@@ -741,6 +741,7 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
   const [de, setDe] = useState(`${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-01`)
   const [ate, setAte] = useState(monthRange(anoAtual, mesAtual).ate)
   const [despesas, setDespesas] = useState<Expense[]>([])
+  const [pagamentos, setPagamentos] = useState<PaymentRow[]>([])
   const [carregando, setCarregando] = useState(true)
 
   // Intervalo efetivo conforme o modo escolhido.
@@ -752,19 +753,24 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
 
   useEffect(() => {
     setCarregando(true)
-    listExpenses(range.de, range.ate)
-      .then(setDespesas)
-      .catch(() => setDespesas([]))
+    Promise.all([listExpenses(range.de, range.ate), listPaymentsPeriodo(range.de, range.ate)])
+      .then(([dp, pg]) => { setDespesas(dp); setPagamentos(pg) })
+      .catch(() => { setDespesas([]); setPagamentos([]) })
       .finally(() => setCarregando(false))
   }, [range.de, range.ate])
 
   const anos = Array.from({ length: 6 }, (_, i) => anoAtual - 4 + i)
 
-  // Agregações
+  // Agregações — despesas
   const total = despesas.reduce((s, d) => s + Number(d.valor), 0)
   const totalPago = despesas.filter((d) => d.pago).reduce((s, d) => s + Number(d.valor), 0)
   const totalAberto = total - totalPago
   const qtdItens = despesas.reduce((s, d) => s + (Number(d.quantidade) || 1), 0)
+
+  // Agregações — receitas (pagamentos recebidos no período) e resultado (regime de caixa)
+  const totalReceitas = pagamentos.reduce((s, p) => s + Number(p.valor), 0)
+  const resultado = totalReceitas - totalPago
+  const maxRD = Math.max(totalReceitas, totalPago, 1)
 
   const porClassificacao = (['produto', 'fixo'] as Classificacao[]).map((c) => ({
     chave: c,
@@ -831,10 +837,29 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
 
       {carregando ? (
         <p className="p-6 text-sm text-texto/50">Carregando…</p>
-      ) : despesas.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma despesa no período.</p>
+      ) : despesas.length === 0 && pagamentos.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum lançamento no período.</p>
       ) : (
         <>
+          {/* Comparativo Receita x Despesa (regime de caixa) */}
+          <Bloco titulo="Receitas × Despesas (realizado no período)">
+            <div className="mb-4 grid grid-cols-3 gap-3">
+              <Card label="Receitas recebidas" valor={totalReceitas} cor="text-emerald-600" />
+              <Card label="Despesas pagas" valor={totalPago} cor="text-secundaria" />
+              <Card label="Resultado" valor={resultado} cor={resultado >= 0 ? 'text-emerald-600' : 'text-secundaria'} />
+            </div>
+            <div className="space-y-2">
+              <div>
+                <div className="mb-1 flex items-center justify-between text-sm"><span className="text-texto/80">Receitas</span><span className="text-texto/60">{brl(totalReceitas)}</span></div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round((totalReceitas / maxRD) * 100)}%` }} /></div>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between text-sm"><span className="text-texto/80">Despesas</span><span className="text-texto/60">{brl(totalPago)}</span></div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-black/5"><div className="h-full rounded-full bg-secundaria" style={{ width: `${Math.round((totalPago / maxRD) * 100)}%` }} /></div>
+              </div>
+            </div>
+          </Bloco>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card label="Total de despesas" valor={total} cor="text-texto" />
             <Card label="Pago" valor={totalPago} cor="text-emerald-600" />
