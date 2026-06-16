@@ -66,6 +66,43 @@ export async function createProfessional(clinicId: string, input: ProfessionalIn
   return data
 }
 
+export async function updateProfessional(id: string, input: ProfessionalInput): Promise<void> {
+  const { error } = await supabase.from('professionals').update(input).eq('id', id)
+  if (error) throw error
+}
+
+/** Remove (desativa) um profissional — soft delete para preservar histórico. */
+export async function deleteProfessional(id: string): Promise<void> {
+  const { error } = await supabase.from('professionals').update({ ativo: false }).eq('id', id)
+  if (error) throw error
+}
+
+// ---- Papéis da equipe (domínio configurável) -------------------------------
+export interface TeamRole {
+  id: string
+  nome: string
+  nivel: UserRole   // admin | profissional | recepcao — governa as permissões
+  ativo: boolean
+}
+
+export async function listTeamRoles(): Promise<TeamRole[]> {
+  const { data, error } = await supabase.from('roles').select('id, nome, nivel, ativo').eq('ativo', true).order('nome')
+  if (error) throw error
+  return data ?? []
+}
+export async function createTeamRole(clinicId: string, nome: string, nivel: UserRole): Promise<void> {
+  const { error } = await supabase.from('roles').insert({ clinic_id: clinicId, nome, nivel })
+  if (error) throw error
+}
+export async function updateTeamRole(id: string, patch: { nome?: string; nivel?: UserRole }): Promise<void> {
+  const { error } = await supabase.from('roles').update(patch).eq('id', id)
+  if (error) throw error
+}
+export async function deleteTeamRole(id: string): Promise<void> {
+  const { error } = await supabase.from('roles').delete().eq('id', id)
+  if (error) throw error
+}
+
 /** Provisiona/redefine o login do profissional (Edge Function, server-side). */
 export async function provisionStaffAccess(professionalId: string, password: string): Promise<{ login: string }> {
   const { data, error } = await supabase.functions.invoke('provision-staff-access', {

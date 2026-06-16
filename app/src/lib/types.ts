@@ -12,6 +12,7 @@ export interface Professional {
   auth_user_id: string | null
   nome: string
   email: string | null
+  telefone: string | null
   role: UserRole
   conselho_tipo: string | null
   conselho_numero: string | null

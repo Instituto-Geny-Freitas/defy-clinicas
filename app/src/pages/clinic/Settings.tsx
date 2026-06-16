@@ -4,19 +4,26 @@ import { useThemeReload } from '@/theme/ThemeProvider'
 import {
   createProfessional,
   createSnippet,
+  createTeamRole,
+  deleteProfessional,
   deleteSnippet,
+  deleteTeamRole,
   getClinic,
   getIntegration,
   listAllSnippets,
   listProfessionals,
+  listTeamRoles,
   provisionStaffAccess,
   updateClinic,
+  updateProfessional,
+  updateTeamRole,
   uploadLogo,
   upsertIntegration,
   type ClinicFull,
   type IntegrationSetting,
   type ProfessionalInput,
   type Snippet,
+  type TeamRole,
 } from '@/lib/settings'
 import { gerarSenhaProvisoria } from '@/lib/patients'
 import {
@@ -55,7 +62,7 @@ import {
 import { createExpenseType, deleteExpenseType, listExpenseTypes, updateExpenseType, type ExpenseType } from '@/lib/cashflow'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'papeis' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -78,6 +85,7 @@ export default function Settings() {
         {[
           { k: 'visual', l: 'Identidade visual' },
           { k: 'equipe', l: 'Equipe' },
+          { k: 'papeis', l: 'Papéis' },
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
           { k: 'ativos', l: 'Ativos' },
@@ -102,6 +110,7 @@ export default function Settings() {
 
       {sec === 'visual' && <VisualSection />}
       {sec === 'equipe' && <EquipeSection clinicId={clinicId} />}
+      {sec === 'papeis' && <RolesSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
       {sec === 'textos' && <TextosSection clinicId={clinicId} />}
       {sec === 'ativos' && <AtivosSection clinicId={clinicId} />}
@@ -758,15 +767,24 @@ function VisualSection() {
 }
 
 // --- Equipe -----------------------------------------------------------------
+const NIVEL_LABEL: Record<UserRole, string> = { admin: 'Administrador', profissional: 'Profissional', recepcao: 'Secretaria' }
+
 function EquipeSection({ clinicId }: { clinicId: string }) {
   const [profs, setProfs] = useState<Professional[]>([])
   const [modal, setModal] = useState(false)
+  const [editando, setEditando] = useState<Professional | null>(null)
   const [acessoFor, setAcessoFor] = useState<Professional | null>(null)
 
   function recarregar() {
-    listProfessionals().then(setProfs).catch(() => {})
+    listProfessionals().then((ps) => setProfs(ps.filter((p) => p.ativo))).catch(() => {})
   }
   useEffect(recarregar, [])
+
+  async function excluir(p: Professional) {
+    if (!confirm(`Remover "${p.nome}" da equipe?`)) return
+    await deleteProfessional(p.id)
+    recarregar()
+  }
 
   return (
     <div className="max-w-3xl">
@@ -776,7 +794,8 @@ function EquipeSection({ clinicId }: { clinicId: string }) {
           + Novo profissional
         </button>
       </div>
-      {modal && <ProfModal clinicId={clinicId} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
+      {modal && <ProfModal clinicId={clinicId} prof={null} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
+      {editando && <ProfModal clinicId={clinicId} prof={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />}
       {acessoFor && <AcessoStaffModal prof={acessoFor} onClose={() => setAcessoFor(null)} onSaved={() => { setAcessoFor(null); recarregar() }} />}
       <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
         <table className="w-full text-sm">
@@ -787,16 +806,79 @@ function EquipeSection({ clinicId }: { clinicId: string }) {
             {profs.map((p) => (
               <tr key={p.id} className="border-t border-black/5">
                 <td className="px-4 py-2 text-texto">{p.nome}</td>
-                <td className="px-4 py-2 capitalize text-texto/70">{p.role}</td>
+                <td className="px-4 py-2 text-texto/70">{NIVEL_LABEL[p.role] ?? p.role}</td>
                 <td className="px-4 py-2 text-texto/70">{p.conselho_tipo ? `${p.conselho_tipo} ${p.conselho_numero ?? ''}` : '—'}</td>
                 <td className="px-4 py-2">{p.auth_user_id ? <span className="text-emerald-600">ativo</span> : <span className="text-texto/40">sem login</span>}</td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right whitespace-nowrap">
                   <button onClick={() => setAcessoFor(p)} className="text-xs font-medium text-primaria hover:underline" disabled={!p.email} title={!p.email ? 'Cadastre um e-mail primeiro' : ''}>
                     {p.auth_user_id ? 'Redefinir senha' : 'Provisionar acesso'}
                   </button>
+                  <button onClick={() => setEditando(p)} className="ml-3 text-xs font-medium text-texto/60 hover:underline">Editar</button>
+                  <button onClick={() => excluir(p)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
                 </td>
               </tr>
             ))}
+            {profs.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-sm text-texto/50">Nenhum profissional cadastrado.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// --- Papéis (domínio configurável) ------------------------------------------
+function RolesSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<TeamRole[]>([])
+  const [nome, setNome] = useState('')
+  const [nivel, setNivel] = useState<UserRole>('profissional')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listTeamRoles().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    try { await createTeamRole(clinicId, nome.trim(), nivel); setNome(''); recarregar() } finally { setSalvando(false) }
+  }
+  async function trocarNivel(id: string, novo: UserRole) { await updateTeamRole(id, { nivel: novo }); recarregar() }
+  async function remover(id: string) { if (confirm('Excluir este papel?')) { await deleteTeamRole(id); recarregar() } }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo papel</h3>
+        <p className="mb-3 text-xs text-texto/50">
+          O <strong>nível de acesso</strong> define as permissões: <em>Administrador</em> acessa tudo (inclui Configurações);
+          <em> Profissional</em> e <em>Secretaria</em> têm acesso operacional.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <input className={`${field} min-w-[12rem] flex-1`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Gerente, Esteticista" />
+          <select className={`${field} w-48 shrink-0`} value={nivel} onChange={(e) => setNivel(e.target.value as UserRole)}>
+            <option value="admin">Administrador</option>
+            <option value="profissional">Profissional</option>
+            <option value="recepcao">Secretaria</option>
+          </select>
+          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <tbody>
+            {itens.map((r) => (
+              <tr key={r.id} className="border-t border-black/5 first:border-t-0">
+                <td className="px-4 py-2 text-texto">{r.nome}</td>
+                <td className="px-4 py-2">
+                  <select className="rounded-lg border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria" value={r.nivel} onChange={(e) => trocarNivel(r.id, e.target.value as UserRole)}>
+                    <option value="admin">Administrador</option>
+                    <option value="profissional">Profissional</option>
+                    <option value="recepcao">Secretaria</option>
+                  </select>
+                </td>
+                <td className="px-4 py-2 text-right"><button onClick={() => remover(r.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
+              </tr>
+            ))}
+            {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum papel cadastrado.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -859,49 +941,64 @@ function AcessoStaffModal({ prof, onClose, onSaved }: { prof: Professional; onCl
   )
 }
 
-function ProfModal({ clinicId, onClose, onSaved }: { clinicId: string; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState<ProfessionalInput>({ nome: '', role: 'profissional' })
+function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; prof: Professional | null; onClose: () => void; onSaved: () => void }) {
+  const editar = !!prof
+  const [papeis, setPapeis] = useState<TeamRole[]>([])
+  const [f, setF] = useState<ProfessionalInput>(
+    prof
+      ? { nome: prof.nome, email: prof.email, telefone: prof.telefone, role: prof.role,
+          conselho_tipo: prof.conselho_tipo, conselho_numero: prof.conselho_numero }
+      : { nome: '', role: 'profissional' },
+  )
   const [salvando, setSalvando] = useState(false)
   const set = <K extends keyof ProfessionalInput>(k: K, v: ProfessionalInput[K]) => setF((s) => ({ ...s, [k]: v }))
+
+  useEffect(() => { listTeamRoles().then(setPapeis).catch(() => {}) }, [])
 
   async function salvar() {
     if (!f.nome.trim()) return
     setSalvando(true)
     try {
-      await createProfessional(clinicId, f)
+      if (prof) await updateProfessional(prof.id, f)
+      else await createProfessional(clinicId, f)
       onSaved()
     } catch {
       setSalvando(false)
     }
   }
 
+  // Opções de papel: do domínio configurável; fallback para os 3 níveis base.
+  const opcoes = papeis.length > 0
+    ? papeis.map((p) => ({ valor: p.nivel, rotulo: p.nome }))
+    : [{ valor: 'admin' as UserRole, rotulo: 'Administrador' }, { valor: 'profissional' as UserRole, rotulo: 'Profissional' }, { valor: 'recepcao' as UserRole, rotulo: 'Secretaria' }]
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-texto">Novo profissional</h2>
+          <h2 className="text-lg font-semibold text-texto">{editar ? 'Editar profissional' : 'Novo profissional'}</h2>
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
         </div>
         <div className="space-y-3">
           <div><label className="mb-1 block text-sm text-texto/70">Nome *</label><input className={field} value={f.nome} onChange={(e) => set('nome', e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">E-mail (usado no login)</label><input className={field} value={f.email ?? ''} onChange={(e) => set('email', e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Telefone</label><input className={field} value={f.telefone ?? ''} onChange={(e) => set('telefone', e.target.value)} /></div>
           <div>
             <label className="mb-1 block text-sm text-texto/70">Papel</label>
             <select className={field} value={f.role} onChange={(e) => set('role', e.target.value as UserRole)}>
-              <option value="profissional">Profissional</option>
-              <option value="admin">Administrador</option>
-              <option value="recepcao">Recepção</option>
+              {opcoes.map((o, i) => <option key={`${o.valor}-${i}`} value={o.valor}>{o.rotulo}</option>)}
             </select>
+            <p className="mt-1 text-xs text-texto/50">Gerencie os papéis em Configurações → Papéis.</p>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div><label className="mb-1 block text-sm text-texto/70">Conselho</label><input className={field} placeholder="CRBM…" value={f.conselho_tipo ?? ''} onChange={(e) => set('conselho_tipo', e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Número</label><input className={field} value={f.conselho_numero ?? ''} onChange={(e) => set('conselho_numero', e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">UF</label><input className={field} value={f.conselho_uf ?? ''} onChange={(e) => set('conselho_uf', e.target.value)} /></div>
           </div>
-          <p className="text-xs text-texto/50">O vínculo de login é feito automaticamente no primeiro acesso (por e-mail).</p>
+          {!editar && <p className="text-xs text-texto/50">O vínculo de login é feito automaticamente no primeiro acesso (por e-mail).</p>}
           <div className="mt-2 flex justify-end gap-2">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
-            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Cadastrar'}</button>
+            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : editar ? 'Salvar' : 'Cadastrar'}</button>
           </div>
         </div>
       </div>
