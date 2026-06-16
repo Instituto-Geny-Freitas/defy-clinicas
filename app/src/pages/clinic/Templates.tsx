@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import {
   createTemplate,
@@ -122,9 +122,27 @@ function Editor({
   const [lembretes, setLembretes] = useState<ReminderItem[]>(template?.reminder_schedule ?? [])
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const corpoRef = useRef<HTMLTextAreaElement>(null)
 
   function addCampo() {
     setCampos((c) => [...c, { key: '', label: '', type: 'text', required: false }])
+  }
+
+  /** Insere o placeholder {{chave}} no corpo, na posição do cursor. */
+  function inserirNoCorpo(chave: string) {
+    if (!chave) return
+    const token = `{{${chave}}}`
+    const el = corpoRef.current
+    if (!el) { setCorpo((c) => (c ? `${c} ${token}` : token)); return }
+    const start = el.selectionStart ?? corpo.length
+    const end = el.selectionEnd ?? corpo.length
+    const novo = corpo.slice(0, start) + token + corpo.slice(end)
+    setCorpo(novo)
+    requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
   }
   function setCampo(i: number, patch: Partial<TemplateField>) {
     setCampos((arr) => arr.map((f, idx) => {
@@ -201,8 +219,8 @@ function Editor({
 
           <div>
             <label className="mb-1 block text-sm text-texto/70">Corpo do documento</label>
-            <textarea rows={5} className={field} value={corpo} onChange={(e) => setCorpo(e.target.value)} placeholder="Use {{chave}} para inserir os campos dinâmicos." />
-            <p className="mt-1 text-xs text-texto/50">Placeholders: escreva <code>{'{{chave}}'}</code> para inserir o valor de um campo.</p>
+            <textarea ref={corpoRef} rows={5} className={field} value={corpo} onChange={(e) => setCorpo(e.target.value)} placeholder="Use {{chave}} para inserir os campos dinâmicos." />
+            <p className="mt-1 text-xs text-texto/50">Placeholders: escreva <code>{'{{chave}}'}</code> ou use o botão <strong>inserir no corpo</strong> de cada campo abaixo (insere na posição do cursor).</p>
           </div>
 
           {/* Campos dinâmicos */}
@@ -223,6 +241,15 @@ function Editor({
                   <label className="flex items-center gap-1 text-xs text-texto/60">
                     <input type="checkbox" checked={!!c.required} onChange={(e) => setCampo(i, { required: e.target.checked })} /> obrig.
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => inserirNoCorpo(c.key || slugify(c.label))}
+                    disabled={!c.label.trim()}
+                    className="rounded-md border border-primaria px-2 py-1 text-xs font-medium text-primaria hover:bg-primaria/5 disabled:opacity-40"
+                    title="Inserir {{chave}} no corpo, na posição do cursor"
+                  >
+                    inserir no corpo
+                  </button>
                   <button onClick={() => setCampos((a) => a.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
                 </div>
               ))}
