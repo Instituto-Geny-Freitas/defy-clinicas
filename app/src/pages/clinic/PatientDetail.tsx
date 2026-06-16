@@ -17,15 +17,17 @@ import TreatmentPlansPanel from './TreatmentPlansPanel'
 import SupplementationsPanel from './SupplementationsPanel'
 import FormulationsPanel from './FormulationsPanel'
 import LabsPanel from './LabsPanel'
+import PatientAgendaPanel from './PatientAgendaPanel'
 import MeasurementsPanel from './MeasurementsPanel'
 import PatientReportsPanel from './PatientReportsPanel'
 
 type Aba =
-  | 'resumo' | 'anamnese' | 'avaliacoes' | 'plano' | 'procedimentos' | 'medidas'
+  | 'resumo' | 'agenda' | 'anamnese' | 'avaliacoes' | 'plano' | 'procedimentos' | 'medidas'
   | 'suplementacao' | 'manipulacao' | 'exames' | 'fotos' | 'documentos' | 'financeiro' | 'relatorios'
 
 const ABAS: { key: Aba; label: string }[] = [
   { key: 'resumo', label: 'Resumo' },
+  { key: 'agenda', label: 'Agenda' },
   { key: 'anamnese', label: 'Anamnese' },
   { key: 'avaliacoes', label: 'Avaliações' },
   { key: 'plano', label: 'Plano' },
@@ -140,6 +142,8 @@ export default function PatientDetail() {
             )}
           </div>
         )}
+
+        {aba === 'agenda' && <PatientAgendaPanel patientId={paciente.id} />}
 
         {aba === 'anamnese' && (
           <AnamnesisForm
