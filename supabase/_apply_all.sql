@@ -2070,3 +2070,16 @@ alter table expenses
   add column if not exists forma_pagamento text,                            -- pix | cartao | outro
   add column if not exists parcela_num     integer,
   add column if not exists parcela_total   integer;
+
+
+-- ======================================================================
+-- ARQUIVO: supabase/migrations/0033_expense_quantity.sql
+-- ======================================================================
+-- =============================================================================
+-- 0033_expense_quantity.sql
+-- Quantidade de itens de uma despesa (informada no registro), usada nas
+-- estatísticas do relatório financeiro.
+-- =============================================================================
+
+alter table expenses
+  add column if not exists quantidade integer not null default 1;

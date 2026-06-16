@@ -52,7 +52,7 @@ import {
   type FormulaInput,
   type FormulationLib,
 } from '@/lib/formulations'
-import { createExpenseType, deleteExpenseType, listExpenseTypes, type ExpenseType } from '@/lib/cashflow'
+import { createExpenseType, deleteExpenseType, listExpenseTypes, updateExpenseType, type ExpenseType } from '@/lib/cashflow'
 import type { Professional, UserRole } from '@/lib/types'
 
 type Sec = 'visual' | 'equipe' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
@@ -498,6 +498,7 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
     try { await createExpenseType(clinicId, nome.trim(), tipo); setNome(''); recarregar() } finally { setSalvando(false) }
   }
   async function remover(id: string) { if (confirm('Excluir este tipo de despesa?')) { await deleteExpenseType(id); recarregar() } }
+  async function classificar(id: string, novoTipo: 'produto' | 'fixo') { await updateExpenseType(id, { tipo: novoTipo }); recarregar() }
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -514,15 +515,21 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
         </div>
       </div>
       <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <div className="border-b border-black/5 px-4 py-2 text-xs text-texto/50">Classifique cada tipo já cadastrado como Gasto fixo ou Produto.</div>
         <table className="w-full text-sm">
           <tbody>
             {itens.map((p) => (
-              <tr key={p.id} className="border-t border-black/5 first:border-t-0">
+              <tr key={p.id} className="border-t border-black/5">
                 <td className="px-4 py-2 text-texto">{p.nome}</td>
                 <td className="px-4 py-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.tipo === 'produto' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700'}`}>
-                    {p.tipo === 'produto' ? 'Produto' : 'Gasto fixo'}
-                  </span>
+                  <select
+                    className="rounded-lg border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria"
+                    value={p.tipo}
+                    onChange={(e) => classificar(p.id, e.target.value as 'produto' | 'fixo')}
+                  >
+                    <option value="fixo">Gasto fixo</option>
+                    <option value="produto">Produto</option>
+                  </select>
                 </td>
                 <td className="px-4 py-2 text-right"><button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
               </tr>

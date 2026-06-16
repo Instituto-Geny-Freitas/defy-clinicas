@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { listAllQuotes, registerPayment, brl, type PaymentMethod, type Quote } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
@@ -23,7 +23,7 @@ import {
   type Periodo,
 } from '@/lib/cashflow'
 
-type Tab = 'consolidado' | 'receitas' | 'despesas' | 'caixa'
+type Tab = 'consolidado' | 'receitas' | 'despesas' | 'caixa' | 'relatorio'
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -118,6 +118,7 @@ export default function Finance() {
           ['receitas', 'Receitas'],
           ['despesas', 'Despesas'],
           ['caixa', 'Caixa & Aportes'],
+          ['relatorio', 'Relatório'],
         ] as [Tab, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`whitespace-nowrap px-4 py-2 text-sm font-medium ${tab === k ? 'border-b-2 border-primaria text-primaria' : 'text-texto/60 hover:text-texto'}`}>
@@ -136,6 +137,8 @@ export default function Finance() {
       ) : tab === 'despesas' ? (
         <DespesasView clinicId={clinicId} tipos={tipos} pagas={despesasPagas} naoPagas={despesasNaoPagas}
           totalPagas={totalDespesasPagas} totalNaoPagas={totalDespesasNaoPagas} de={de} onChange={recarregar} />
+      ) : tab === 'relatorio' ? (
+        <RelatorioView anoAtual={ano} mesAtual={mes} />
       ) : (
         <CaixaView clinicId={clinicId} movimentos={movimentos} totais={{ totalCaixa, totalAplic, totalAportes }} onChange={recarregar} />
       )}
@@ -419,6 +422,7 @@ function DespesasView(props: {
                 </td>
                 <td className="px-4 py-2 text-texto/60">
                   {d.descricao ?? '—'}
+                  {Number(d.quantidade) > 1 && <span className="ml-1 text-[10px] text-texto/50">×{d.quantidade}</span>}
                   {d.forma_pagamento && <span className="ml-1 text-[10px] uppercase text-texto/40">· {d.forma_pagamento === 'cartao' ? 'Cartão' : d.forma_pagamento}</span>}
                 </td>
                 <td className="px-4 py-2 text-right font-medium text-texto">{brl(Number(d.valor))}</td>
@@ -450,6 +454,7 @@ function DespesaModal(props: {
   const [classificacao, setClassificacao] = useState<Classificacao>('fixo')
   const [descricao, setDescricao] = useState('')
   const [valor, setValor] = useState('')
+  const [quantidade, setQuantidade] = useState('1')
   const [data, setData] = useState(dataPadrao)
   const [pago, setPago] = useState(false)
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('pix')
@@ -487,6 +492,7 @@ function DespesaModal(props: {
         pago,
         classificacao,
         formaPagamento,
+        quantidade: Number(quantidade) || 1,
         parcelado: classificacao === 'produto' && parcelado,
         parcelas: nParcelas,
         recorrente: classificacao === 'fixo' && recorrente,
@@ -526,10 +532,14 @@ function DespesaModal(props: {
             <label className="mb-1 block text-xs font-medium text-texto/60">Descrição</label>
             <input className={field} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Opcional" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-texto/60">Valor{classificacao === 'produto' && parcelado ? ' total' : ''}</label>
               <input className={field} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-texto/60">Qtd. de itens</label>
+              <input className={field} inputMode="numeric" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-texto/60">Data</label>
@@ -716,6 +726,182 @@ function MovimentoModal(props: { clinicId: string; onClose: () => void; onSaved:
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/60 hover:bg-black/5">Cancelar</button>
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Salvar'}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- Relatório / Estatísticas de despesas ----------------------------------
+type ModoPeriodo = 'mensal' | 'anual' | 'intervalo'
+
+function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: number }) {
+  const [modo, setModo] = useState<ModoPeriodo>('mensal')
+  const [ano, setAno] = useState(anoAtual)
+  const [mes, setMes] = useState(mesAtual)
+  const [de, setDe] = useState(`${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-01`)
+  const [ate, setAte] = useState(monthRange(anoAtual, mesAtual).ate)
+  const [despesas, setDespesas] = useState<Expense[]>([])
+  const [carregando, setCarregando] = useState(true)
+
+  // Intervalo efetivo conforme o modo escolhido.
+  const range = useMemo(() => {
+    if (modo === 'mensal') return monthRange(ano, mes)
+    if (modo === 'anual') return { de: `${ano}-01-01`, ate: `${ano}-12-31` }
+    return { de, ate }
+  }, [modo, ano, mes, de, ate])
+
+  useEffect(() => {
+    setCarregando(true)
+    listExpenses(range.de, range.ate)
+      .then(setDespesas)
+      .catch(() => setDespesas([]))
+      .finally(() => setCarregando(false))
+  }, [range.de, range.ate])
+
+  const anos = Array.from({ length: 6 }, (_, i) => anoAtual - 4 + i)
+
+  // Agregações
+  const total = despesas.reduce((s, d) => s + Number(d.valor), 0)
+  const totalPago = despesas.filter((d) => d.pago).reduce((s, d) => s + Number(d.valor), 0)
+  const totalAberto = total - totalPago
+  const qtdItens = despesas.reduce((s, d) => s + (Number(d.quantidade) || 1), 0)
+
+  const porClassificacao = (['produto', 'fixo'] as Classificacao[]).map((c) => ({
+    chave: c,
+    rotulo: c === 'produto' ? 'Produtos' : 'Gastos fixos',
+    valor: despesas.filter((d) => d.classificacao === c).reduce((s, d) => s + Number(d.valor), 0),
+  }))
+
+  const porForma = (['pix', 'cartao'] as FormaPagamento[]).map((fp) => ({
+    chave: fp,
+    rotulo: fp === 'pix' ? 'Pix' : 'Cartão',
+    valor: despesas.filter((d) => d.forma_pagamento === fp).reduce((s, d) => s + Number(d.valor), 0),
+  }))
+
+  const porTipo = (() => {
+    const map = new Map<string, { nome: string; valor: number; itens: number; lanc: number }>()
+    for (const d of despesas) {
+      const nome = d.expense_types?.nome ?? 'Sem tipo'
+      const cur = map.get(nome) ?? { nome, valor: 0, itens: 0, lanc: 0 }
+      cur.valor += Number(d.valor)
+      cur.itens += Number(d.quantidade) || 1
+      cur.lanc += 1
+      map.set(nome, cur)
+    }
+    return Array.from(map.values()).sort((a, b) => b.valor - a.valor)
+  })()
+
+  const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0)
+
+  return (
+    <div className="space-y-6">
+      {/* Seletor de período */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex gap-1 rounded-lg bg-black/[0.03] p-1 text-sm">
+          {(['mensal', 'anual', 'intervalo'] as ModoPeriodo[]).map((m) => (
+            <button key={m} onClick={() => setModo(m)}
+              className={`rounded-md px-3 py-1.5 capitalize ${modo === m ? 'bg-white font-semibold text-primaria shadow-sm' : 'text-texto/60'}`}>
+              {m === 'intervalo' ? 'Intervalo' : m}
+            </button>
+          ))}
+        </div>
+        {modo === 'mensal' && (
+          <>
+            <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
+              {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+            </select>
+            <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+              {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </>
+        )}
+        {modo === 'anual' && (
+          <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        )}
+        {modo === 'intervalo' && (
+          <div className="flex items-center gap-2 text-sm">
+            <input type="date" className="rounded-lg border border-black/10 px-3 py-2" value={de} onChange={(e) => setDe(e.target.value)} />
+            <span className="text-texto/50">até</span>
+            <input type="date" className="rounded-lg border border-black/10 px-3 py-2" value={ate} onChange={(e) => setAte(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      {carregando ? (
+        <p className="p-6 text-sm text-texto/50">Carregando…</p>
+      ) : despesas.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma despesa no período.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card label="Total de despesas" valor={total} cor="text-texto" />
+            <Card label="Pago" valor={totalPago} cor="text-emerald-600" />
+            <Card label="Em aberto" valor={totalAberto} cor="text-amber-600" />
+            <div className="rounded-xl border border-black/5 bg-white p-4">
+              <div className="text-xl font-semibold text-texto">{despesas.length}</div>
+              <div className="text-xs text-texto/60">Lançamentos · {qtdItens} itens</div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <Bloco titulo="Por classificação">
+              {porClassificacao.map((r) => <Barra key={r.chave} rotulo={r.rotulo} valor={r.valor} pct={pct(r.valor)} />)}
+            </Bloco>
+            <Bloco titulo="Por forma de pagamento">
+              {porForma.map((r) => <Barra key={r.chave} rotulo={r.rotulo} valor={r.valor} pct={pct(r.valor)} />)}
+            </Bloco>
+          </div>
+
+          <Bloco titulo="Por tipo de despesa">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-texto/50"><tr>
+                  <th className="py-1 font-medium">Tipo</th>
+                  <th className="py-1 text-center font-medium">Lanç.</th>
+                  <th className="py-1 text-center font-medium">Itens</th>
+                  <th className="py-1 text-right font-medium">Valor</th>
+                  <th className="py-1 text-right font-medium">%</th>
+                </tr></thead>
+                <tbody>
+                  {porTipo.map((r) => (
+                    <tr key={r.nome} className="border-t border-black/5">
+                      <td className="py-1.5 text-texto">{r.nome}</td>
+                      <td className="py-1.5 text-center text-texto/60">{r.lanc}</td>
+                      <td className="py-1.5 text-center text-texto/60">{r.itens}</td>
+                      <td className="py-1.5 text-right font-medium text-texto">{brl(r.valor)}</td>
+                      <td className="py-1.5 text-right text-texto/50">{pct(r.valor)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Bloco>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Bloco({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-black/5 bg-white p-5">
+      <h3 className="mb-3 text-sm font-semibold text-texto/70">{titulo}</h3>
+      <div className="space-y-2">{children}</div>
+    </div>
+  )
+}
+
+function Barra({ rotulo, valor, pct }: { rotulo: string; valor: number; pct: number }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-sm">
+        <span className="text-texto/80">{rotulo}</span>
+        <span className="text-texto/60">{brl(valor)} · {pct}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-black/5">
+        <div className="h-full rounded-full bg-primaria" style={{ width: `${pct}%` }} />
       </div>
     </div>
   )

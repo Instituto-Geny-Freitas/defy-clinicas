@@ -13,6 +13,10 @@ export async function createExpenseType(clinicId: string, nome: string, tipo: Cl
   const { error } = await supabase.from('expense_types').insert({ clinic_id: clinicId, nome, tipo })
   if (error) throw error
 }
+export async function updateExpenseType(id: string, patch: { nome?: string; tipo?: Classificacao }): Promise<void> {
+  const { error } = await supabase.from('expense_types').update(patch).eq('id', id)
+  if (error) throw error
+}
 export async function deleteExpenseType(id: string): Promise<void> {
   const { error } = await supabase.from('expense_types').delete().eq('id', id)
   if (error) throw error
@@ -30,10 +34,11 @@ export interface Expense {
   pago: boolean
   classificacao: Classificacao
   forma_pagamento: FormaPagamento | null
+  quantidade: number
   parcela_num: number | null
   parcela_total: number | null
   recorrencia_grupo: string | null
-  expense_types?: { nome: string } | null
+  expense_types?: { nome: string; tipo?: Classificacao } | null
 }
 
 export type Periodo = 'semanal' | 'quinzenal' | 'mensal' | 'anual'
@@ -51,7 +56,7 @@ function addPeriodo(isoDate: string, periodo: Periodo, n: number): string {
 export async function listExpenses(de: string, ate: string): Promise<Expense[]> {
   const { data, error } = await supabase
     .from('expenses')
-    .select('*, expense_types(nome)')
+    .select('*, expense_types(nome, tipo)')
     .gte('data', de).lte('data', ate)
     .order('data', { ascending: true })
   if (error) throw error
@@ -67,6 +72,7 @@ export async function createExpense(args: {
   pago: boolean
   classificacao: Classificacao
   formaPagamento?: FormaPagamento | null
+  quantidade?: number
   // Produto comprado parcelado: divide o valor total em N parcelas mensais.
   parcelado?: boolean
   parcelas?: number
@@ -81,6 +87,7 @@ export async function createExpense(args: {
     descricao: args.descricao ?? null,
     classificacao: args.classificacao,
     forma_pagamento: args.formaPagamento ?? null,
+    quantidade: Math.max(1, args.quantidade ?? 1),
   }
 
   let rows: Record<string, unknown>[]
