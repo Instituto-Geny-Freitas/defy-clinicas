@@ -19,4 +19,6 @@ Thumbs.db
 
 # Configurações locais do Claude Code
 .claude/settings.local.json
-_Flavia Coelho Silva .docx.pdf
+
+# PDFs soltos na raiz (anexos/exports com dados de pacientes — não versionar)
+/*.pdf
