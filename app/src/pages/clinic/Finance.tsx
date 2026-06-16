@@ -470,11 +470,14 @@ function DespesaModal(props: {
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
-  // Ao escolher um tipo de despesa, herda a natureza (produto/fixo).
-  function escolherTipo(id: string) {
-    setTipoId(id)
-    const t = tipos.find((x) => x.id === id)
-    if (t) setClassificacao(t.tipo)
+  // Tipos disponíveis conforme a classificação escolhida.
+  const tiposFiltrados = tipos.filter((t) => t.tipo === classificacao)
+
+  // Ao trocar a classificação, limpa o tipo se não pertencer à nova classificação.
+  function escolherClassificacao(c: Classificacao) {
+    setClassificacao(c)
+    const atual = tipos.find((t) => t.id === tipoId)
+    if (!atual || atual.tipo !== c) setTipoId('')
   }
 
   const v = Number(valor) || 0
@@ -511,23 +514,26 @@ function DespesaModal(props: {
         <h3 className="mb-4 text-lg font-semibold text-texto">Nova despesa</h3>
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-texto/60">Tipo de despesa</label>
-            <select className={field} value={tipoId} onChange={(e) => escolherTipo(e.target.value)}>
-              <option value="">Selecione…</option>
-              {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome} ({t.tipo === 'produto' ? 'Produto' : 'Gasto fixo'})</option>)}
-            </select>
-          </div>
-
-          <div>
             <label className="mb-1 block text-xs font-medium text-texto/60">Classificação</label>
             <div className="flex gap-2">
               {(['produto', 'fixo'] as Classificacao[]).map((c) => (
-                <button key={c} type="button" onClick={() => setClassificacao(c)}
+                <button key={c} type="button" onClick={() => escolherClassificacao(c)}
                   className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${classificacao === c ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
                   {c === 'produto' ? 'Produto' : 'Gasto fixo'}
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Tipo de despesa</label>
+            <select className={field} value={tipoId} onChange={(e) => setTipoId(e.target.value)}>
+              <option value="">Selecione…</option>
+              {tiposFiltrados.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            </select>
+            {tiposFiltrados.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">Nenhum tipo classificado como “{classificacao === 'produto' ? 'Produto' : 'Gasto fixo'}”. Cadastre/classifique em Configurações → Tipos de Despesa.</p>
+            )}
           </div>
 
           <div>
