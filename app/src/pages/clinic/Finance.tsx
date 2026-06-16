@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
+import { useClinic } from '@/theme/ThemeProvider'
 import { listAllQuotes, registerPayment, brl, type PaymentMethod, type Quote } from '@/lib/finance'
+import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
 import { formatDateBR } from '@/lib/format'
 import {
@@ -735,6 +737,7 @@ function MovimentoModal(props: { clinicId: string; onClose: () => void; onSaved:
 type ModoPeriodo = 'mensal' | 'anual' | 'intervalo'
 
 function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: number }) {
+  const clinic = useClinic()
   const [modo, setModo] = useState<ModoPeriodo>('mensal')
   const [ano, setAno] = useState(anoAtual)
   const [mes, setMes] = useState(mesAtual)
@@ -743,6 +746,7 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
   const [despesas, setDespesas] = useState<Expense[]>([])
   const [pagamentos, setPagamentos] = useState<PaymentRow[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [serie, setSerie] = useState<{ mes: string; receita: number; despesa: number }[]>([])
 
   // Intervalo efetivo conforme o modo escolhido.
   const range = useMemo(() => {
@@ -758,6 +762,18 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
       .catch(() => { setDespesas([]); setPagamentos([]) })
       .finally(() => setCarregando(false))
   }, [range.de, range.ate])
+
+  // Série anual (evolução mês a mês) — independente do modo, sempre do ano selecionado.
+  useEffect(() => {
+    Promise.all([listExpenses(`${ano}-01-01`, `${ano}-12-31`), listPaymentsPeriodo(`${ano}-01-01`, `${ano}-12-31`)])
+      .then(([dp, pg]) => {
+        const r = Array.from({ length: 12 }, () => ({ receita: 0, despesa: 0 }))
+        for (const d of dp) { if (d.pago) { const m = Number(d.data.slice(5, 7)) - 1; if (m >= 0 && m < 12) r[m].despesa += Number(d.valor) } }
+        for (const p of pg) { if (p.pago_em) { const m = Number(p.pago_em.slice(5, 7)) - 1; if (m >= 0 && m < 12) r[m].receita += Number(p.valor) } }
+        setSerie(r.map((x, i) => ({ mes: MESES[i].slice(0, 3), receita: x.receita, despesa: x.despesa })))
+      })
+      .catch(() => setSerie([]))
+  }, [ano])
 
   const anos = Array.from({ length: 6 }, (_, i) => anoAtual - 4 + i)
 
@@ -799,6 +815,32 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
 
   const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0)
 
+  const periodoLabel = modo === 'mensal' ? `${MESES[mes]} de ${ano}`
+    : modo === 'anual' ? `Ano de ${ano}`
+    : `${formatDateBR(range.de)} a ${formatDateBR(range.ate)}`
+
+  function exportarPdf() {
+    const { blob, filename } = buildRelatorioFinanceiroPdf({
+      clinic,
+      periodoLabel,
+      totalReceitas,
+      totalDespesasPagas: totalPago,
+      resultado,
+      totalDespesas: total,
+      totalEmAberto: totalAberto,
+      lancamentos: despesas.length,
+      itens: qtdItens,
+      porClassificacao: porClassificacao.map((r) => ({ rotulo: r.rotulo, valor: r.valor })),
+      porForma: porForma.map((r) => ({ rotulo: r.rotulo, valor: r.valor })),
+      porTipo,
+      serie: modo === 'anual' ? serie : undefined,
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
+
   return (
     <div className="space-y-6">
       {/* Seletor de período */}
@@ -833,7 +875,15 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
             <input type="date" className="rounded-lg border border-black/10 px-3 py-2" value={ate} onChange={(e) => setAte(e.target.value)} />
           </div>
         )}
+        <button onClick={exportarPdf} className="ml-auto rounded-lg border border-primaria px-4 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5">
+          Exportar PDF
+        </button>
       </div>
+
+      {/* Evolução mês a mês (ano selecionado) */}
+      <Bloco titulo={`Evolução mês a mês — ${ano}`}>
+        <EvolucaoChart serie={serie} />
+      </Bloco>
 
       {carregando ? (
         <p className="p-6 text-sm text-texto/50">Carregando…</p>
@@ -905,6 +955,52 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
           </Bloco>
         </>
       )}
+    </div>
+  )
+}
+
+function EvolucaoChart({ serie }: { serie: { mes: string; receita: number; despesa: number }[] }) {
+  if (serie.length === 0) return <p className="text-sm text-texto/50">Sem dados no ano.</p>
+  const max = Math.max(1, ...serie.map((s) => Math.max(s.receita, s.despesa)))
+  // Geometria
+  const W = 720, H = 220, padL = 44, padB = 24, padT = 10
+  const innerW = W - padL - 8
+  const innerH = H - padB - padT
+  const stepX = innerW / serie.length
+  const y = (v: number) => padT + innerH - (v / max) * innerH
+  const linha = (sel: (s: { receita: number; despesa: number }) => number) =>
+    serie.map((s, i) => `${padL + stepX * (i + 0.5)},${y(sel(s))}`).join(' ')
+  const fmtK = (v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)))
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-4 text-xs">
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-emerald-500" /> Receitas</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-secundaria" /> Despesas</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
+        {[0, 0.5, 1].map((f) => {
+          const yy = padT + innerH - f * innerH
+          return (
+            <g key={f}>
+              <line x1={padL} y1={yy} x2={W - 8} y2={yy} stroke="#e5e7eb" strokeWidth={1} />
+              <text x={padL - 6} y={yy + 3} textAnchor="end" fontSize={9} fill="#9ca3af">{fmtK(max * f)}</text>
+            </g>
+          )
+        })}
+        <polyline points={linha((s) => s.receita)} fill="none" stroke="#10b981" strokeWidth={2} />
+        <polyline points={linha((s) => s.despesa)} fill="none" stroke="#e11d48" strokeWidth={2} />
+        {serie.map((s, i) => {
+          const cx = padL + stepX * (i + 0.5)
+          return (
+            <g key={i}>
+              <circle cx={cx} cy={y(s.receita)} r={2.5} fill="#10b981" />
+              <circle cx={cx} cy={y(s.despesa)} r={2.5} fill="#e11d48" />
+              <text x={cx} y={H - 8} textAnchor="middle" fontSize={9} fill="#6b7280">{s.mes}</text>
+            </g>
+          )
+        })}
+      </svg>
     </div>
   )
 }
