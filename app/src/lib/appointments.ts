@@ -5,7 +5,7 @@ export type AppointmentStatus = 'agendado' | 'confirmado' | 'realizado' | 'cance
 export interface Appointment {
   id: string
   clinic_id: string
-  patient_id: string
+  patient_id: string | null
   professional_id: string | null
   procedimento: string | null
   inicio: string
@@ -13,7 +13,9 @@ export interface Appointment {
   status: AppointmentStatus
   observacoes: string | null
   confirmado_em: string | null
-  patients?: { nome: string; whatsapp: string | null }
+  nome_avulso: string | null
+  telefone_avulso: string | null
+  patients?: { nome: string; whatsapp: string | null } | null
   professionals?: { nome: string } | null
 }
 
@@ -44,12 +46,15 @@ export async function listPatientAppointments(patientId: string): Promise<Appoin
 
 interface CreateArgs {
   clinicId: string
-  patientId: string
+  patientId?: string | null
   professionalId?: string | null
   procedimento?: string | null
   inicio: string
   fim?: string | null
   observacoes?: string | null
+  // Agendamento prévio sem cadastro (paciente ainda não cadastrado):
+  nomeAvulso?: string | null
+  telefoneAvulso?: string | null
 }
 
 export async function createAppointment(args: CreateArgs): Promise<Appointment> {
@@ -57,12 +62,14 @@ export async function createAppointment(args: CreateArgs): Promise<Appointment> 
     .from('appointments')
     .insert({
       clinic_id: args.clinicId,
-      patient_id: args.patientId,
+      patient_id: args.patientId ?? null,
       professional_id: args.professionalId ?? null,
       procedimento: args.procedimento ?? null,
       inicio: args.inicio,
       fim: args.fim ?? null,
       observacoes: args.observacoes ?? null,
+      nome_avulso: args.nomeAvulso ?? null,
+      telefone_avulso: args.telefoneAvulso ?? null,
       status: 'agendado',
       origem: 'profissional',
     })
@@ -70,6 +77,27 @@ export async function createAppointment(args: CreateArgs): Promise<Appointment> 
     .single()
   if (error) throw error
   return data
+}
+
+/** Agendamentos prévios sem cadastro (patient_id nulo) — pendentes de regularização. */
+export async function listWalkInAppointments(): Promise<Appointment[]> {
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('*, professionals(nome)')
+    .is('patient_id', null)
+    .order('inicio', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
+/** Regulariza agendamentos avulsos vinculando-os a um paciente cadastrado. */
+export async function linkAppointmentsToPatient(patientId: string, apptIds: string[]): Promise<void> {
+  if (apptIds.length === 0) return
+  const { error } = await supabase
+    .from('appointments')
+    .update({ patient_id: patientId, nome_avulso: null, telefone_avulso: null })
+    .in('id', apptIds)
+  if (error) throw error
 }
 
 /** Remarca um agendamento para nova data/hora (zera o lembrete enviado). */

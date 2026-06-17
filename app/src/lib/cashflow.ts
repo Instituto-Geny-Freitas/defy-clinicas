@@ -130,6 +130,29 @@ export async function setExpensePaid(id: string, pago: boolean): Promise<void> {
   const { error } = await supabase.from('expenses').update({ pago }).eq('id', id)
   if (error) throw error
 }
+
+export async function updateExpense(id: string, patch: {
+  expenseTypeId?: string | null
+  descricao?: string | null
+  valor?: number
+  data?: string
+  pago?: boolean
+  classificacao?: Classificacao
+  formaPagamento?: FormaPagamento | null
+  quantidade?: number
+}): Promise<void> {
+  const row: Record<string, unknown> = {}
+  if (patch.expenseTypeId !== undefined) row.expense_type_id = patch.expenseTypeId
+  if (patch.descricao !== undefined) row.descricao = patch.descricao
+  if (patch.valor !== undefined) row.valor = patch.valor
+  if (patch.data !== undefined) row.data = patch.data
+  if (patch.pago !== undefined) row.pago = patch.pago
+  if (patch.classificacao !== undefined) row.classificacao = patch.classificacao
+  if (patch.formaPagamento !== undefined) row.forma_pagamento = patch.formaPagamento
+  if (patch.quantidade !== undefined) row.quantidade = Math.max(1, patch.quantidade)
+  const { error } = await supabase.from('expenses').update(row).eq('id', id)
+  if (error) throw error
+}
 export async function deleteExpense(id: string): Promise<void> {
   const { error } = await supabase.from('expenses').delete().eq('id', id)
   if (error) throw error

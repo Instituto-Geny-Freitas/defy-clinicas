@@ -141,6 +141,16 @@ export async function registerPayment(args: RegisterPaymentArgs): Promise<Paymen
   return data
 }
 
+export async function updatePayment(id: string, patch: { valor?: number; metodo?: PaymentMethod }): Promise<void> {
+  const { error } = await supabase.from('payments').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function deletePayment(id: string): Promise<void> {
+  const { error } = await supabase.from('payments').delete().eq('id', id)
+  if (error) throw error
+}
+
 /** Total já pago (status 'pago') de um orçamento, a partir da lista de pagamentos. */
 export function totalPago(payments: Payment[], quoteId: string): number {
   return payments

@@ -42,6 +42,24 @@ export async function setSupplementationPaid(id: string, pago: boolean): Promise
   if (error) throw error
 }
 
+export async function updateSupplementation(id: string, patch: {
+  medicacao?: string
+  via_adm?: string | null
+  validade?: string | null
+  lote?: string | null
+  fornecedor?: string | null
+  valor_venda?: number
+  observacoes?: string | null
+}): Promise<void> {
+  const { error } = await supabase.from('supplementations').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteSupplementation(id: string): Promise<void> {
+  const { error } = await supabase.from('supplementations').delete().eq('id', id)
+  if (error) throw error
+}
+
 interface CreateArgs {
   clinicId: string
   patientId: string

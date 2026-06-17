@@ -12,7 +12,7 @@ import {
   type Quote,
   type QuoteItem,
 } from '@/lib/finance'
-import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
+import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listUnpaidSupplementations } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
@@ -187,6 +187,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   const [desconto, setDesconto] = useState(0)
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [planoId, setPlanoId] = useState('')
+  const [procImportados, setProcImportados] = useState<string[]>([])
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
@@ -207,12 +208,21 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
     setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
   }
 
+  async function importarProcedimentos() {
+    const procs = await listUnbilledProcedures(patientId)
+    if (procs.length === 0) { alert('Nenhum procedimento avulso (sem orçamento) com valor a cobrar.'); return }
+    const novos = procs.map((p) => ({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado) || 0, total: Number(p.valor_cobrado) || 0 }))
+    setProcImportados((ids) => [...new Set([...ids, ...procs.map((p) => p.id)])])
+    setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
+  }
+
   async function salvar() {
     const validos = itens.filter((i) => i.descricao.trim())
     if (validos.length === 0) return
     setSalvando(true)
     try {
-      await createQuote({ clinicId, patientId, professionalId, treatmentPlanId: planoId || null, itens: validos, desconto })
+      const quote = await createQuote({ clinicId, patientId, professionalId, treatmentPlanId: planoId || null, itens: validos, desconto })
+      if (procImportados.length > 0) await linkProceduresToQuote(quote.id, procImportados)
       onSaved()
     } catch {
       setSalvando(false)
@@ -251,6 +261,9 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
             </button>
             <button onClick={importarSuplementacoes} className="text-xs font-medium text-primaria hover:underline">
               + Importar suplementações não pagas
+            </button>
+            <button onClick={importarProcedimentos} className="text-xs font-medium text-primaria hover:underline">
+              + Importar procedimentos avulsos
             </button>
           </div>
         </div>

@@ -17,6 +17,7 @@ export interface ProcedureRecord {
   data: string
   regiao: string | null
   observacoes: string | null
+  valor_cobrado: number
   produtos_usados: UsedProduct[]
   created_at: string
 }
@@ -44,6 +45,26 @@ export async function listProcedures(patientId: string): Promise<ProcedureRecord
   return data ?? []
 }
 
+/** Procedimentos avulsos: sem orçamento, com valor a cobrar e ainda não pagos. */
+export async function listUnbilledProcedures(patientId: string): Promise<ProcedureRecord[]> {
+  const { data, error } = await supabase
+    .from('procedures_log')
+    .select('*')
+    .eq('patient_id', patientId)
+    .is('quote_id', null)
+    .gt('valor_cobrado', 0)
+    .order('data', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+/** Vincula procedimentos avulsos a um orçamento (após importá-los no orçamento). */
+export async function linkProceduresToQuote(quoteId: string, procedureIds: string[]): Promise<void> {
+  if (procedureIds.length === 0) return
+  const { error } = await supabase.from('procedures_log').update({ quote_id: quoteId }).in('id', procedureIds)
+  if (error) throw error
+}
+
 interface CreateArgs {
   clinicId: string
   patientId: string
@@ -53,6 +74,7 @@ interface CreateArgs {
   data: string
   regiao?: string | null
   observacoes?: string | null
+  valorCobrado?: number
   produtos: UsedProduct[]
 }
 
@@ -72,28 +94,80 @@ export async function createProcedure(args: CreateArgs): Promise<ProcedureRecord
       data: args.data,
       regiao: args.regiao ?? null,
       observacoes: args.observacoes ?? null,
+      valor_cobrado: args.valorCobrado ?? 0,
       produtos_usados: args.produtos,
     })
     .select()
     .single()
   if (error) throw error
 
-  const movimentos = args.produtos
+  await aplicarSaidas(args.clinicId, proc.id, args.patientId, args.professionalId ?? null, args.produtos)
+  return proc
+}
+
+/** Posta as saídas de estoque (baixa por uso) dos produtos de um procedimento. */
+async function aplicarSaidas(clinicId: string, procedureId: string, patientId: string, professionalId: string | null, produtos: UsedProduct[]) {
+  const movimentos = produtos
     .filter((p) => p.inventory_id && p.qtd > 0)
     .map((p) => ({
-      clinic_id: args.clinicId,
-      inventory_id: p.inventory_id,
-      tipo: 'saida_uso',
-      quantidade: p.qtd,
-      procedure_id: proc.id,
-      patient_id: args.patientId,
-      professional_id: args.professionalId ?? null,
+      clinic_id: clinicId, inventory_id: p.inventory_id, tipo: 'saida_uso', quantidade: p.qtd,
+      procedure_id: procedureId, patient_id: patientId, professional_id: professionalId,
     }))
-
   if (movimentos.length > 0) {
-    const { error: mErr } = await supabase.from('stock_movements').insert(movimentos)
-    if (mErr) throw mErr
+    const { error } = await supabase.from('stock_movements').insert(movimentos)
+    if (error) throw error
   }
+}
 
-  return proc
+/** Estorna (devolve ao estoque) os produtos atualmente baixados de um procedimento. */
+async function estornarSaidas(clinicId: string, proc: ProcedureRecord) {
+  const movimentos = (proc.produtos_usados ?? [])
+    .filter((p) => p.inventory_id && p.qtd > 0)
+    .map((p) => ({
+      clinic_id: clinicId, inventory_id: p.inventory_id, tipo: 'entrada', quantidade: p.qtd,
+      procedure_id: proc.id, patient_id: proc.patient_id, professional_id: proc.professional_id,
+      motivo: 'Estorno (edição/exclusão de procedimento)',
+    }))
+  if (movimentos.length > 0) {
+    const { error } = await supabase.from('stock_movements').insert(movimentos)
+    if (error) throw error
+  }
+}
+
+interface UpdateArgs {
+  clinicId: string
+  anterior: ProcedureRecord
+  procedimento: string
+  data: string
+  regiao?: string | null
+  observacoes?: string | null
+  valorCobrado?: number
+  produtos: UsedProduct[]
+}
+
+/** Edita um procedimento; reconcilia o estoque (estorna os produtos antigos e aplica os novos). */
+export async function updateProcedure(args: UpdateArgs): Promise<void> {
+  const novos = args.produtos.filter((p) => p.inventory_id)
+  // Reconcilia estoque: devolve os antigos e dá baixa nos novos.
+  await estornarSaidas(args.clinicId, args.anterior)
+  await aplicarSaidas(args.clinicId, args.anterior.id, args.anterior.patient_id, args.anterior.professional_id, novos)
+  const { error } = await supabase
+    .from('procedures_log')
+    .update({
+      procedimento: args.procedimento,
+      data: args.data,
+      regiao: args.regiao ?? null,
+      observacoes: args.observacoes ?? null,
+      valor_cobrado: args.valorCobrado ?? 0,
+      produtos_usados: novos,
+    })
+    .eq('id', args.anterior.id)
+  if (error) throw error
+}
+
+/** Exclui um procedimento devolvendo os produtos ao estoque. */
+export async function deleteProcedure(clinicId: string, proc: ProcedureRecord): Promise<void> {
+  await estornarSaidas(clinicId, proc)
+  const { error } = await supabase.from('procedures_log').delete().eq('id', proc.id)
+  if (error) throw error
 }

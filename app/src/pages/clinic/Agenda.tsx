@@ -131,9 +131,13 @@ export default function Agenda() {
                   <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-black/5 bg-white p-4">
                     <div className="w-14 text-center"><div className="text-lg font-semibold text-primaria">{hora(a.inicio)}</div></div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium text-texto">{a.patients?.nome ?? 'Paciente'}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium text-texto">{a.patients?.nome ?? a.nome_avulso ?? 'Paciente'}</span>
+                        {!a.patient_id && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">cadastro pendente</span>}
+                      </div>
                       <div className="text-sm text-texto/60">
                         {a.procedimento ?? 'Atendimento'}
+                        {!a.patient_id && a.telefone_avulso && <span className="text-texto/40"> · 📞 {a.telefone_avulso}</span>}
                         {a.professionals?.nome && <span className="text-texto/40"> · {a.professionals.nome}</span>}
                       </div>
                     </div>
@@ -163,7 +167,10 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
   clinicId: string; profissionais: Professional[]; defaultProf?: string | null; onClose: () => void; onSaved: () => void
 }) {
   const [pacientes, setPacientes] = useState<Patient[]>([])
+  const [semCadastro, setSemCadastro] = useState(false)
   const [patientId, setPatientId] = useState('')
+  const [nomeAvulso, setNomeAvulso] = useState('')
+  const [telefoneAvulso, setTelefoneAvulso] = useState('')
   const [professionalId, setProfessionalId] = useState(defaultProf ?? '')
   const [procedimento, setProcedimento] = useState('')
   const [data, setData] = useState<string | null>(null)
@@ -176,12 +183,16 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
   useEffect(() => { listPatients().then(setPacientes).catch(() => {}) }, [])
 
   async function salvar() {
-    if (!patientId) { setErro('Selecione o paciente.'); return }
+    if (semCadastro ? !nomeAvulso.trim() : !patientId) { setErro(semCadastro ? 'Informe o nome.' : 'Selecione o paciente.'); return }
     if (!data) { setErro('Escolha a data no calendário.'); return }
     setSalvando(true); setErro(null)
     try {
       await createAppointment({
-        clinicId, patientId, professionalId: professionalId || null, procedimento,
+        clinicId,
+        patientId: semCadastro ? null : patientId,
+        nomeAvulso: semCadastro ? nomeAvulso.trim() : null,
+        telefoneAvulso: semCadastro ? telefoneAvulso.trim() : null,
+        professionalId: professionalId || null, procedimento,
         inicio: toISO(data, horaInicio),
         fim: horaFim ? toISO(data, horaFim) : null,
         observacoes: obs,
@@ -193,13 +204,25 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
   return (
     <Shell titulo="Novo agendamento" onClose={onClose}>
       <div className="space-y-3">
-        <div>
-          <label className="mb-1 block text-sm text-texto/70">Paciente *</label>
-          <select className={field} value={patientId} onChange={(e) => setPatientId(e.target.value)}>
-            <option value="">Selecione…</option>
-            {pacientes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-          </select>
-        </div>
+        <label className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <input type="checkbox" checked={semCadastro} onChange={(e) => setSemCadastro(e.target.checked)} />
+          Paciente ainda sem cadastro (agendamento prévio)
+        </label>
+        {semCadastro ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><label className="mb-1 block text-sm text-texto/70">Nome *</label><input className={field} value={nomeAvulso} onChange={(e) => setNomeAvulso(e.target.value)} placeholder="Nome do contato" /></div>
+            <div><label className="mb-1 block text-sm text-texto/70">Telefone</label><input className={field} value={telefoneAvulso} onChange={(e) => setTelefoneAvulso(e.target.value)} placeholder="WhatsApp/telefone" /></div>
+            <p className="text-xs text-amber-700 sm:col-span-2">Ficará marcado como “cadastro pendente”. Ao cadastrar o paciente, há a opção de regularizar e vincular este agendamento.</p>
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Paciente *</label>
+            <select className={field} value={patientId} onChange={(e) => setPatientId(e.target.value)}>
+              <option value="">Selecione…</option>
+              {pacientes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-sm text-texto/70">Profissional</label>
           <select className={field} value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>

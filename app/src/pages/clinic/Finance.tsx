@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
-import { listAllQuotes, registerPayment, brl, type PaymentMethod, type Quote } from '@/lib/finance'
+import { listAllQuotes, registerPayment, updatePayment, deletePayment, brl, type PaymentMethod, type Quote } from '@/lib/finance'
 import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
 import { formatDateBR } from '@/lib/format'
@@ -15,6 +15,7 @@ import {
   listMovements,
   listPaymentsPeriodo,
   setExpensePaid,
+  updateExpense,
   type Classificacao,
   type Expense,
   type ExpenseType,
@@ -204,6 +205,13 @@ function ReceitasView(props: {
   const { clinicId, pagamentos, totalReceitas, totalAReceber, quotes, saldos, onChange } = props
   const [view, setView] = useState<'pagos' | 'receber'>('pagos')
   const [cobranca, setCobranca] = useState(false)
+  const [editandoPg, setEditandoPg] = useState<PaymentRow | null>(null)
+
+  async function excluirPagamento(p: PaymentRow) {
+    if (!confirm(`Excluir o pagamento de ${brl(Number(p.valor))}?`)) return
+    await deletePayment(p.id)
+    onChange()
+  }
 
   const aReceber = quotes
     .map((q) => ({ q, saldo: saldos[q.id] ? Number(saldos[q.id].saldo_a_receber) : Number(q.valor_total) }))
@@ -232,6 +240,7 @@ function ReceitasView(props: {
             <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
               <th className="px-4 py-2 font-medium">Paciente</th><th className="px-4 py-2 font-medium">Método</th>
               <th className="px-4 py-2 font-medium">Pago em</th><th className="px-4 py-2 font-medium text-right">Valor</th>
+              <th className="px-4 py-2 font-medium text-right">Ações</th>
             </tr></thead>
             <tbody>
               {pagamentos.map((p) => (
@@ -240,9 +249,13 @@ function ReceitasView(props: {
                   <td className="px-4 py-2 text-texto/60">{p.metodo}</td>
                   <td className="px-4 py-2 text-texto/60">{p.pago_em ? new Date(p.pago_em).toLocaleDateString('pt-BR') : '—'}</td>
                   <td className="px-4 py-2 text-right font-medium text-emerald-600">{brl(Number(p.valor))}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">
+                    <button onClick={() => setEditandoPg(p)} className="text-xs text-texto/60 hover:underline">Editar</button>
+                    <button onClick={() => excluirPagamento(p)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
+                  </td>
                 </tr>
               ))}
-              {pagamentos.length === 0 && <tr><td colSpan={4} className="px-4 py-3 text-texto/50">Nenhum pagamento no mês.</td></tr>}
+              {pagamentos.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">Nenhum pagamento no mês.</td></tr>}
             </tbody>
           </table>
         ) : (
@@ -267,6 +280,52 @@ function ReceitasView(props: {
       </div>
 
       {cobranca && <CobrancaModal clinicId={clinicId} quotes={quotes} saldos={saldos} onClose={() => setCobranca(false)} onSaved={() => { setCobranca(false); onChange() }} />}
+      {editandoPg && <PagamentoEditModal pagamento={editandoPg} onClose={() => setEditandoPg(null)} onSaved={() => { setEditandoPg(null); onChange() }} />}
+    </div>
+  )
+}
+
+function PagamentoEditModal({ pagamento, onClose, onSaved }: { pagamento: PaymentRow; onClose: () => void; onSaved: () => void }) {
+  const [valor, setValor] = useState(String(pagamento.valor))
+  const [metodo, setMetodo] = useState<PaymentMethod>((pagamento.metodo as PaymentMethod) ?? 'pix')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  async function salvar() {
+    const v = Number(valor)
+    if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
+    setSalvando(true)
+    try { await updatePayment(pagamento.id, { valor: v, metodo }); onSaved() }
+    catch (e) { setErro((e as Error).message ?? 'Erro ao salvar.'); setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-4 text-lg font-semibold text-texto">Editar pagamento</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Valor</label>
+            <input className={field} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Método</label>
+            <select className={field} value={metodo} onChange={(e) => setMetodo(e.target.value as PaymentMethod)}>
+              <option value="pix">PIX</option>
+              <option value="cartao_credito">Cartão crédito</option>
+              <option value="cartao_debito">Cartão débito</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="transferencia">Transferência</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          {erro && <p className="text-sm text-secundaria">{erro}</p>}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/60 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Salvar'}</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -381,6 +440,7 @@ function DespesasView(props: {
   const { clinicId, tipos, pagas, naoPagas, totalPagas, totalNaoPagas, de, onChange } = props
   const [view, setView] = useState<'pagas' | 'naoPagas'>('pagas')
   const [modal, setModal] = useState(false)
+  const [editando, setEditando] = useState<Expense | null>(null)
   const lista = view === 'pagas' ? pagas : naoPagas
 
   async function alternarPago(d: Expense) { await setExpensePaid(d.id, !d.pago); onChange() }
@@ -428,9 +488,10 @@ function DespesasView(props: {
                   {d.forma_pagamento && <span className="ml-1 text-[10px] uppercase text-texto/40">· {d.forma_pagamento === 'cartao' ? 'Cartão' : d.forma_pagamento}</span>}
                 </td>
                 <td className="px-4 py-2 text-right font-medium text-texto">{brl(Number(d.valor))}</td>
-                <td className="px-4 py-2 text-right">
-                  <button onClick={() => alternarPago(d)} className="mr-3 text-xs text-primaria hover:underline">{d.pago ? 'Marcar não pago' : 'Marcar pago'}</button>
-                  <button onClick={() => remover(d)} className="text-xs text-secundaria hover:underline">Excluir</button>
+                <td className="px-4 py-2 text-right whitespace-nowrap">
+                  <button onClick={() => alternarPago(d)} className="text-xs text-primaria hover:underline">{d.pago ? 'Não pago' : 'Pago'}</button>
+                  <button onClick={() => setEditando(d)} className="ml-3 text-xs text-texto/60 hover:underline">Editar</button>
+                  <button onClick={() => remover(d)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
                 </td>
               </tr>
             ))}
@@ -439,7 +500,8 @@ function DespesasView(props: {
         </table>
       </div>
 
-      {modal && <DespesaModal clinicId={clinicId} tipos={tipos} dataPadrao={de} onClose={() => setModal(false)} onSaved={() => { setModal(false); onChange() }} />}
+      {modal && <DespesaModal clinicId={clinicId} tipos={tipos} dataPadrao={de} despesa={null} onClose={() => setModal(false)} onSaved={() => { setModal(false); onChange() }} />}
+      {editando && <DespesaModal clinicId={clinicId} tipos={tipos} dataPadrao={de} despesa={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); onChange() }} />}
     </div>
   )
 }
@@ -448,18 +510,20 @@ function DespesaModal(props: {
   clinicId: string
   tipos: ExpenseType[]
   dataPadrao: string
+  despesa: Expense | null
   onClose: () => void
   onSaved: () => void
 }) {
-  const { clinicId, tipos, dataPadrao, onClose, onSaved } = props
-  const [tipoId, setTipoId] = useState('')
-  const [classificacao, setClassificacao] = useState<Classificacao>('fixo')
-  const [descricao, setDescricao] = useState('')
-  const [valor, setValor] = useState('')
-  const [quantidade, setQuantidade] = useState('1')
-  const [data, setData] = useState(dataPadrao)
-  const [pago, setPago] = useState(false)
-  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('pix')
+  const { clinicId, tipos, dataPadrao, despesa, onClose, onSaved } = props
+  const editar = !!despesa
+  const [tipoId, setTipoId] = useState(despesa?.expense_type_id ?? '')
+  const [classificacao, setClassificacao] = useState<Classificacao>(despesa?.classificacao ?? 'fixo')
+  const [descricao, setDescricao] = useState(despesa?.descricao ?? '')
+  const [valor, setValor] = useState(despesa ? String(despesa.valor) : '')
+  const [quantidade, setQuantidade] = useState(despesa ? String(despesa.quantidade) : '1')
+  const [data, setData] = useState(despesa?.data ?? dataPadrao)
+  const [pago, setPago] = useState(despesa?.pago ?? false)
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(despesa?.forma_pagamento ?? 'pix')
   // Produto: à vista x parcelado
   const [parcelado, setParcelado] = useState(false)
   const [parcelas, setParcelas] = useState('2')
@@ -488,22 +552,29 @@ function DespesaModal(props: {
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
     setSalvando(true)
     try {
-      await createExpense({
-        clinicId,
-        expenseTypeId: tipoId || null,
-        descricao: descricao || null,
-        valor: v,
-        data,
-        pago,
-        classificacao,
-        formaPagamento,
-        quantidade: Number(quantidade) || 1,
-        parcelado: classificacao === 'produto' && parcelado,
-        parcelas: nParcelas,
-        recorrente: classificacao === 'fixo' && recorrente,
-        periodo,
-        repeticoes: Number(repeticoes) || 1,
-      })
+      if (despesa) {
+        await updateExpense(despesa.id, {
+          expenseTypeId: tipoId || null, descricao: descricao || null, valor: v, data, pago,
+          classificacao, formaPagamento, quantidade: Number(quantidade) || 1,
+        })
+      } else {
+        await createExpense({
+          clinicId,
+          expenseTypeId: tipoId || null,
+          descricao: descricao || null,
+          valor: v,
+          data,
+          pago,
+          classificacao,
+          formaPagamento,
+          quantidade: Number(quantidade) || 1,
+          parcelado: classificacao === 'produto' && parcelado,
+          parcelas: nParcelas,
+          recorrente: classificacao === 'fixo' && recorrente,
+          periodo,
+          repeticoes: Number(repeticoes) || 1,
+        })
+      }
       onSaved()
     } catch (e) { setErro((e as Error).message ?? 'Erro ao salvar.') } finally { setSalvando(false) }
   }
@@ -511,7 +582,7 @@ function DespesaModal(props: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="max-h-[92vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="mb-4 text-lg font-semibold text-texto">Nova despesa</h3>
+        <h3 className="mb-4 text-lg font-semibold text-texto">{editar ? 'Editar despesa' : 'Nova despesa'}</h3>
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-texto/60">Classificação</label>
@@ -567,8 +638,8 @@ function DespesaModal(props: {
             </div>
           </div>
 
-          {/* Produto: à vista x parcelado */}
-          {classificacao === 'produto' && (
+          {/* Produto: à vista x parcelado (apenas na criação) */}
+          {!editar && classificacao === 'produto' && (
             <div className="rounded-lg bg-black/[0.02] p-3">
               <label className="mb-1 block text-xs font-medium text-texto/60">Pagamento</label>
               <div className="flex gap-2">
@@ -587,8 +658,8 @@ function DespesaModal(props: {
             </div>
           )}
 
-          {/* Gasto fixo: recorrência */}
-          {classificacao === 'fixo' && (
+          {/* Gasto fixo: recorrência (apenas na criação) */}
+          {!editar && classificacao === 'fixo' && (
             <>
               <label className="flex items-center gap-2 text-sm text-texto/70">
                 <input type="checkbox" checked={recorrente} onChange={(e) => setRecorrente(e.target.checked)} /> Despesa recorrente

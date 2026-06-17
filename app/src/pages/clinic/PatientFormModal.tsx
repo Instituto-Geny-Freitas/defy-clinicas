@@ -9,6 +9,7 @@ import {
 } from '@/lib/patients'
 import { getClinic } from '@/lib/settings'
 import { recordConsent } from '@/lib/lgpd'
+import { linkAppointmentsToPatient, listWalkInAppointments, type Appointment } from '@/lib/appointments'
 import type { Patient } from '@/lib/types'
 
 interface Props {
@@ -39,6 +40,9 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
   const [salvando, setSalvando] = useState(false)
   const [provisionando, setProvisionando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  // Regularização de agendamentos prévios sem cadastro
+  const [walkins, setWalkins] = useState<Appointment[]>([])
+  const [aptsSel, setAptsSel] = useState<Set<string>>(new Set())
   // resultado do provisionamento (mostra login + senha para entregar ao paciente)
   const [resultado, setResultado] = useState<{ id: string; login: string; senha: string; aviso?: string } | null>(null)
 
@@ -53,7 +57,8 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
         })
       })
       .catch(() => {})
-  }, [editando])
+    if (!patient) listWalkInAppointments().then(setWalkins).catch(() => {})
+  }, [editando, patient])
 
   function set<K extends keyof PatientInput>(k: K, v: PatientInput[K]) {
     setForm((f) => ({ ...f, [k]: v }))
@@ -99,6 +104,7 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
       // criação + provisionamento de acesso
       const p = await createPatient(clinicId, form)
       if (grantConsent) await recordConsent({ patientId: p.id, clinicId, versao: lgpd.versao, origem: 'profissional' })
+      if (aptsSel.size > 0) await linkAppointmentsToPatient(p.id, [...aptsSel]).catch(() => {})
       try {
         const { login } = await provisionPatientAccess(p.id, senhaAcesso)
         setResultado({ id: p.id, login, senha: senhaAcesso })
@@ -180,6 +186,30 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
           <label className="mb-1 block text-sm text-texto/70">Alergias</label>
           <input className={field} value={form.alergias ?? ''} onChange={(e) => set('alergias', e.target.value)} />
         </div>
+
+        {/* Regularização de agendamento prévio sem cadastro */}
+        {!editando && walkins.length > 0 && (
+          <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div className="mb-1 text-sm font-medium text-amber-800">Regularizar agendamento prévio?</div>
+            <p className="mb-2 text-xs text-amber-700">Há agendamentos sem cadastro. Marque os que pertencem a este paciente para vinculá-los automaticamente.</p>
+            <div className="max-h-40 space-y-1 overflow-auto">
+              {walkins.map((a) => (
+                <label key={a.id} className="flex items-center gap-2 rounded-lg bg-white/70 px-2 py-1.5 text-sm text-texto/80">
+                  <input
+                    type="checkbox"
+                    checked={aptsSel.has(a.id)}
+                    onChange={(e) => setAptsSel((s) => { const n = new Set(s); e.target.checked ? n.add(a.id) : n.delete(a.id); return n })}
+                  />
+                  <span className="flex-1">
+                    <strong>{a.nome_avulso ?? 'Sem nome'}</strong>
+                    {a.telefone_avulso && <span className="text-texto/50"> · {a.telefone_avulso}</span>}
+                    <span className="block text-xs text-texto/50">{new Date(a.inicio).toLocaleString('pt-BR')}{a.procedimento ? ` · ${a.procedimento}` : ''}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Acesso do paciente */}
         <div className="sm:col-span-2 rounded-xl border border-primaria/20 bg-primaria/5 p-3">
