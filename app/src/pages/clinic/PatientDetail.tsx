@@ -20,6 +20,7 @@ import LabsPanel from './LabsPanel'
 import PatientAgendaPanel from './PatientAgendaPanel'
 import MeasurementsPanel from './MeasurementsPanel'
 import PatientReportsPanel from './PatientReportsPanel'
+import { usePermissions } from '@/auth/PermissionsProvider'
 
 type Aba =
   | 'resumo' | 'agenda' | 'anamnese' | 'avaliacoes' | 'plano' | 'procedimentos' | 'medidas'
@@ -51,6 +52,8 @@ const TIPOS_AVALIACAO: { key: AssessmentType; label: string }[] = [
 export default function PatientDetail() {
   const { id } = useParams<{ id: string }>()
   const { profile } = useAuth()
+  const { can } = usePermissions()
+  const abasVisiveis = ABAS.filter((a) => can(`paciente.${a.key}`))
   const [paciente, setPaciente] = useState<Patient | null>(null)
   const [aba, setAba] = useState<Aba>('resumo')
   const [tipoAval, setTipoAval] = useState<AssessmentType>('dermato')
@@ -67,6 +70,14 @@ export default function PatientDetail() {
     listConsentLogs(id).then(setConsentLogs).catch(() => {})
   }
   useEffect(recarregar, [id])
+
+  // Garante que a aba ativa é uma permitida para o perfil.
+  useEffect(() => {
+    if (abasVisiveis.length > 0 && !abasVisiveis.some((a) => a.key === aba)) {
+      setAba(abasVisiveis[0].key)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abasVisiveis.length])
 
   if (carregando) return <p className="text-sm text-texto/50">Carregando…</p>
   if (!paciente) return <p className="text-sm text-texto/50">Paciente não encontrado.</p>
@@ -98,7 +109,7 @@ export default function PatientDetail() {
       )}
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-black/5">
-        {ABAS.map((a) => (
+        {abasVisiveis.map((a) => (
           <button
             key={a.key}
             onClick={() => setAba(a.key)}

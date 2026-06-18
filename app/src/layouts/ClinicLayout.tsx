@@ -1,23 +1,29 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
+import { usePermissions } from '@/auth/PermissionsProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 
 const NAV = [
-  { to: '/clinica', label: 'Dashboard', end: true },
-  { to: '/clinica/agenda', label: 'Agenda' },
-  { to: '/clinica/pacientes', label: 'Pacientes' },
-  { to: '/clinica/documentos', label: 'Modelos de Documentos' },
-  { to: '/clinica/estoque', label: 'Estoque' },
-  { to: '/clinica/financeiro', label: 'Financeiro' },
-  { to: '/clinica/relatorios', label: 'Relatórios' },
-  { to: '/clinica/configuracoes', label: 'Configurações' },
+  { to: '/clinica', label: 'Dashboard', end: true, perm: 'menu.dashboard' },
+  { to: '/clinica/agenda', label: 'Agenda', perm: 'menu.agenda' },
+  { to: '/clinica/pacientes', label: 'Pacientes', perm: 'menu.pacientes' },
+  { to: '/clinica/documentos', label: 'Modelos de Documentos', perm: 'menu.documentos' },
+  { to: '/clinica/estoque', label: 'Estoque', perm: 'menu.estoque' },
+  { to: '/clinica/financeiro', label: 'Financeiro', perm: 'menu.financeiro' },
+  { to: '/clinica/relatorios', label: 'Relatórios', perm: 'menu.relatorios' },
+  { to: '/clinica/configuracoes', label: 'Configurações', perm: 'admin' },
 ]
 
 export default function ClinicLayout() {
   const { profile, signOut } = useAuth()
+  const { can } = usePermissions()
   const clinic = useClinic()
+  const isAdmin = profile?.professional?.role === 'admin'
   const [menuAberto, setMenuAberto] = useState(false)
+
+  // Configurações é exclusiva do admin; os demais itens seguem a matriz de permissões.
+  const navVisivel = NAV.filter((item) => (item.perm === 'admin' ? isAdmin : can(item.perm)))
 
   const sidebar = (
     <>
@@ -31,7 +37,7 @@ export default function ClinicLayout() {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-2">
-        {NAV.map((item) => (
+        {navVisivel.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

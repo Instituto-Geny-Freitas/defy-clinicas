@@ -60,9 +60,11 @@ import {
   type FormulationLib,
 } from '@/lib/formulations'
 import { createExpenseType, deleteExpenseType, listExpenseTypes, updateExpenseType, type ExpenseType } from '@/lib/cashflow'
+import { FEATURES, NIVEIS_EDITAVEIS, NIVEL_LABEL as PERM_NIVEL_LABEL, defaultsMatrix, getPermissions, savePermissions, type PermMatrix } from '@/lib/permissions'
+import { usePermissions } from '@/auth/PermissionsProvider'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'papeis' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -86,6 +88,7 @@ export default function Settings() {
           { k: 'visual', l: 'Identidade visual' },
           { k: 'equipe', l: 'Equipe' },
           { k: 'papeis', l: 'Papéis' },
+          { k: 'permissoes', l: 'Permissões' },
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
           { k: 'ativos', l: 'Ativos' },
@@ -111,6 +114,7 @@ export default function Settings() {
       {sec === 'visual' && <VisualSection />}
       {sec === 'equipe' && <EquipeSection clinicId={clinicId} />}
       {sec === 'papeis' && <RolesSection clinicId={clinicId} />}
+      {sec === 'permissoes' && <PermissoesSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
       {sec === 'textos' && <TextosSection clinicId={clinicId} />}
       {sec === 'ativos' && <AtivosSection clinicId={clinicId} />}
@@ -881,6 +885,95 @@ function RolesSection({ clinicId }: { clinicId: string }) {
             {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum papel cadastrado.</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// --- Permissões por nível de acesso -----------------------------------------
+function PermissoesSection({ clinicId }: { clinicId: string }) {
+  const { reload } = usePermissions()
+  const [matrix, setMatrix] = useState<PermMatrix | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => { getPermissions().then(setMatrix).catch(() => {}) }, [])
+
+  function toggle(nivel: 'profissional' | 'recepcao', key: string) {
+    setMatrix((m) => {
+      if (!m) return m
+      const set = new Set(m[nivel])
+      set.has(key) ? set.delete(key) : set.add(key)
+      return { ...m, [nivel]: [...set] }
+    })
+  }
+  function temAcesso(nivel: 'profissional' | 'recepcao', key: string) {
+    return matrix?.[nivel].includes(key) ?? false
+  }
+
+  async function salvar() {
+    if (!matrix) return
+    setSalvando(true); setMsg(null)
+    try { await savePermissions(clinicId, matrix); reload(); setMsg('Permissões salvas.') }
+    catch { setMsg('Não foi possível salvar.') }
+    finally { setSalvando(false) }
+  }
+
+  if (!matrix) return <p className="text-sm text-texto/50">Carregando…</p>
+
+  const grupos = ['Menu lateral', 'Abas do paciente'] as const
+  const Switch = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
+    <button type="button" onClick={onClick}
+      className={`relative h-5 w-9 rounded-full transition ${on ? 'bg-primaria' : 'bg-black/15'}`}>
+      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? 'left-4' : 'left-0.5'}`} />
+    </button>
+  )
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Permissões por nível de acesso</h3>
+        <p className="mb-2 text-xs text-texto/50">
+          Ligue/desligue cada funcionalidade por nível. O <strong>Administrador</strong> sempre tem acesso total
+          (não editável). O <strong>Paciente</strong> usa apenas o Portal do Paciente.
+        </p>
+        <p className="text-xs text-texto/40">Os papéis cadastrados em “Papéis” herdam as permissões do seu nível de acesso.</p>
+      </div>
+
+      {grupos.map((g) => (
+        <div key={g} className="overflow-hidden rounded-xl border border-black/5 bg-white">
+          <div className="border-b border-black/5 bg-black/[0.02] px-4 py-2 text-sm font-semibold text-texto/70">{g}</div>
+          <table className="w-full text-sm">
+            <thead className="text-left text-texto/50">
+              <tr>
+                <th className="px-4 py-2 font-medium">Funcionalidade</th>
+                <th className="px-3 py-2 text-center font-medium">{PERM_NIVEL_LABEL.admin}</th>
+                {NIVEIS_EDITAVEIS.map((n) => <th key={n} className="px-3 py-2 text-center font-medium">{PERM_NIVEL_LABEL[n]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {FEATURES.filter((f) => f.group === g).map((f) => (
+                <tr key={f.key} className="border-t border-black/5">
+                  <td className="px-4 py-2 text-texto">{f.label}</td>
+                  <td className="px-3 py-2 text-center"><span className="text-xs font-medium text-emerald-600">sempre</span></td>
+                  {NIVEIS_EDITAVEIS.map((n) => (
+                    <td key={n} className="px-3 py-2">
+                      <div className="flex justify-center"><Switch on={temAcesso(n, f.key)} onClick={() => toggle(n, f.key)} /></div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {salvando ? 'Salvando…' : 'Salvar permissões'}
+        </button>
+        <button onClick={() => setMatrix(defaultsMatrix())} className="rounded-lg border border-black/10 px-4 py-2.5 text-sm hover:bg-black/5">Restaurar padrões</button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
+import { PermissionsProvider } from '@/auth/PermissionsProvider'
 import Login from '@/pages/Login'
 import ForcePasswordChange from '@/pages/ForcePasswordChange'
 import ClinicLayout from '@/layouts/ClinicLayout'
@@ -59,6 +60,7 @@ export default function App() {
   }
 
   return (
+    <PermissionsProvider>
     <BrowserRouter>
       <Routes>
         {isStaff ? (
@@ -90,5 +92,6 @@ export default function App() {
         <Route path="*" element={<Navigate to={isStaff ? '/clinica' : '/portal'} replace />} />
       </Routes>
     </BrowserRouter>
+    </PermissionsProvider>
   )
 }
