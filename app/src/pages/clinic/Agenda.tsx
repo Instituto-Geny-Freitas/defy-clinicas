@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import {
   createAppointment,
+  createRecurringAppointments,
   listAppointments,
   rescheduleAppointment,
   updateAppointmentStatus,
   type Appointment,
   type AppointmentStatus,
+  type ApptPeriodo,
 } from '@/lib/appointments'
 import { listPatients } from '@/lib/patients'
 import { listProfessionals } from '@/lib/settings'
@@ -177,26 +179,38 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
   const [horaInicio, setHoraInicio] = useState('09:00')
   const [horaFim, setHoraFim] = useState('')
   const [obs, setObs] = useState('')
+  const [recorrente, setRecorrente] = useState(false)
+  const [periodo, setPeriodo] = useState<ApptPeriodo>('semanal')
+  const [ateAno, setAteAno] = useState(new Date().getFullYear())
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => { listPatients().then(setPacientes).catch(() => {}) }, [])
+  // Ao escolher a data, garante que "até o ano" não fique antes do ano da 1ª data.
+  useEffect(() => { if (data) { const a = Number(data.slice(0, 4)); if (ateAno < a) setAteAno(a) } }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
+  const anoBase = data ? Number(data.slice(0, 4)) : new Date().getFullYear()
+  const anos = Array.from({ length: 6 }, (_, i) => anoBase + i)
 
   async function salvar() {
     if (semCadastro ? !nomeAvulso.trim() : !patientId) { setErro(semCadastro ? 'Informe o nome.' : 'Selecione o paciente.'); return }
     if (!data) { setErro('Escolha a data no calendário.'); return }
     setSalvando(true); setErro(null)
+    const comum = {
+      clinicId,
+      patientId: semCadastro ? null : patientId,
+      nomeAvulso: semCadastro ? nomeAvulso.trim() : null,
+      telefoneAvulso: semCadastro ? telefoneAvulso.trim() : null,
+      professionalId: professionalId || null,
+      procedimento,
+      observacoes: obs,
+    }
     try {
-      await createAppointment({
-        clinicId,
-        patientId: semCadastro ? null : patientId,
-        nomeAvulso: semCadastro ? nomeAvulso.trim() : null,
-        telefoneAvulso: semCadastro ? telefoneAvulso.trim() : null,
-        professionalId: professionalId || null, procedimento,
-        inicio: toISO(data, horaInicio),
-        fim: horaFim ? toISO(data, horaFim) : null,
-        observacoes: obs,
-      })
+      if (recorrente) {
+        const n = await createRecurringAppointments({ ...comum, date: data, horaInicio, horaFim: horaFim || null, periodo, ateAno })
+        if (n === 0) { setErro('Nenhuma data gerada — verifique o período e o ano.'); setSalvando(false); return }
+      } else {
+        await createAppointment({ ...comum, inicio: toISO(data, horaInicio), fim: horaFim ? toISO(data, horaFim) : null })
+      }
       onSaved()
     } catch { setErro('Não foi possível agendar.'); setSalvando(false) }
   }
@@ -242,6 +256,32 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
           <div><label className="mb-1 block text-sm text-texto/70">Início</label><input type="time" className={field} value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Fim</label><input type="time" className={field} value={horaFim} onChange={(e) => setHoraFim(e.target.value)} /></div>
         </div>
+
+        {/* Recorrência (apenas pelo profissional) */}
+        <label className="flex items-center gap-2 text-sm text-texto/70">
+          <input type="checkbox" checked={recorrente} onChange={(e) => setRecorrente(e.target.checked)} /> Agendamento recorrente
+        </label>
+        {recorrente && (
+          <div className="grid grid-cols-2 gap-3 rounded-lg bg-black/[0.02] p-3">
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Repetir</label>
+              <select className={field} value={periodo} onChange={(e) => setPeriodo(e.target.value as ApptPeriodo)}>
+                <option value="semanal">Semanalmente</option>
+                <option value="quinzenal">Quinzenalmente</option>
+                <option value="mensal">Mensalmente</option>
+                <option value="anual">Anualmente</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Até o ano (inclusive)</label>
+              <select className={field} value={ateAno} onChange={(e) => setAteAno(Number(e.target.value))}>
+                {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <p className="col-span-2 text-xs text-texto/50">Cria a mesma consulta repetida no horário escolhido até 31/12/{ateAno}.</p>
+          </div>
+        )}
+
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
         {erro && <p className="text-sm text-secundaria">{erro}</p>}
         <Footer onClose={onClose} onSave={salvar} disabled={salvando} label={salvando ? 'Salvando…' : 'Agendar'} />

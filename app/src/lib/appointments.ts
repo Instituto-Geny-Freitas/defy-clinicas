@@ -79,6 +79,63 @@ export async function createAppointment(args: CreateArgs): Promise<Appointment> 
   return data
 }
 
+export type ApptPeriodo = 'semanal' | 'quinzenal' | 'mensal' | 'anual'
+
+function proximaData(d: Date, periodo: ApptPeriodo): Date {
+  const n = new Date(d)
+  if (periodo === 'semanal') n.setDate(n.getDate() + 7)
+  else if (periodo === 'quinzenal') n.setDate(n.getDate() + 15)
+  else if (periodo === 'mensal') n.setMonth(n.getMonth() + 1)
+  else n.setFullYear(n.getFullYear() + 1)
+  return n
+}
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * Cria uma série de agendamentos recorrentes (uso exclusivo do profissional),
+ * da 1ª data até 31/dez do ano informado (inclusive). Devolve quantos foram criados.
+ */
+export async function createRecurringAppointments(args: {
+  clinicId: string
+  patientId?: string | null
+  nomeAvulso?: string | null
+  telefoneAvulso?: string | null
+  professionalId?: string | null
+  procedimento?: string | null
+  observacoes?: string | null
+  date: string          // YYYY-MM-DD (primeira ocorrência)
+  horaInicio: string    // HH:MM
+  horaFim?: string | null
+  periodo: ApptPeriodo
+  ateAno: number
+}): Promise<number> {
+  const limite = new Date(args.ateAno, 11, 31, 23, 59, 59) // 31/dez do ano, hora local
+  let cursor = new Date(`${args.date}T12:00:00`)
+  const rows: Record<string, unknown>[] = []
+  const MAX = 600 // trava de segurança
+  while (cursor <= limite && rows.length < MAX) {
+    const ymd = `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(cursor.getDate())}`
+    rows.push({
+      clinic_id: args.clinicId,
+      patient_id: args.patientId ?? null,
+      professional_id: args.professionalId ?? null,
+      procedimento: args.procedimento ?? null,
+      inicio: new Date(`${ymd}T${args.horaInicio}:00`).toISOString(),
+      fim: args.horaFim ? new Date(`${ymd}T${args.horaFim}:00`).toISOString() : null,
+      observacoes: args.observacoes ?? null,
+      nome_avulso: args.nomeAvulso ?? null,
+      telefone_avulso: args.telefoneAvulso ?? null,
+      status: 'agendado',
+      origem: 'profissional',
+    })
+    cursor = proximaData(cursor, args.periodo)
+  }
+  if (rows.length === 0) return 0
+  const { error } = await supabase.from('appointments').insert(rows)
+  if (error) throw error
+  return rows.length
+}
+
 /** Agendamentos prévios sem cadastro (patient_id nulo) — pendentes de regularização. */
 export async function listWalkInAppointments(): Promise<Appointment[]> {
   const { data, error } = await supabase
