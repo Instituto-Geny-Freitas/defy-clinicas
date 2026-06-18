@@ -3,11 +3,13 @@ import {
   brl,
   calcItensTotal,
   createQuote,
+  deletePayment,
   deleteQuote,
   listPaymentsByPatient,
   listQuotes,
   registerPayment,
   totalPago,
+  updatePayment,
   updateQuote,
   type Payment,
   type PaymentMethod,
@@ -39,7 +41,18 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
   const [modalOrc, setModalOrc] = useState(false)
   const [editandoOrc, setEditandoOrc] = useState<Quote | null>(null)
   const [pagandoQuote, setPagandoQuote] = useState<Quote | null>(null)
+  const [editandoPg, setEditandoPg] = useState<Payment | null>(null)
   const [enviando, setEnviando] = useState<string | null>(null)
+
+  async function excluirPagamento(p: Payment) {
+    if (!confirm(`Excluir o pagamento de ${brl(Number(p.valor))}?`)) return
+    await deletePayment(p.id)
+    recarregar()
+  }
+  const metodoLabel: Record<string, string> = {
+    pix: 'PIX', cartao_credito: 'Cartão crédito', cartao_debito: 'Cartão débito',
+    dinheiro: 'Dinheiro', transferencia: 'Transferência', outro: 'Outro',
+  }
 
   async function excluirOrc(q: Quote) {
     const pago = totalPago(pagamentos, q.id)
@@ -124,6 +137,13 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
           onSaved={() => { setPagandoQuote(null); recarregar() }}
         />
       )}
+      {editandoPg && (
+        <EditarPagamentoModal
+          pagamento={editandoPg}
+          onClose={() => setEditandoPg(null)}
+          onSaved={() => { setEditandoPg(null); recarregar() }}
+        />
+      )}
 
       {quotes.length === 0 ? (
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum orçamento.</p>
@@ -177,6 +197,30 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                     <button onClick={() => excluirOrc(q)} className="text-xs font-medium text-secundaria hover:underline">Excluir</button>
                   </div>
                 </div>
+
+                {(() => {
+                  const pgs = pagamentos.filter((p) => p.quote_id === q.id && p.status === 'pago')
+                  if (pgs.length === 0) return null
+                  return (
+                    <div className="mt-3 border-t border-black/5 pt-3">
+                      <div className="mb-1 text-xs font-medium text-texto/60">Pagamentos</div>
+                      <div className="space-y-1">
+                        {pgs.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-texto/70">
+                              {brl(Number(p.valor))} · {metodoLabel[p.metodo] ?? p.metodo}
+                              {p.pago_em && <span className="text-texto/40"> · {new Date(p.pago_em).toLocaleDateString('pt-BR')}</span>}
+                            </span>
+                            <span className="whitespace-nowrap">
+                              <button onClick={() => setEditandoPg(p)} className="text-xs text-texto/60 hover:underline">Editar</button>
+                              <button onClick={() => excluirPagamento(p)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
                 {produtos.length > 0 && (
                   <div className="mt-3 border-t border-black/5 pt-3">
                     <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados</div>
@@ -359,6 +403,51 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
             {salvando ? 'Salvando…' : 'Salvar'}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditarPagamentoModal({ pagamento, onClose, onSaved }: { pagamento: Payment; onClose: () => void; onSaved: () => void }) {
+  const [valor, setValor] = useState(String(pagamento.valor))
+  const [metodo, setMetodo] = useState<PaymentMethod>(pagamento.metodo)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  async function salvar() {
+    const v = Number(valor)
+    if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
+    setSalvando(true)
+    try { await updatePayment(pagamento.id, { valor: v, metodo }); onSaved() }
+    catch { setErro('Não foi possível salvar.'); setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-4 text-lg font-semibold text-texto">Editar pagamento</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Valor</label>
+            <input className={field} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-texto/60">Método</label>
+            <select className={field} value={metodo} onChange={(e) => setMetodo(e.target.value as PaymentMethod)}>
+              <option value="pix">PIX</option>
+              <option value="cartao_credito">Cartão crédito</option>
+              <option value="cartao_debito">Cartão débito</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="transferencia">Transferência</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          {erro && <p className="text-sm text-secundaria">{erro}</p>}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/60 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Salvar'}</button>
         </div>
       </div>
     </div>
