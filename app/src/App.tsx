@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { PermissionsProvider } from '@/auth/PermissionsProvider'
+import { RouteGuard } from '@/auth/RouteGuard'
 import Login from '@/pages/Login'
 import ForcePasswordChange from '@/pages/ForcePasswordChange'
 import ClinicLayout from '@/layouts/ClinicLayout'
@@ -65,15 +66,15 @@ export default function App() {
       <Routes>
         {isStaff ? (
           <Route path="/clinica" element={<ClinicLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="agenda" element={<Agenda />} />
-            <Route path="pacientes" element={<PatientsList />} />
-            <Route path="pacientes/:id" element={<PatientDetail />} />
-            <Route path="documentos" element={<Templates />} />
-            <Route path="estoque" element={<Inventory />} />
-            <Route path="financeiro" element={<Finance />} />
-            <Route path="relatorios" element={<Reports />} />
-            <Route path="configuracoes" element={<Settings />} />
+            <Route index element={<RouteGuard perm="menu.dashboard"><Dashboard /></RouteGuard>} />
+            <Route path="agenda" element={<RouteGuard perm="menu.agenda"><Agenda /></RouteGuard>} />
+            <Route path="pacientes" element={<RouteGuard perm="menu.pacientes"><PatientsList /></RouteGuard>} />
+            <Route path="pacientes/:id" element={<RouteGuard perm="menu.pacientes"><PatientDetail /></RouteGuard>} />
+            <Route path="documentos" element={<RouteGuard perm="menu.documentos"><Templates /></RouteGuard>} />
+            <Route path="estoque" element={<RouteGuard perm="menu.estoque"><Inventory /></RouteGuard>} />
+            <Route path="financeiro" element={<RouteGuard perm="menu.financeiro"><Finance /></RouteGuard>} />
+            <Route path="relatorios" element={<RouteGuard perm="menu.relatorios"><Reports /></RouteGuard>} />
+            <Route path="configuracoes" element={<RouteGuard perm="admin"><Settings /></RouteGuard>} />
           </Route>
         ) : (
           <Route path="/portal" element={<PatientLayout />}>
