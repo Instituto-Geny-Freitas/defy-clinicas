@@ -4,7 +4,7 @@ import { listInventory, type InventoryItem } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, parseMoneyBR } from '@/lib/format'
 
 interface Props {
   patientId: string
@@ -108,7 +108,7 @@ function RegistrarModal({
   const [data, setData] = useState((proc?.data ?? new Date().toISOString()).slice(0, 10))
   const [regiao, setRegiao] = useState(proc?.regiao ?? '')
   const [obs, setObs] = useState(proc?.observacoes ?? '')
-  const [valorCobrado, setValorCobrado] = useState(proc ? Number(proc.valor_cobrado) || 0 : 0)
+  const [valorCobrado, setValorCobrado] = useState(proc && Number(proc.valor_cobrado) > 0 ? String(Number(proc.valor_cobrado).toFixed(2)).replace('.', ',') : '')
   const [produtos, setProdutos] = useState<UsedProduct[]>(proc?.produtos_usados ?? [])
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -137,16 +137,17 @@ function RegistrarModal({
     setSalvando(true)
     try {
       const prods = produtos.filter((p) => p.inventory_id)
+      const valor = avulso ? parseMoneyBR(valorCobrado) : 0
       if (proc) {
         await updateProcedure({
           clinicId, anterior: proc, procedimento, data: new Date(data).toISOString(),
-          regiao, observacoes: obs, valorCobrado: avulso ? valorCobrado : 0, produtos: prods,
+          regiao, observacoes: obs, valorCobrado: valor, produtos: prods,
         })
       } else {
         await createProcedure({
           clinicId, patientId, professionalId, quoteId: quoteId || null, procedimento,
           data: new Date(data).toISOString(), regiao, observacoes: obs,
-          valorCobrado: avulso ? valorCobrado : 0, produtos: prods,
+          valorCobrado: valor, produtos: prods,
         })
       }
       onSaved()
@@ -204,8 +205,11 @@ function RegistrarModal({
             {avulso && (
               <div className="mt-2">
                 <label className="mb-1 block text-sm text-texto/70">Valor a cobrar (procedimento avulso)</label>
-                <input className={field} inputMode="decimal" value={valorCobrado} onChange={(e) => setValorCobrado(Number(e.target.value) || 0)} placeholder="0,00" />
-                <p className="mt-1 text-xs text-texto/60">Sem orçamento: informe o valor. Ele poderá ser importado depois em “Novo orçamento”. {valorCobrado > 0 && <strong>{brl(valorCobrado)}</strong>}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-texto/50">R$</span>
+                  <input className={field} inputMode="decimal" value={valorCobrado} onChange={(e) => setValorCobrado(e.target.value)} placeholder="0,00" />
+                </div>
+                <p className="mt-1 text-xs text-texto/60">Sem orçamento: informe o valor (use vírgula para centavos). Ele poderá ser importado depois em “Novo orçamento”. {parseMoneyBR(valorCobrado) > 0 && <strong>{brl(parseMoneyBR(valorCobrado))}</strong>}</p>
               </div>
             )}
           </div>

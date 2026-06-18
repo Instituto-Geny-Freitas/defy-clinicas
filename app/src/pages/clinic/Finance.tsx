@@ -4,7 +4,7 @@ import { useClinic } from '@/theme/ThemeProvider'
 import { listAllQuotes, registerPayment, updatePayment, deletePayment, brl, type PaymentMethod, type Quote } from '@/lib/finance'
 import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import {
   createExpense,
   createMovement,
@@ -292,7 +292,7 @@ function PagamentoEditModal({ pagamento, onClose, onSaved }: { pagamento: Paymen
   const [erro, setErro] = useState('')
 
   async function salvar() {
-    const v = Number(valor)
+    const v = parseMoneyBR(valor)
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
     setSalvando(true)
     try { await updatePayment(pagamento.id, { valor: v, metodo }); onSaved() }
@@ -363,7 +363,7 @@ function CobrancaModal(props: {
 
   async function salvar() {
     setErro('')
-    const v = Number(valor)
+    const v = parseMoneyBR(valor)
     if (!quoteId || !patientId) { setErro('Selecione o paciente e o orçamento.'); return }
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
     setSalvando(true)
@@ -544,7 +544,7 @@ function DespesaModal(props: {
     if (!atual || atual.tipo !== c) setTipoId('')
   }
 
-  const v = Number(valor) || 0
+  const v = parseMoneyBR(valor)
   const nParcelas = Math.max(1, Number(parcelas) || 1)
 
   async function salvar() {
@@ -763,7 +763,7 @@ function MovimentoModal(props: { clinicId: string; onClose: () => void; onSaved:
 
   async function salvar() {
     setErro('')
-    const v = Number(valor)
+    const v = parseMoneyBR(valor)
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
     setSalvando(true)
     try {

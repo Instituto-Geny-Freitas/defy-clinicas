@@ -19,3 +19,19 @@ export function parseLocalDate(value?: string | null): Date | null {
   const d = new Date(value)
   return isNaN(d.getTime()) ? null : d
 }
+
+/**
+ * Lê um valor monetário digitado em pt-BR e devolve um número.
+ * Aceita "1.234,56", "1234,56", "1234.56", "R$ 1.234,56" etc.
+ */
+export function parseMoneyBR(value: string | number | null | undefined): number {
+  if (typeof value === 'number') return value
+  if (!value) return 0
+  let s = String(value).replace(/[^\d.,-]/g, '') // remove R$, espaços, etc.
+  if (s.includes(',')) {
+    // vírgula é o separador decimal; pontos são milhar
+    s = s.replace(/\./g, '').replace(',', '.')
+  }
+  const n = Number(s)
+  return isNaN(n) ? 0 : n
+}
