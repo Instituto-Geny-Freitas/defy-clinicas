@@ -65,45 +65,68 @@ Acesse **Configurações** (menu lateral, somente admin). As abas são:
   o que **governa as permissões**. Você pode criar novos papéis e reclassificar o nível.
 - **Mantenha sempre ao menos um Administrador**, para não perder o acesso às Configurações.
 
-### 2.4 Integrações
+### 2.4 Permissões (o que cada nível pode acessar)
+O Admin define, com **botões ativo/inativo**, o que cada **nível de acesso** enxerga e usa.
+A matriz tem duas seções:
+- **Menu lateral:** Dashboard, Agenda, Pacientes, Modelos de Documentos, Estoque, Financeiro, Relatórios.
+- **Abas da ficha do paciente:** Resumo, Agenda, Anamnese, Avaliações, Plano, Procedimentos,
+  Medidas, Suplementação, Manipulação, Exames, Fotos, Documentos, Financeiro, Relatórios.
+
+Colunas (níveis):
+- **Administrador:** sempre tudo (não editável — evita ficar sem acesso).
+- **Profissional** e **Secretaria/Recepção:** cada item é ligado/desligado individualmente.
+- **Paciente:** não entra nesta matriz (usa apenas o Portal do Paciente).
+
+Padrões já configurados: **Profissional** = todos os módulos clínicos e abas; **Secretaria/Recepção**
+= Agenda, Cadastro (Pacientes) e Financeiro. Botões **Salvar permissões** e **Restaurar padrões**.
+As mudanças se aplicam **na hora** (menu e abas se ajustam; a aba ativa muda se a atual for desligada).
+
+> **Proteção em camadas:** além de **esconder** os itens sem permissão, há um **guard de rota** —
+> se alguém tentar abrir por **URL direta** uma página sem permissão, é **redirecionado** para a
+> primeira página permitida do seu nível. A **segurança real dos dados** continua na proteção do
+> banco (RLS): paciente vê só o que é dele; a equipe vê os pacientes da clínica; Configurações é só admin.
+
+> Os **Papéis** (item 2.3) herdam as permissões do seu **nível de acesso**.
+
+### 2.5 Integrações
 - **Gateway de pagamento (PIX):** provedor, ambiente (teste/produção), chave PIX,
   chave pública e URL de webhook. (As chaves **secretas** ficam fora do app, no servidor.)
 - **WhatsApp:** provedor, número de envio e URL da API — usado para enviar receitas a
   fornecedores. (O **token** fica como segredo do servidor; o envio real é ativado quando
   a integração estiver configurada.)
 
-### 2.5 Textos-padrão
+### 2.6 Textos-padrão
 - Crie/edite **modelos de texto** por categoria (ex.: Plano de tratamento). Ficam
   disponíveis para inserir com um clique ao montar planos e documentos.
 
-### 2.6 Ativos (composição de fórmulas)
+### 2.7 Ativos (composição de fórmulas)
 - Catálogo de **ativos** das fórmulas manipuladas, classificados em **Ativos Gerais,
   Vitaminas, Esclerosantes e Anestésicos**, com **filtro por categoria** + busca.
 - **CRUD completo** (criar/editar/excluir). Cada ativo tem: código, nome, categoria,
   **apresentação/Via** (domínio), **fornecedor** (domínio), **lote**, **validade**,
   **preço de aquisição**, **margem (%)** e **preço de venda** (calculado pela margem).
 
-### 2.7 Vias
+### 2.8 Vias
 - Domínio das **vias de administração / local** (ex.: Oral, Endovenosa). CRUD.
 
-### 2.8 Fornecedores
+### 2.9 Fornecedores
 - Cadastro de **fornecedores** (nome, contato e **telefone/WhatsApp**). CRUD. Usado nos
   ativos, na suplementação e no envio de receitas.
 
-### 2.9 Fórmulas (biblioteca)
+### 2.10 Fórmulas (biblioteca)
 - Biblioteca de **fórmulas manipuladas** (nome, forma, composição e posologia). O admin
   monta as fórmulas aqui; na ficha do paciente a profissional apenas **designa** pelo nome.
 
-### 2.10 Procedimentos
+### 2.11 Procedimentos
 - Lista dos **tipos de procedimento** (ex.: Skinbooster PDRN, Toxina botulínica…),
   usada como domínio ao registrar um atendimento. CRUD.
 
-### 2.11 Tipos de Despesa
+### 2.12 Tipos de Despesa
 - Tipos usados no fluxo de caixa (ex.: Aluguel, Insumos, Energia). Cada tipo é
   **classificado** como **Gasto fixo** ou **Produto** — classifique cada um pelo seletor
   da linha. Essa classificação organiza o registro de despesas e os relatórios.
 
-### 2.12 LGPD
+### 2.13 LGPD
 - Edite o **texto** e a **versão** do termo de consentimento, apresentado no cadastro do paciente.
 
 ---
@@ -324,6 +347,7 @@ A marca da clínica (logo/nome/cores) aparece também no portal e no app instala
 | **Trocar o e-mail de login** de um profissional | Configurações → Equipe → **Gerenciar acesso** (preserva o histórico) |
 | Forçar nova senha do profissional | Configurações → Equipe → **Gerenciar acesso** → Forçar nova senha |
 | Novo papel / mudar nível de acesso | Configurações → **Papéis** |
+| Definir o que cada nível acessa | Configurações → **Permissões** (toggles + guard de rota) |
 | Forçar troca no 1º acesso | Automático para senhas provisórias (exceto login Google) |
 
 ---
