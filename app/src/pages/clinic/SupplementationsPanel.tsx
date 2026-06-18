@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createSupplementation, deleteSupplementation, listSupplementations, setSupplementationPaid, updateSupplementation, type Supplementation } from '@/lib/supplementations'
 import { listActiveIngredients, listRoutes, type ActiveIngredient, type DomainItem } from '@/lib/domains'
 import { brl } from '@/lib/finance'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
@@ -82,7 +82,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
   const [validade, setValidade] = useState(supl?.validade ?? '')
   const [lote, setLote] = useState(supl?.lote ?? '')
   const [fornecedor, setFornecedor] = useState(supl?.fornecedor ?? '')
-  const [valorVenda, setValorVenda] = useState(supl ? Number(supl.valor_venda) || 0 : 0)
+  const [valorVenda, setValorVenda] = useState(supl && Number(supl.valor_venda) > 0 ? String(Number(supl.valor_venda).toFixed(2)).replace('.', ',') : '')
   const [obs, setObs] = useState(supl?.observacoes ?? '')
   const [salvando, setSalvando] = useState(false)
 
@@ -100,7 +100,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
     setValidade(a.validade ?? '')
     setLote(a.lote ?? '')
     setFornecedor(a.fornecedor ?? '')
-    setValorVenda(Number(a.preco_venda) || 0)
+    setValorVenda(Number(a.preco_venda) > 0 ? String(Number(a.preco_venda).toFixed(2)).replace('.', ',') : '')
   }
 
   const podeSalvar = medicacao.trim().length > 0
@@ -109,16 +109,17 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
     if (!podeSalvar) return
     setSalvando(true)
     try {
+      const valor = parseMoneyBR(valorVenda)
       if (supl) {
         await updateSupplementation(supl.id, {
           medicacao, via_adm: via || null, validade: validade || null, lote: lote || null,
-          fornecedor: fornecedor || null, valor_venda: valorVenda, observacoes: obs || null,
+          fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
         })
       } else {
         await createSupplementation({
           clinicId, patientId, professionalId, medicacao,
           via_adm: via || null, validade: validade || null, lote: lote || null,
-          fornecedor: fornecedor || null, valor_venda: valorVenda, observacoes: obs || null,
+          fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
         })
       }
       onSaved()
@@ -150,8 +151,11 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
           <div>
             <label className="mb-1 block text-sm text-texto/70">Valor de Venda</label>
-            <input className={field} inputMode="decimal" value={valorVenda} onChange={(e) => setValorVenda(Number(e.target.value) || 0)} />
-            <p className="mt-1 text-xs text-texto/50">{brl(valorVenda)}</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-texto/50">R$</span>
+              <input className={field} inputMode="decimal" value={valorVenda} onChange={(e) => setValorVenda(e.target.value)} placeholder="0,00" />
+            </div>
+            <p className="mt-1 text-xs text-texto/50">{brl(parseMoneyBR(valorVenda))}</p>
           </div>
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
