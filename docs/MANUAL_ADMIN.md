@@ -2,7 +2,8 @@
 
 Guia de navegação e uso da **Área da Clínica** e do **Portal do Paciente**.
 Aplicação web responsiva (PWA): funciona no computador e no celular, e pode ser
-"instalada" na tela inicial do aparelho.
+"instalada" na tela inicial do aparelho, já com a **logo, o nome e as cores** da
+clínica (identidade visual).
 
 > **Acesso:** `https://defy-clinicas.vercel.app`
 
@@ -10,7 +11,7 @@ Aplicação web responsiva (PWA): funciona no computador e no celular, e pode se
 
 ## 1. Entrar no sistema (login)
 
-Na tela inicial há três formas de entrar:
+A tela de login já exibe a **logo e o nome** da clínica. Há três formas de entrar:
 
 - **Entrar com Google** — para quem usa conta Google (precisa estar habilitado).
 - **CPF** — paciente entra com CPF + senha.
@@ -25,72 +26,101 @@ você receberá um link para redefinir.
 o sistema **obriga a definir uma nova senha** antes de continuar. (Quem entra pelo
 Google não passa por isso.)
 
-### Perfis de acesso
+### Perfis de acesso (Papéis)
 - **Admin:** acesso total, incluindo Configurações e gestão da equipe.
 - **Profissional:** atende pacientes e usa todos os módulos clínicos.
-- **Recepção:** agenda, cadastro e financeiro.
+- **Secretaria / Recepção:** agenda, cadastro e financeiro.
 - **Paciente:** vê apenas os próprios dados, no Portal do Paciente.
+
+Os papéis são **configuráveis** (Configurações → Papéis): cada papel aponta para um
+**nível de acesso** que define as permissões.
 
 ---
 
 ## 2. Primeira configuração (o que fazer antes de usar)
 
-Acesse **Configurações** (menu lateral, somente admin). Há 5 abas:
+Acesse **Configurações** (menu lateral, somente admin). As abas são:
 
 ### 2.1 Identidade visual
-- Envie o **logo** da clínica.
-- Defina a **paleta de cores** (primária, secundária, fundo, texto) — o app inteiro
-  e os PDFs passam a usar essas cores.
-- Preencha **nome, CNPJ, responsável técnico, WhatsApp**. O WhatsApp aqui é o
-  número que o paciente usa para falar com a clínica.
+- Envie o **logo** da clínica e clique em **Salvar**.
+- Defina a **paleta de cores** (primária, secundária, fundo, texto) — o app inteiro,
+  a tela de login, o ícone do app instalado e os PDFs passam a usar essas cores.
+- Preencha **nome, CNPJ, responsável técnico, WhatsApp**. O nome aparece no topo do
+  app e nos PDFs; o WhatsApp é o número que o paciente usa para falar com a clínica.
 
 ### 2.2 Equipe
-- **+ Novo profissional:** nome, e-mail (usado no login), papel (admin/profissional/recepção)
-  e dados do conselho (ex.: CRBM 12345) — esses dados aparecem nos documentos formais.
-- Na lista, cada profissional mostra **login ativo** ou **sem login**:
-  - **Provisionar acesso** (sem login): cria o usuário, gera uma senha e mostra as
-    credenciais para você entregar ao profissional.
-  - **Redefinir senha** (login ativo): gera uma nova senha provisória.
-  - Em ambos os casos, o profissional troca a senha no primeiro acesso.
+- **+ Novo profissional:** nome, e-mail (usado no login), telefone, **papel** e dados
+  do conselho (tipo, número e **UF** — ex.: CRBM 12345-SP), que aparecem nos documentos.
+- Cada profissional na lista tem **Editar**, **Excluir** e a gestão de acesso:
+  - **Provisionar acesso** (sem login): cria o usuário e mostra **login + senha** para entregar.
+  - **Gerenciar acesso** (login ativo): aqui você pode **alterar o e-mail de login**
+    (a chave de acesso) **e/ou forçar uma nova senha** provisória. A troca de e-mail
+    **preserva todo o histórico** do profissional.
+- O e-mail no formulário "Editar profissional" fica **somente leitura** quando há login
+  ativo — a troca da chave é feita em **Gerenciar acesso** (evita inconsistências).
 
-### 2.3 Integrações
-- Cadastro do **gateway de pagamento (PIX)**: provedor, ambiente (teste/produção),
-  chave PIX, chave pública e URL de webhook. (As chaves **secretas** ficam fora do
-  app, no servidor.)
+### 2.3 Papéis
+- CRUD dos **papéis** da equipe, já com **Admin, Secretaria e Profissional**.
+- Cada papel tem um **nível de acesso** (Administrador / Profissional / Secretaria) que é
+  o que **governa as permissões**. Você pode criar novos papéis e reclassificar o nível.
+- **Mantenha sempre ao menos um Administrador**, para não perder o acesso às Configurações.
 
-### 2.4 Textos-padrão
-- Crie/edite **modelos de texto** por categoria (ex.: Plano de tratamento). Eles
-  ficam disponíveis para inserir com um clique ao montar planos e documentos.
+### 2.4 Integrações
+- **Gateway de pagamento (PIX):** provedor, ambiente (teste/produção), chave PIX,
+  chave pública e URL de webhook. (As chaves **secretas** ficam fora do app, no servidor.)
+- **WhatsApp:** provedor, número de envio e URL da API — usado para enviar receitas a
+  fornecedores. (O **token** fica como segredo do servidor; o envio real é ativado quando
+  a integração estiver configurada.)
 
-### 2.5 Ativos (composição de fórmulas)
-- Catálogo de **ativos** usados na composição das fórmulas manipuladas, classificados em
-  **Ativos Gerais, Vitaminas, Esclerosantes e Anestésicos**.
-- Cadastre/exclua ativos e use o **filtro por categoria** + busca. O catálogo já vem
-  pré-carregado; ajuste conforme sua necessidade.
+### 2.5 Textos-padrão
+- Crie/edite **modelos de texto** por categoria (ex.: Plano de tratamento). Ficam
+  disponíveis para inserir com um clique ao montar planos e documentos.
 
-### 2.6 Tipos de Procedimento
-- Lista dos **procedimentos** oferecidos (ex.: Skinbooster PDRN, Toxina botulínica…),
-  usada como domínio ao registrar um atendimento. Cadastre/exclua livremente.
+### 2.6 Ativos (composição de fórmulas)
+- Catálogo de **ativos** das fórmulas manipuladas, classificados em **Ativos Gerais,
+  Vitaminas, Esclerosantes e Anestésicos**, com **filtro por categoria** + busca.
+- **CRUD completo** (criar/editar/excluir). Cada ativo tem: código, nome, categoria,
+  **apresentação/Via** (domínio), **fornecedor** (domínio), **lote**, **validade**,
+  **preço de aquisição**, **margem (%)** e **preço de venda** (calculado pela margem).
 
-### 2.7 LGPD
-- Edite o **texto** e a **versão** do termo de consentimento de tratamento de dados,
-  apresentado no cadastro do paciente.
+### 2.7 Vias
+- Domínio das **vias de administração / local** (ex.: Oral, Endovenosa). CRUD.
+
+### 2.8 Fornecedores
+- Cadastro de **fornecedores** (nome, contato e **telefone/WhatsApp**). CRUD. Usado nos
+  ativos, na suplementação e no envio de receitas.
+
+### 2.9 Fórmulas (biblioteca)
+- Biblioteca de **fórmulas manipuladas** (nome, forma, composição e posologia). O admin
+  monta as fórmulas aqui; na ficha do paciente a profissional apenas **designa** pelo nome.
+
+### 2.10 Procedimentos
+- Lista dos **tipos de procedimento** (ex.: Skinbooster PDRN, Toxina botulínica…),
+  usada como domínio ao registrar um atendimento. CRUD.
+
+### 2.11 Tipos de Despesa
+- Tipos usados no fluxo de caixa (ex.: Aluguel, Insumos, Energia). Cada tipo é
+  **classificado** como **Gasto fixo** ou **Produto** — classifique cada um pelo seletor
+  da linha. Essa classificação organiza o registro de despesas e os relatórios.
+
+### 2.12 LGPD
+- Edite o **texto** e a **versão** do termo de consentimento, apresentado no cadastro do paciente.
 
 ---
 
 ## 3. Navegação geral (Área da Clínica)
 
-Menu lateral (no celular, abre pelo ☰):
+Menu lateral (no celular, abre pelo menu):
 
 | Item | Para quê |
 |------|----------|
-| **Dashboard** | Visão do dia: nº de pacientes, consultas de hoje, documentos pendentes, a receber e alertas de estoque |
+| **Dashboard** | Visão do dia: pacientes, consultas de hoje, documentos pendentes, a receber e alertas de estoque |
 | **Agenda** | Agendamentos, calendário e busca por data |
 | **Pacientes** | Cadastro e prontuário completo |
 | **Modelos de Documentos** | Criar/editar termos e orientações |
 | **Estoque** | Produtos, lotes, validade, margem |
-| **Financeiro** | Orçamentos, pagamentos e recebíveis |
-| **Relatórios** | Faturamento, estoque e atendimentos |
+| **Financeiro** | Fluxo de caixa: receitas, despesas, caixa, balanço e relatório |
+| **Relatórios** | Faturamento, estoque, atendimentos e **Mapa financeiro mensal** |
 | **Configurações** | Ajustes da clínica (só admin) |
 
 ---
@@ -98,58 +128,82 @@ Menu lateral (no celular, abre pelo ☰):
 ## 4. Agenda
 
 - **+ Novo:** cria um agendamento — escolha paciente, **profissional**, data (no
-  **calendário**), horário de início/fim, procedimento e observações.
-- **Filtro por profissional:** veja a agenda de um profissional específico ou de todos.
-- **Buscar data:** use o campo de data ou clique em **📅 Ver calendário** para abrir
-  o mês; **dias com agendamento ficam marcados**. Clique em "Limpar data" para voltar.
-- Em cada agendamento: **Confirmar**, **Remarcar** (escolhe nova data no calendário),
-  **Realizado** ou **Cancelar**.
+  **calendário**), horário, procedimento e observações.
+- **Agendamento prévio sem cadastro:** marque **"Paciente ainda sem cadastro"** e informe
+  **nome + telefone**. O agendamento fica com o selo **"cadastro pendente"**. Depois,
+  ao cadastrar o paciente, o sistema oferece **regularizar e vincular** esse agendamento.
+- **Filtro por profissional** e **busca por data** (campo de data ou **Ver calendário**,
+  com os dias que têm agendamento marcados).
+- Em cada agendamento: **Confirmar**, **Remarcar**, **Realizado** ou **Cancelar**.
 - **Lembretes automáticos** de consulta são enviados conforme configurado.
 
 ---
 
 ## 5. Pacientes (o coração do sistema)
 
-### 5.1 Lista e cadastro
-- Busque por nome. **+ Novo paciente** abre o cadastro:
-  - Dados pessoais (nome, nascimento — **idade calculada automaticamente**, CPF,
-    WhatsApp, e-mail, profissão, estilo de trabalho, alergias).
-  - **Acesso ao sistema:** defina a **senha provisória** (botão "Gerar"). Ao salvar,
-    o sistema cria o login do paciente e mostra **login + senha** para você entregar.
-  - **Consentimento LGPD:** marque quando o paciente consentir (registra data e versão).
-  - **Limite de relatórios** (ao editar): quantos relatórios o paciente pode manter
-    armazenados — controle de armazenamento (o paciente não pode alterar esse limite).
+### 5.1 Lista e cadastro (CRUD)
+- Busque por nome. Cada paciente na lista tem **Abrir**, **Editar** e **Excluir**
+  (o excluir preserva o histórico e apenas tira o paciente da lista).
+- **+ Novo paciente** abre o cadastro:
+  - Dados pessoais (nome, nascimento — **idade automática**, CPF, WhatsApp, e-mail,
+    profissão, estilo de trabalho, alergias).
+  - **Regularizar agendamento prévio:** se houver agendamentos "sem cadastro", aparece a
+    opção de **vinculá-los** a este novo paciente.
+  - **Acesso ao sistema:** defina a **senha provisória**. Ao salvar, o sistema cria o
+    login (usando o **e-mail** cadastrado; se não houver, usa o CPF) e mostra **login + senha**.
+  - **Consentimento LGPD** e **Limite de relatórios** (ao editar).
 
 ### 5.2 Ficha do paciente (abas)
-Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro
-(inclui "Redefinir/Provisionar acesso" e o consentimento LGPD).
+Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro.
 
 | Aba | O que faz |
 |-----|-----------|
 | **Resumo** | Dados pessoais, idade, status do consentimento LGPD |
-| **Anamnese** | Ficha clínica e estética (também pode ser preenchida pelo paciente no portal) |
-| **Avaliações** | Fichas **Dermato Funcional**, **Capilar** e **Corporal** (com escalas e perimetria) |
-| **Plano** | Plano de tratamento — texto livre, **textos-padrão** e **✨ Sugerir com IA**. Permite **editar** e **excluir** planos |
-| **Procedimentos** | Registra o atendimento; o **Procedimento** vem do domínio; **vincula a um Orçamento de um Plano** e dá **baixa no estoque** |
+| **Agenda** | Agendamentos **deste paciente** + calendário só dele; realizados/cancelados ficam no fim da lista |
+| **Anamnese** | Ficha clínica (também preenchida pelo paciente). O **Estilo de trabalho** preenchido aqui reflete no Resumo |
+| **Avaliações** | Fichas Dermato Funcional, Capilar e Corporal (escalas e perimetria) |
+| **Plano** | Plano de tratamento — texto livre, **textos-padrão** e **Sugerir com IA**. Editar/excluir |
+| **Procedimentos** | Registra o atendimento; **Editar/Excluir**, **CRUD de produtos** (baixa/estorno de estoque), vínculo a Orçamento ou **valor avulso** |
 | **Medidas** | Peso, IMC, gordura etc. por sessão, com **gráfico de evolução** |
-| **Suplementação** | Suplementos prescritos (medicação, via, validade, lote) |
-| **Manipulação** | Fórmulas manipuladas — composição via **catálogo de ativos com filtro por categoria** + posologia + biblioteca |
-| **Exames** | Requisição (painel padrão de 40 exames + extras) e resultados enviados |
+| **Suplementação** | Medicação pelo **domínio de Ativos** (preenche fornecedor/lote/validade/valor de venda), indicador **Pago/Não pago**, **Editar/Excluir** |
+| **Manipulação** | **Designar fórmulas** da biblioteca e **gerar a receita em PDF** (enviar ao paciente e ao fornecedor) |
+| **Exames** | **Requisição em PDF (A4)**, **anexar resultados** no dossiê |
 | **Fotos** | Fotos clínicas antes/depois/evolução (bucket privado) |
 | **Documentos** | Emitir termos/orientações, **assinar**, **gerar PDF** e **editar** |
-| **Financeiro** | Orçamentos (**vinculados a um Plano**), pagamentos, saldo e **produtos utilizados** |
-| **Relatórios** | Relatórios que o **paciente gerou** (procedimentos, manipulações, medidas, suplementações) — **visualizar e baixar** |
+| **Financeiro** | Orçamentos (vinculados a um Plano), pagamentos, saldo e **gerar/enviar orçamento em PDF** ao paciente |
+| **Relatórios** | Relatórios que o **paciente gerou** — visualizar e baixar |
 
 ### 5.3 Encadeamento Plano → Orçamento → Procedimento
-Para manter a integridade dos dados, o fluxo recomendado é:
-1. **Crie o Plano** de tratamento (aba Plano).
+1. **Crie o Plano** (aba Plano).
 2. **Crie o Orçamento** (aba Financeiro) e **vincule-o ao Plano**.
-3. Ao **Registrar o Procedimento**, escolha o **Plano** e o **Orçamento** correspondente
-   (o orçamento é obrigatório quando já existe algum). O sistema mostra
-   *"Registrando em: Plano X › Orçamento Y"*.
+3. Ao **Registrar o Procedimento**, escolha o **Plano** e o **Orçamento**; ou deixe
+   **sem orçamento** e informe um **Valor a cobrar** (procedimento **avulso**).
 
-Assim, cada procedimento (e os produtos utilizados nele) fica ligado a um orçamento,
-que por sua vez pertence a um plano — e tudo aparece no **Financeiro** do paciente.
+### 5.4 Procedimentos avulsos e importação no orçamento
+- Sem plano/orçamento, informe o **Valor a cobrar** no procedimento (selo *Avulso*).
+- No **Novo orçamento**, use **+ Importar procedimentos avulsos** (e também
+  **+ Importar suplementações não pagas**). Ao salvar, esses itens entram no orçamento
+  e os procedimentos passam a ficar **vinculados** a ele.
+
+### 5.5 Suplementação
+- Em **Nova suplementação**, escolha a **Medicação** no domínio de **Ativos**: o sistema
+  preenche automaticamente **Via**, **Fornecedor**, **Lote**, **Validade** e **Valor de Venda**.
+- Marque **Pago/Não pago**; use **Editar/Excluir**. As **não pagas** podem ser importadas
+  no orçamento.
+
+### 5.6 Manipulação — receita em PDF
+- A profissional **designa** uma ou mais fórmulas (pelo nome da biblioteca).
+- **Gerar receita (PDF):** documento com o cabeçalho do paciente, a composição em tópicos,
+  a posologia e a **assinatura/conselho (com UF)** da profissional.
+- Da própria tela é possível **Enviar ao paciente** (vai para a aba **Documentos** do
+  portal) e **Enviar ao fornecedor** por WhatsApp (quando a integração estiver ativa).
+
+### 5.7 Exames
+- **Requisição em PDF (A4):** cabeçalho com **dados do cliente**, lista de exames do
+  painel padrão, **Outros exames** e **Observações**, e **duas linhas para o carimbo** da
+  profissional (preenchidas à mão). Botão **Gerar PDF / Imprimir** no modal e em cada requisição.
+- **Resultados:** o profissional pode **anexar** PDF/imagem no dossiê do paciente (e o
+  paciente também pode enviar pelo portal).
 
 ---
 
@@ -157,72 +211,106 @@ que por sua vez pertence a um plano — e tudo aparece no **Financeiro** do paci
 
 Crie e edite **termos** (consentimento) e **orientações** (cuidados) — tudo via CRUD.
 
-- **Campos dinâmicos:** defina campos (rótulo, chave, tipo, obrigatório). A **chave**
-  é usada no corpo do documento como `{{chave}}` e é substituída pelo valor preenchido
-  na emissão.
-- **Corpo do documento:** texto com os placeholders `{{...}}`.
-- **Orientações:** podem ter **lembretes automáticos** (ex.: "após X horas" ou
-  "repetir por N dias"), entregues por **aviso no app** e/ou **push**.
+- **Campos dinâmicos:** cada campo tem **Rótulo** (nome amigável) e **chave** (id técnico).
+  No **corpo** você usa `{{chave}}`, substituído pelo valor na emissão.
+- **Botão "inserir no corpo":** em cada campo, insere o `{{chave}}` correto na posição do
+  cursor — evita digitar a chave errada.
+- **Orientações** podem ter **lembretes automáticos** (ex.: "após X horas" ou "repetir por
+  N dias"), entregues por **aviso no app** e/ou **push**.
 - Ao editar um modelo, a **versão** é incrementada; a emissão "congela" a versão usada.
 
-**Como emitir:** na ficha do paciente → aba **Documentos → + Emitir documento** →
-escolha o modelo → preencha → veja a pré-visualização → emitir. O paciente lê e
-**assina** no portal; você pode **Gerar PDF** (com identificação do paciente, do
-profissional e hash de integridade).
+> Os valores dos campos **não** são informados no editor de modelo — apenas na **emissão**
+> (ficha do paciente → Documentos → Emitir documento).
 
 ---
 
-## 7. Estoque
+## 7. Estoque (CRUD)
 
-- **+ Novo produto:** produto, marca, lote, validade, custo, preço de venda,
-  quantidade inicial e **estoque mínimo**. A **margem** é calculada automaticamente.
-- **+ Entrada:** lança reposição de estoque.
-- **Alertas:** itens em **estoque baixo** (no/abaixo do mínimo) e com **validade
-  próxima** (≤ 30 dias) ficam destacados aqui e no Dashboard.
-- A **baixa automática** acontece quando você registra um procedimento com produtos.
-
----
-
-## 8. Financeiro
-
-- **Por paciente** (aba Financeiro da ficha): crie **orçamentos** (itens, desconto,
-  total), registre **pagamentos** (PIX/cartão/dinheiro…) e acompanhe **pago × saldo**.
-  Os **produtos utilizados** nos procedimentos vinculados aparecem dentro do orçamento.
-- **Geral** (menu Financeiro): visão de **recebíveis** — total recebido, a receber e
-  lista de orçamentos por paciente.
+- **+ Novo produto:** produto, marca, lote, validade, custo, preço de venda, quantidade
+  inicial e **estoque mínimo**. A **margem** é calculada automaticamente.
+- Cada item tem **+ Entrada**, **Editar** e **Excluir**. (Na edição, a **quantidade atual**
+  é somente leitura — ajuste pela "+ Entrada", para preservar a auditoria.)
+- **Alertas** de **estoque baixo** e **validade próxima** (≤ 30 dias) aqui e no Dashboard.
+- A **baixa automática** acontece ao registrar um procedimento; ao **editar/excluir** um
+  procedimento, o estoque é **reconciliado** (devolve os antigos, baixa os novos).
 
 ---
 
-## 9. Relatórios
+## 8. Financeiro (fluxo de caixa)
+
+No topo há o **seletor de Mês/Ano**, que filtra todas as visões. Abas:
+
+### 8.1 Consolidado (balanço)
+Receitas recebidas, despesas pagas, **resultado do mês**, pendências (a receber / a pagar)
+e **posição patrimonial** (caixa + aplicações + aportes).
+
+### 8.2 Receitas
+- **Realizado (Pagos)** e **Não pagos (A receber)**.
+- **Registrar cobrança recebida:** escolha **paciente → orçamento** (saldo pré-preenchido)
+  sem precisar entrar na ficha do paciente.
+- Cada pagamento tem **Editar** e **Excluir**.
+
+### 8.3 Despesas
+- **Realizado (Pagas)** e **Não pagas**, com **Editar**, **Excluir** e marcar pago.
+- **Nova despesa:** **Classificação** (Produto / Gasto fixo) na 1ª linha — o **Tipo de
+  Despesa** mostra só os tipos daquela classificação. Informe **Valor**, **Qtd. de itens**,
+  **Data** e **Forma de pagamento** (Pix/Cartão).
+  - **Produto:** pagamento **à vista** ou **parcelado** (Nº de parcelas distribuídas nos
+    meses seguintes).
+  - **Gasto fixo:** opção de **recorrência** (período + nº de ocorrências).
+
+### 8.4 Caixa & Aportes
+Registro de **valores em caixa**, **aplicações** e **aportes financeiros** eventuais.
+
+### 8.5 Relatório
+- Período **Mensal / Anual / Intervalo de datas**.
+- **Comparativo Receitas × Despesas** (cards + barras), totais, e quebras **por
+  classificação**, **por forma de pagamento** e **por tipo de despesa**.
+- **Evolução mês a mês** (gráfico de linha receita × despesa do ano).
+- **Exportar PDF** — inclui o gráfico de evolução e as tabelas.
+
+---
+
+## 9. Relatórios (menu lateral)
 
 Indicadores do **mês atual** e visão geral:
-- **Faturamento:** recebido no mês (por método de pagamento), a receber, total recebido.
+- **Faturamento:** recebido no mês (por método), a receber, total recebido.
 - **Estoque:** valor de custo, valor de venda, itens em baixa, validade próxima.
-- **Atendimento:** procedimentos e atendimentos realizados no mês.
+- **Atendimento:** procedimentos e atendimentos no mês.
+
+### Mapa financeiro mensal (4 colunas)
+Selecione **Mês/Ano** e veja, lado a lado, com **totalizadores**:
+**Despesas fixas** · **Produtos e materiais** · **Pagamentos das clientes** ·
+**A receber das clientes**, mais o **resumo do mês** (recebido, despesas, saldo, a receber).
+Botão **Exportar PDF** (paisagem).
 
 ---
 
 ## 10. Automação e notificações
 
-- Ao **emitir uma orientação**, o sistema agenda os **avisos de cuidado** (no app e,
-  se configurado, **push** no aparelho) conforme a programação do modelo.
+- Ao **emitir uma orientação**, o sistema agenda os **avisos de cuidado** (no app e, se
+  configurado, **push** no aparelho).
 - **Lembretes de consulta** são enfileirados automaticamente.
-- O paciente vê os avisos em **Início** do portal e pode **ativar notificações** no
-  aparelho.
+- O paciente vê os avisos em **Início** do portal e pode **ativar notificações**.
 
 ---
 
 ## 11. Portal do Paciente (o que o paciente vê)
 
-- **Início:** avisos/cuidados, ativar notificações, falar no WhatsApp.
+A marca da clínica (logo/nome/cores) aparece também no portal e no app instalado.
+
+- **Início:** avisos/cuidados, **próxima consulta** (data e hora), ativar notificações e
+  falar no WhatsApp.
 - **Agendamentos:** ver consultas e **solicitar horário** (a clínica confirma).
-- **Anamnese:** preencher a própria ficha antes da consulta.
-- **Documentos:** ler e **assinar** termos; dar ciência em orientações; gerar PDF.
-- **Evolução:** gráfico de medidas, **enviar resultados de exame** e ver fotos.
-- **Relatórios:** escolhe **seções** (procedimentos, manipulações, medidas, suplementações)
-  e **período**, gera um **PDF** (download + guardado no perfil) e gerencia os anteriores.
-  Limitado pela quantidade definida pelo admin.
+- **Anamnese:** preencher a própria ficha (inclui **estilo de trabalho**).
+- **Documentos:** ler/**assinar** termos e orientações; **abrir as receitas, orçamentos e
+  arquivos** enviados pela clínica (PDFs).
+- **Exames:** ver as **requisições** da clínica e **enviar/abrir/excluir resultados**.
+- **Evolução:** gráfico de medidas e fotos.
+- **Relatórios:** escolhe **seções** e **período**, gera um **PDF** (download + guardado),
+  limitado pela quantidade definida pelo admin.
 - **Financeiro:** orçamentos, saldos e produtos utilizados.
+- **LGPD:** ler o termo e **dar ciência**, com registro de data/hora.
 
 ---
 
@@ -230,23 +318,29 @@ Indicadores do **mês atual** e visão geral:
 
 | Situação | Como resolver |
 |----------|----------------|
-| Novo paciente precisa entrar | Cadastro já cria o login; entregue login + senha mostrados |
-| Paciente esqueceu a senha | Paciente usa "Esqueci minha senha" (se tiver e-mail) **ou** você usa Editar → Redefinir acesso |
+| Novo paciente precisa entrar | O cadastro cria o login (usa o **e-mail**; senão, o CPF); entregue login + senha |
+| Paciente esqueceu a senha | Paciente usa "Esqueci minha senha" **ou** Editar → Redefinir acesso |
 | Novo profissional | Configurações → Equipe → Provisionar acesso |
-| Profissional esqueceu a senha | Configurações → Equipe → Redefinir senha (ou "Esqueci minha senha") |
+| **Trocar o e-mail de login** de um profissional | Configurações → Equipe → **Gerenciar acesso** (preserva o histórico) |
+| Forçar nova senha do profissional | Configurações → Equipe → **Gerenciar acesso** → Forçar nova senha |
+| Novo papel / mudar nível de acesso | Configurações → **Papéis** |
 | Forçar troca no 1º acesso | Automático para senhas provisórias (exceto login Google) |
 
 ---
 
 ## 13. Dicas finais
 
-- O app **republica sozinho** a cada atualização; basta **recarregar a página**.
-- No celular, use **"Adicionar à tela inicial"** para instalar como aplicativo.
-- Os dados são protegidos por permissões: **paciente vê só o que é dele**; a equipe
-  vê os pacientes da clínica.
-- **PDF de documentos** serve como comprovante (traz identificação e hash de integridade).
+- O app **republica sozinho** a cada atualização; **recarregue a página** (Ctrl+Shift+R)
+  para ver novidades. No celular, use **"Adicionar à tela inicial"** para instalar.
+- Os dados são protegidos por permissões: **paciente vê só o que é dele**; a equipe vê os
+  pacientes da clínica; **Configurações é só do admin**.
+- **PDFs** (documentos, receitas, orçamentos, exames, relatórios) servem como comprovante
+  e seguem a identidade visual da clínica.
+- Para os relatórios financeiros baterem, mantenha os **Tipos de Despesa classificados**
+  (Produto/Gasto fixo) e registre os pagamentos/recebimentos no mês correto.
 
 ---
 
 *Este manual cobre as funcionalidades desenvolvidas até o momento. Itens em evolução:
-cobrança PIX automática e envio por WhatsApp (dependem de contas externas).*
+cobrança PIX automática e **envio por WhatsApp** ao fornecedor (dependem de contas/contratos
+externos; o sistema já está preparado para ativá-los nas Integrações).*
