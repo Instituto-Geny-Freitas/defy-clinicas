@@ -3,10 +3,12 @@ import {
   brl,
   calcItensTotal,
   createQuote,
+  deleteQuote,
   listPaymentsByPatient,
   listQuotes,
   registerPayment,
   totalPago,
+  updateQuote,
   type Payment,
   type PaymentMethod,
   type Quote,
@@ -35,8 +37,17 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
   const [compartilhados, setCompartilhados] = useState<SharedDocument[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modalOrc, setModalOrc] = useState(false)
+  const [editandoOrc, setEditandoOrc] = useState<Quote | null>(null)
   const [pagandoQuote, setPagandoQuote] = useState<Quote | null>(null)
   const [enviando, setEnviando] = useState<string | null>(null)
+
+  async function excluirOrc(q: Quote) {
+    const pago = totalPago(pagamentos, q.id)
+    if (pago > 0) { alert('Este orçamento já tem pagamento registrado. Exclua/estorne os pagamentos antes.'); return }
+    if (!confirm('Excluir este orçamento?')) return
+    try { await deleteQuote(q.id); recarregar() }
+    catch { alert('Não foi possível excluir (há vínculos como pagamentos ou procedimentos).') }
+  }
 
   function recarregar() {
     Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId), listSharedDocuments(patientId)])
@@ -94,6 +105,13 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
           professionalId={professionalId}
           onClose={() => setModalOrc(false)}
           onSaved={() => { setModalOrc(false); recarregar() }}
+        />
+      )}
+      {editandoOrc && (
+        <EditarItensModal
+          quote={editandoOrc}
+          onClose={() => setEditandoOrc(null)}
+          onSaved={() => { setEditandoOrc(null); recarregar() }}
         />
       )}
       {pagandoQuote && (
@@ -155,6 +173,8 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                         Registrar pagamento
                       </button>
                     )}
+                    <button onClick={() => setEditandoOrc(q)} className="text-xs font-medium text-texto/60 hover:underline">Editar itens</button>
+                    <button onClick={() => excluirOrc(q)} className="text-xs font-medium text-secundaria hover:underline">Excluir</button>
                   </div>
                 </div>
                 {produtos.length > 0 && (
@@ -278,6 +298,66 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
             {salvando ? 'Salvando…' : 'Salvar orçamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: () => void; onSaved: () => void }) {
+  const [itens, setItens] = useState<QuoteItem[]>(
+    quote.itens?.length ? quote.itens.map((i) => ({ ...i })) : [{ descricao: '', qtd: 1, valor_unit: 0, total: 0 }],
+  )
+  const [desconto, setDesconto] = useState(Number(quote.desconto) || 0)
+  const [salvando, setSalvando] = useState(false)
+
+  const bruto = calcItensTotal(itens)
+  const total = Math.max(0, bruto - desconto)
+  function setItem(idx: number, patch: Partial<QuoteItem>) {
+    setItens((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+  }
+
+  async function salvar() {
+    const validos = itens.filter((i) => i.descricao.trim())
+    if (validos.length === 0) { alert('Inclua ao menos um item.'); return }
+    setSalvando(true)
+    try { await updateQuote(quote.id, { itens: validos, desconto }); onSaved() }
+    catch { setSalvando(false); alert('Não foi possível salvar.') }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-texto">Editar itens do orçamento</h2>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+
+        <div className="space-y-2">
+          {itens.map((it, idx) => (
+            <div key={idx} className="flex gap-2">
+              <input className={field} placeholder="Descrição" value={it.descricao} onChange={(e) => setItem(idx, { descricao: e.target.value })} />
+              <input type="number" min={1} className="w-16 rounded-lg border border-black/10 px-2 py-2 text-sm" value={it.qtd} onChange={(e) => setItem(idx, { qtd: Number(e.target.value) })} />
+              <input type="number" step="0.01" className="w-28 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Valor un." value={it.valor_unit} onChange={(e) => setItem(idx, { valor_unit: Number(e.target.value) })} />
+              <button onClick={() => setItens((a) => a.filter((_, i) => i !== idx))} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+            </div>
+          ))}
+          <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
+            + Adicionar item
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-3 text-sm">
+          <span className="text-texto/60">Desconto</span>
+          <input type="number" step="0.01" className="w-28 rounded-lg border border-black/10 px-2 py-1.5" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
+        </div>
+        <div className="mt-2 text-right text-lg font-semibold text-texto">Total: {brl(total)}</div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+            {salvando ? 'Salvando…' : 'Salvar'}
           </button>
         </div>
       </div>

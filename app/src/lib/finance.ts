@@ -103,6 +103,24 @@ export async function updateQuoteStatus(id: string, status: QuoteStatus): Promis
   if (error) throw error
 }
 
+/** Atualiza os itens/desconto de um orçamento, recalculando os totais. */
+export async function updateQuote(id: string, args: { itens: QuoteItem[]; desconto: number }): Promise<void> {
+  const itens = args.itens.map((i) => ({ ...i, total: (i.qtd || 0) * (i.valor_unit || 0) }))
+  const valor_bruto = calcItensTotal(itens)
+  const valor_total = Math.max(0, valor_bruto - (args.desconto || 0))
+  const { error } = await supabase
+    .from('quotes')
+    .update({ itens, valor_bruto, desconto: args.desconto || 0, valor_total })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Exclui um orçamento. Falha se houver pagamentos vinculados (FK). */
+export async function deleteQuote(id: string): Promise<void> {
+  const { error } = await supabase.from('quotes').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ---- Pagamentos -----------------------------------------------------------
 export async function listPaymentsByPatient(patientId: string): Promise<Payment[]> {
   const { data, error } = await supabase
