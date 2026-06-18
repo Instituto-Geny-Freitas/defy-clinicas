@@ -65,6 +65,12 @@ export async function linkProceduresToQuote(quoteId: string, procedureIds: strin
   if (error) throw error
 }
 
+/** Desvincula um procedimento do orçamento (volta a ser avulso/importável). */
+export async function unlinkProcedureFromQuote(procedureId: string): Promise<void> {
+  const { error } = await supabase.from('procedures_log').update({ quote_id: null }).eq('id', procedureId)
+  if (error) throw error
+}
+
 interface CreateArgs {
   clinicId: string
   patientId: string

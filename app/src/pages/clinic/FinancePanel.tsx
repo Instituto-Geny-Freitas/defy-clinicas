@@ -16,7 +16,7 @@ import {
   type Quote,
   type QuoteItem,
 } from '@/lib/finance'
-import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
+import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listUnpaidSupplementations } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
@@ -252,6 +252,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [planoId, setPlanoId] = useState('')
   const [procImportados, setProcImportados] = useState<string[]>([])
+  const [avisoNovo, setAvisoNovo] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
@@ -261,6 +262,13 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   const bruto = calcItensTotal(itens)
   const total = Math.max(0, bruto - desconto)
 
+  // Remove um item; se for procedimento importado, tira-o da fila de vínculo.
+  function removerItem(idx: number) {
+    const it = itens[idx]
+    if (it.origem === 'procedimento' && it.ref_id) setProcImportados((ids) => ids.filter((id) => id !== it.ref_id))
+    setItens((a) => a.filter((_, i) => i !== idx))
+  }
+
   function setItem(idx: number, patch: Partial<QuoteItem>) {
     setItens((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
   }
@@ -268,14 +276,14 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   async function importarSuplementacoes() {
     const supl = await listUnpaidSupplementations(patientId)
     if (supl.length === 0) { alert('Nenhuma suplementação não paga.'); return }
-    const novos = supl.map((s) => ({ descricao: `Suplementação: ${s.medicacao}`, qtd: 1, valor_unit: Number(s.valor_venda) || 0, total: Number(s.valor_venda) || 0 }))
+    const novos: QuoteItem[] = supl.map((s) => ({ descricao: `Suplementação: ${s.medicacao}`, qtd: 1, valor_unit: Number(s.valor_venda) || 0, total: Number(s.valor_venda) || 0, origem: 'suplementacao', ref_id: s.id }))
     setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
   }
 
   async function importarProcedimentos() {
     const procs = await listUnbilledProcedures(patientId)
     if (procs.length === 0) { alert('Nenhum procedimento avulso (sem orçamento) com valor a cobrar.'); return }
-    const novos = procs.map((p) => ({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado) || 0, total: Number(p.valor_cobrado) || 0 }))
+    const novos: QuoteItem[] = procs.map((p) => ({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado) || 0, total: Number(p.valor_cobrado) || 0, origem: 'procedimento', ref_id: p.id }))
     setProcImportados((ids) => [...new Set([...ids, ...procs.map((p) => p.id)])])
     setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
   }
@@ -311,14 +319,21 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
         </div>
 
         <div className="space-y-2">
-          {itens.map((it, idx) => (
-            <div key={idx} className="flex gap-2">
-              <input className={field} placeholder="Descrição" value={it.descricao} onChange={(e) => setItem(idx, { descricao: e.target.value })} />
-              <input type="number" min={1} className="w-16 rounded-lg border border-black/10 px-2 py-2 text-sm" value={it.qtd} onChange={(e) => setItem(idx, { qtd: Number(e.target.value) })} />
-              <input type="number" step="0.01" className="w-28 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Valor un." value={it.valor_unit} onChange={(e) => setItem(idx, { valor_unit: Number(e.target.value) })} />
-              <button onClick={() => setItens((a) => a.filter((_, i) => i !== idx))} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
-            </div>
-          ))}
+          {itens.map((it, idx) => {
+            const travado = !!it.origem
+            return (
+              <div key={idx}>
+                <div className="flex gap-2">
+                  <input className={`${field} ${travado ? 'bg-black/[0.03] text-texto/70' : ''}`} placeholder="Descrição" value={it.descricao} readOnly={travado} onChange={(e) => !travado && setItem(idx, { descricao: e.target.value })} />
+                  <input type="number" min={1} className={`w-16 rounded-lg border border-black/10 px-2 py-2 text-sm ${travado ? 'bg-black/[0.03] text-texto/70' : ''}`} value={it.qtd} readOnly={travado} onChange={(e) => !travado && setItem(idx, { qtd: Number(e.target.value) })} />
+                  <input type="number" step="0.01" className={`w-28 rounded-lg border border-black/10 px-2 py-2 text-sm ${travado ? 'cursor-not-allowed bg-black/[0.03] text-texto/70' : ''}`} placeholder="Valor un." value={it.valor_unit} readOnly={travado} onMouseDown={() => travado && setAvisoNovo('Estes valores só podem ser ajustados nos respectivos painéis (Procedimentos ou Suplementação).')} onChange={(e) => !travado && setItem(idx, { valor_unit: Number(e.target.value) })} />
+                  <button onClick={() => removerItem(idx)} className="px-2 text-texto/40 hover:text-secundaria" title={travado ? 'Desvincular' : 'Remover'}>✕</button>
+                </div>
+                {travado && <div className="mt-0.5 text-[10px] text-amber-700">{it.origem === 'procedimento' ? 'Procedimento' : 'Suplementação'} importado · valor travado (✕ para desvincular)</div>}
+              </div>
+            )
+          })}
+          {avisoNovo && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{avisoNovo}</p>}
           <div className="flex flex-wrap gap-3">
             <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
               + Adicionar item (Outros serviços)
@@ -355,11 +370,22 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
   )
   const [desconto, setDesconto] = useState(Number(quote.desconto) || 0)
   const [salvando, setSalvando] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
 
+  const MSG_TRAVADO = 'Estes valores só podem ser ajustados nos respectivos painéis (Procedimentos ou Suplementação).'
   const bruto = calcItensTotal(itens)
   const total = Math.max(0, bruto - desconto)
   function setItem(idx: number, patch: Partial<QuoteItem>) {
     setItens((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+  }
+
+  async function desvincular(idx: number) {
+    const it = itens[idx]
+    if (it.origem === 'procedimento' && it.ref_id) {
+      try { await unlinkProcedureFromQuote(it.ref_id) } catch { /* segue removendo o item */ }
+    }
+    setItens((a) => a.filter((_, i) => i !== idx))
+    setAviso(`${it.origem === 'procedimento' ? 'Procedimento' : 'Suplementação'} desvinculado deste orçamento.`)
   }
 
   async function salvar() {
@@ -379,18 +405,44 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
         </div>
 
         <div className="space-y-2">
-          {itens.map((it, idx) => (
-            <div key={idx} className="flex gap-2">
-              <input className={field} placeholder="Descrição" value={it.descricao} onChange={(e) => setItem(idx, { descricao: e.target.value })} />
-              <input type="number" min={1} className="w-16 rounded-lg border border-black/10 px-2 py-2 text-sm" value={it.qtd} onChange={(e) => setItem(idx, { qtd: Number(e.target.value) })} />
-              <input type="number" step="0.01" className="w-28 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Valor un." value={it.valor_unit} onChange={(e) => setItem(idx, { valor_unit: Number(e.target.value) })} />
-              <button onClick={() => setItens((a) => a.filter((_, i) => i !== idx))} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
-            </div>
-          ))}
+          {itens.map((it, idx) => {
+            const travado = !!it.origem
+            return (
+              <div key={idx}>
+                <div className="flex gap-2">
+                  <input
+                    className={`${field} ${travado ? 'bg-black/[0.03] text-texto/70' : ''}`}
+                    placeholder="Descrição" value={it.descricao} readOnly={travado}
+                    onChange={(e) => !travado && setItem(idx, { descricao: e.target.value })} />
+                  <input type="number" min={1}
+                    className={`w-16 rounded-lg border border-black/10 px-2 py-2 text-sm ${travado ? 'bg-black/[0.03] text-texto/70' : ''}`}
+                    value={it.qtd} readOnly={travado}
+                    onChange={(e) => !travado && setItem(idx, { qtd: Number(e.target.value) })} />
+                  <input type="number" step="0.01"
+                    className={`w-28 rounded-lg border border-black/10 px-2 py-2 text-sm ${travado ? 'cursor-not-allowed bg-black/[0.03] text-texto/70' : ''}`}
+                    placeholder="Valor un." value={it.valor_unit} readOnly={travado}
+                    onMouseDown={() => travado && setAviso(MSG_TRAVADO)}
+                    onChange={(e) => !travado && setItem(idx, { valor_unit: Number(e.target.value) })} />
+                  {travado ? (
+                    <button onClick={() => desvincular(idx)} className="shrink-0 rounded-md border border-amber-300 px-2 text-xs font-medium text-amber-700 hover:bg-amber-50">Desvincular</button>
+                  ) : (
+                    <button onClick={() => setItens((a) => a.filter((_, i) => i !== idx))} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+                  )}
+                </div>
+                {travado && (
+                  <div className="mt-0.5 text-[10px] text-amber-700">
+                    {it.origem === 'procedimento' ? 'Procedimento vinculado' : 'Suplementação vinculada'} · valor travado (ajuste no painel de origem)
+                  </div>
+                )}
+              </div>
+            )
+          })}
           <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
             + Adicionar item
           </button>
         </div>
+
+        {aviso && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{aviso}</p>}
 
         <div className="mt-4 flex items-center justify-end gap-3 text-sm">
           <span className="text-texto/60">Desconto</span>

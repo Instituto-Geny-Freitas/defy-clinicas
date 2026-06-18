@@ -9,6 +9,9 @@ export interface QuoteItem {
   qtd: number
   valor_unit: number
   total: number
+  /** Origem do item, quando importado — o valor é travado e ajustado no painel de origem. */
+  origem?: 'procedimento' | 'suplementacao'
+  ref_id?: string
 }
 
 export interface Quote {
