@@ -155,6 +155,10 @@ Menu lateral (no celular, abre pelo menu):
 - **Agendamento prévio sem cadastro:** marque **"Paciente ainda sem cadastro"** e informe
   **nome + telefone**. O agendamento fica com o selo **"cadastro pendente"**. Depois,
   ao cadastrar o paciente, o sistema oferece **regularizar e vincular** esse agendamento.
+- **Agendamento recorrente (só pelo profissional):** marque **"Agendamento recorrente"**,
+  escolha o período (**semanal/quinzenal/mensal/anual**) e o **ano até o qual repetir
+  (inclusive)** — o sistema cria a série no mesmo horário até 31/12 do ano escolhido.
+  (No portal, o paciente solicita horários **individualmente**.)
 - **Filtro por profissional** e **busca por data** (campo de data ou **Ver calendário**,
   com os dias que têm agendamento marcados).
 - Em cada agendamento: **Confirmar**, **Remarcar**, **Realizado** ou **Cancelar**.
@@ -207,6 +211,21 @@ Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro.
 - No **Novo orçamento**, use **+ Importar procedimentos avulsos** (e também
   **+ Importar suplementações não pagas**). Ao salvar, esses itens entram no orçamento
   e os procedimentos passam a ficar **vinculados** a ele.
+
+**Itens importados (travados):** os itens que vêm de **Procedimento** ou **Suplementação**
+ficam **marcados** no orçamento e com o **valor travado** — ao tentar alterá-lo, o sistema
+avisa que *o ajuste é feito no painel de origem* (Procedimentos ou Suplementação). Para
+mudar o valor, edite no painel de origem e reimporte. Cada item importado tem a opção
+**Desvincular** (na edição do orçamento) — remove o item e, no caso de procedimento, ele
+**volta a ser avulso** (importável de novo). Itens manuais ("Outros serviços") continuam
+totalmente editáveis.
+
+### 5.4.1 CRUD do orçamento e pagamentos (aba Financeiro)
+- **Editar itens:** adicionar/editar/remover itens e ajustar o **desconto**; o total é
+  recalculado. (Itens importados seguem a regra de "valor travado" acima.)
+- **Excluir** orçamento: bloqueado quando há **pagamento registrado** (estorne antes).
+- **Pagamentos:** cada orçamento lista seus pagamentos com **Editar** (valor/método) e
+  **Excluir**; o *Pago × Saldo* é recalculado na hora.
 
 ### 5.5 Suplementação
 - Em **Nova suplementação**, escolha a **Medicação** no domínio de **Ativos**: o sistema
