@@ -254,15 +254,46 @@ totalmente editáveis.
 Crie e edite **termos** (consentimento) e **orientações** (cuidados) — tudo via CRUD.
 
 - **Campos dinâmicos:** cada campo tem **Rótulo** (nome amigável) e **chave** (id técnico).
-  No **corpo** você usa `{{chave}}`, substituído pelo valor na emissão.
+  No **corpo** você usa `{{chave}}`, substituído pelo valor.
 - **Botão "inserir no corpo":** em cada campo, insere o `{{chave}}` correto na posição do
   cursor — evita digitar a chave errada.
 - **Orientações** podem ter **lembretes automáticos** (ex.: "após X horas" ou "repetir por
   N dias"), entregues por **aviso no app** e/ou **push**.
 - Ao editar um modelo, a **versão** é incrementada; a emissão "congela" a versão usada.
 
-> Os valores dos campos **não** são informados no editor de modelo — apenas na **emissão**
-> (ficha do paciente → Documentos → Emitir documento).
+### 6.1 Quem preenche cada campo (Profissional / Paciente / Sistema)
+Em cada campo dinâmico você escolhe **"Preenchido por"**:
+- **Profissional** — preenchido na **emissão**; o *obrigatório* vale aqui. Para campos de
+  número/texto, há a opção **"sugerir valor do orçamento"** (ex.: *Valor dos Serviços*): ao
+  emitir, o profissional escolhe **um orçamento do paciente** ou digita um valor livre.
+- **Paciente (portal)** — preenchido pelo paciente quando **lê e dá ciência** no portal; o
+  *obrigatório* é exigido **nesse momento**, não na emissão. Usa o formato do campo (texto,
+  Sim/Não, número, texto longo).
+- **Sistema (automático)** — o sistema preenche sozinho a partir de uma **fonte**: Data da
+  emissão · Data da ciência · Nome/CPF do paciente · Nome/Conselho/Número/UF do profissional.
+  Assim, campos como nome do paciente, dados do profissional logado e datas **não precisam
+  ser digitados**.
+
+### 6.2 Emitir documento (ficha do paciente → Documentos)
+- O profissional só vê/preenche os **campos do profissional**; o restante é automático ou do
+  paciente. O sistema mostra quais campos o **paciente** preencherá no portal.
+- Ao emitir, os campos de **Sistema** (dados do paciente/profissional e data da emissão) já
+  entram preenchidos; a **data da ciência** é resolvida depois, no aceite do paciente.
+
+### 6.3 Ciência do paciente e autenticidade
+No portal, o paciente lê o documento, preenche os campos dele e confirma. Nesse aceite o
+sistema grava **data, hora** e um **hash de autenticidade** (vincula o conteúdo aos dados do
+paciente e ao instante do aceite), guardado no registro do documento para **auditoria** e
+exibido no PDF.
+
+### 6.4 "Exige assinatura do paciente" (flag)
+Em **todos** os casos o paciente lê e **confirma** no portal para fechar o ciclo — o flag
+**não** decide isso. Ele define a **natureza do aceite**:
+- **Marcado** (Termo): aparece **"Assinar"** → status final **Assinado** (registra `assinado_em`).
+- **Desmarcado**: aparece **"Confirmar leitura"** → status final **Lido**.
+
+Em ambos são gravados data, hora e o hash. O flag só existe para **Termos**; **Orientações
+nunca exigem assinatura**. Ciclo: **Pendente** (emitido) → paciente confirma → **Assinado/Lido**.
 
 ---
 

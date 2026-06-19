@@ -225,10 +225,18 @@ function Editor({
               <input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} placeholder="ex.: toxina_botulinica" />
             </div>
             {tipo === 'termo' && (
-              <label className="mt-6 flex items-center gap-2 text-sm text-texto/80">
-                <input type="checkbox" checked={requerAssinatura} onChange={(e) => setRequerAssinatura(e.target.checked)} />
-                Exige assinatura do paciente
-              </label>
+              <div className="sm:col-span-2 rounded-lg bg-black/[0.02] p-2">
+                <label className="flex items-center gap-2 text-sm text-texto/80">
+                  <input type="checkbox" checked={requerAssinatura} onChange={(e) => setRequerAssinatura(e.target.checked)} />
+                  Exige assinatura do paciente
+                </label>
+                <p className="mt-1 text-xs text-texto/50">
+                  Em todos os casos o paciente lê e confirma no portal para fechar o ciclo. Este flag define a
+                  <strong> natureza do aceite</strong>: <strong>marcado</strong> = “Assinar” → status <strong>Assinado</strong>
+                  (registra <code>assinado_em</code>); <strong>desmarcado</strong> = “Confirmar leitura” → status <strong>Lido</strong>.
+                  Em ambos são gravados data, hora e o hash de autenticidade. Orientações nunca exigem assinatura.
+                </p>
+              </div>
             )}
           </div>
 
