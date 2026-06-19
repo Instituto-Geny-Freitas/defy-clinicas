@@ -141,10 +141,13 @@ function IssueModal({ clinicId, patient, professionalId, contexto, onClose, onIs
   const camposOrc = camposProf.filter((f) => f.fonteOrcamento)
   const camposPaciente = selecionado ? camposDe(selecionado.schema, 'paciente') : []
 
-  // Preview com os automáticos resolvidos.
+  // Preview = o que será de fato gravado na emissão: resolve os automáticos do
+  // momento da emissão, deixando a "data da ciência" em branco (preenchida pelo paciente).
   const dadosPreview: FormValues = { ...valores }
   for (const f of selecionado?.schema ?? []) {
-    if (f.preenchidoPor === 'sistema' && f.auto && dadosPreview[f.key] === undefined) dadosPreview[f.key] = resolveAuto(f.auto, contexto)
+    if (f.preenchidoPor === 'sistema' && f.auto && f.auto !== 'data_ciencia' && dadosPreview[f.key] === undefined) {
+      dadosPreview[f.key] = resolveAuto(f.auto, contexto)
+    }
   }
 
   async function emitir() {
