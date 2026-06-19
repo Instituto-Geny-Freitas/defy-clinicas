@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   camposDe,
+  deleteDocument,
   getTemplate,
   issueDocument,
   listActiveTemplates,
@@ -13,8 +14,10 @@ import {
   type DocTemplate,
 } from '@/lib/documents'
 import { listQuotes, brl } from '@/lib/finance'
+import { buildDocumentoPdf } from '@/lib/documentoPdf'
+import { createSharedDocument, enviarDocumentoPaciente, type CanalEnvio } from '@/lib/sharedDocs'
 import type { FormField, FormValues } from '@/forms/types'
-import type { Patient } from '@/lib/types'
+import type { Clinic, Patient } from '@/lib/types'
 import DynamicForm from '@/forms/DynamicForm'
 import DocStatusBadge from '@/components/DocStatusBadge'
 import { printDocument } from '@/lib/printDoc'
@@ -34,10 +37,18 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
   const [carregando, setCarregando] = useState(true)
   const [emitindo, setEmitindo] = useState(false)
   const [editando, setEditando] = useState<DocInstance | null>(null)
+  const [reenviando, setReenviando] = useState<DocInstance | null>(null)
 
   const prof = profile?.professional
     ? { nome: profile.professional.nome, conselho_tipo: profile.professional.conselho_tipo, conselho_numero: profile.professional.conselho_numero, conselho_uf: profile.professional.conselho_uf }
     : null
+  const profConselho = prof ? ([prof.conselho_tipo, prof.conselho_numero].filter(Boolean).join(' ') + (prof.conselho_uf ? `-${prof.conselho_uf}` : '')) || null : null
+
+  async function excluir(d: DocInstance) {
+    if (!confirm(`Excluir o documento "${d.document_templates?.nome ?? ''}"? Esta ação não pode ser desfeita.`)) return
+    await deleteDocument(d.id)
+    recarregar()
+  }
 
   function recarregar() {
     listPatientDocuments(patient.id)
@@ -81,6 +92,18 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
           onSaved={() => { setEditando(null); recarregar() }}
         />
       )}
+      {reenviando && (
+        <ReenviarModal
+          inst={reenviando}
+          clinic={clinic}
+          clinicId={clinicId}
+          patient={patient}
+          professionalId={professionalId}
+          profConselho={profConselho}
+          profNome={prof?.nome ?? null}
+          onClose={() => setReenviando(null)}
+        />
+      )}
 
       {carregando ? (
         <p className="text-sm text-texto/50">Carregando…</p>
@@ -108,6 +131,14 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
                   )}
                   <button onClick={() => gerarPdf(d)} className="text-xs font-medium text-primaria hover:underline">
                     Gerar PDF
+                  </button>
+                  {!editavel && (
+                    <button onClick={() => setReenviando(d)} className="text-xs font-medium text-primaria hover:underline">
+                      Reenviar
+                    </button>
+                  )}
+                  <button onClick={() => excluir(d)} className="text-xs font-medium text-secundaria hover:underline">
+                    Excluir
                   </button>
                   <DocStatusBadge status={d.status} />
                 </div>
@@ -256,6 +287,69 @@ function EditModal({ inst, onClose, onSaved }: { inst: DocInstance; onClose: () 
       )}
       {erro && <p className="mt-3 text-sm text-secundaria">{erro}</p>}
       <ModalFooter onClose={onClose} onSave={salvar} disabled={!template || salvando} label={salvando ? 'Salvando…' : 'Salvar alterações'} />
+    </ModalShell>
+  )
+}
+
+function ReenviarModal({ inst, clinic, clinicId, patient, professionalId, profNome, profConselho, onClose }: {
+  inst: DocInstance; clinic: Clinic | null; clinicId: string; patient: Patient; professionalId?: string | null
+  profNome: string | null; profConselho: string | null; onClose: () => void
+}) {
+  const [canal, setCanal] = useState<CanalEnvio>('email')
+  const [enviando, setEnviando] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  async function reenviar() {
+    setEnviando(true); setMsg(null)
+    try {
+      const { blob } = buildDocumentoPdf({
+        clinic,
+        paciente: { nome: patient.nome, cpf: patient.cpf, nascimento: patient.nascimento },
+        profissional: profNome ? { nome: profNome, conselho: profConselho } : null,
+        doc: {
+          nome: inst.document_templates?.nome ?? 'Documento',
+          corpo_final: inst.corpo_final,
+          status: inst.status,
+          assinado_em: inst.assinado_em,
+          lido_em: inst.lido_em,
+          hash: inst.assinatura_hash ?? inst.content_hash,
+          uso_imagem_autorizado: inst.uso_imagem_autorizado,
+        },
+      })
+      // Disponibiliza o PDF no portal do paciente (sem novo fluxo de ciência).
+      const shared = await createSharedDocument({
+        clinicId, patientId: patient.id, professionalId,
+        titulo: `Documento: ${inst.document_templates?.nome ?? ''}`.trim(),
+        categoria: 'documento', blob, enviarPaciente: true,
+      })
+      const destino = canal === 'email' ? patient.email : patient.whatsapp
+      const r = await enviarDocumentoPaciente({ canal, destino, sharedDocId: shared.id })
+      setMsg(r.mensagem)
+    } catch {
+      setMsg('Não foi possível reenviar.')
+    } finally { setEnviando(false) }
+  }
+
+  return (
+    <ModalShell titulo="Reenviar documento ao paciente" onClose={onClose}>
+      <p className="mb-3 text-sm text-texto/60">
+        Reenvia o <strong>PDF</strong> do documento (sem novo fluxo de ciência). O arquivo fica disponível na aba
+        <strong> Documentos</strong> do portal do paciente; opcionalmente, notificamos pelo canal escolhido.
+      </p>
+      <div className="mb-3 flex gap-2">
+        <button type="button" onClick={() => setCanal('email')} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${canal === 'email' ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
+          E-mail{patient.email ? '' : ' (sem e-mail)'}
+        </button>
+        <button type="button" onClick={() => setCanal('whatsapp')} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${canal === 'whatsapp' ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
+          WhatsApp (em breve)
+        </button>
+      </div>
+      <p className="text-xs text-texto/50">
+        Destino: {canal === 'email' ? (patient.email || '— sem e-mail —') : (patient.whatsapp || '— sem WhatsApp —')}.
+        {canal === 'whatsapp' && ' O envio por WhatsApp será ativado quando a integração estiver configurada.'}
+      </p>
+      {msg && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-sm text-amber-700">{msg}</p>}
+      <ModalFooter onClose={onClose} onSave={reenviar} disabled={enviando} label={enviando ? 'Enviando…' : 'Reenviar'} />
     </ModalShell>
   )
 }

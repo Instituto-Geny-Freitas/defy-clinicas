@@ -29,7 +29,7 @@ export async function createSharedDocument(args: {
   blob: Blob
   enviarPaciente: boolean
 }): Promise<SharedDocument> {
-  const pasta = args.categoria === 'orcamento' ? 'orcamentos' : 'manipulacoes'
+  const pasta = args.categoria === 'orcamento' ? 'orcamentos' : args.categoria === 'documento' ? 'documentos' : 'manipulacoes'
   const path = `${args.patientId}/${pasta}/${crypto.randomUUID()}.pdf`
   const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, args.blob, { contentType: 'application/pdf' })
   if (upErr) throw upErr
@@ -90,6 +90,36 @@ export async function listSharedForPatient(patientId: string): Promise<SharedDoc
 export async function marcarEnviadoPaciente(id: string): Promise<void> {
   const { error } = await supabase.from('shared_documents').update({ enviado_paciente: true }).eq('id', id)
   if (error) throw error
+}
+
+export type CanalEnvio = 'email' | 'whatsapp'
+
+/**
+ * Notifica o paciente de um documento compartilhado por e-mail ou WhatsApp.
+ * O PDF já fica disponível no portal; este passo é a notificação no canal escolhido.
+ * O envio real depende de uma integração ATIVA (Configurações → Integrações) e da
+ * respectiva Edge Function. Sem isso, devolve uma mensagem explicativa (preparado).
+ */
+export async function enviarDocumentoPaciente(args: {
+  canal: CanalEnvio
+  destino: string | null | undefined   // e-mail ou telefone do paciente
+  sharedDocId: string
+}): Promise<{ enviado: boolean; mensagem: string }> {
+  const canalNome = args.canal === 'email' ? 'e-mail' : 'WhatsApp'
+  if (!args.destino) {
+    return { enviado: false, mensagem: `Paciente sem ${canalNome} cadastrado. O PDF já está disponível no portal do paciente.` }
+  }
+  const cfg = await getIntegration(args.canal).catch(() => null)
+  if (cfg?.ativo) {
+    const fn = args.canal === 'email' ? 'send-document-email' : 'send-whatsapp'
+    const { error } = await supabase.functions.invoke(fn, { body: { doc_id: args.sharedDocId, to: args.destino } })
+    if (error) throw error
+    return { enviado: true, mensagem: `Documento enviado por ${canalNome}.` }
+  }
+  return {
+    enviado: false,
+    mensagem: `Integração de ${canalNome} ainda não configurada (Configurações → Integrações). O PDF já está disponível no portal do paciente.`,
+  }
 }
 
 export interface WhatsappResult { enviado: boolean; mensagem: string }

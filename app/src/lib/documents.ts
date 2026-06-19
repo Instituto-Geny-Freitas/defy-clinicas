@@ -138,6 +138,11 @@ export async function updateDocumentInstance(
   if (error) throw error
 }
 
+export async function deleteDocument(id: string): Promise<void> {
+  const { error } = await supabase.from('document_instances').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function listPatientDocuments(patientId: string): Promise<DocInstance[]> {
   const { data, error } = await supabase
     .from('document_instances')
