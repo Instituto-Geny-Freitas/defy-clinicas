@@ -52,6 +52,14 @@ export async function deletePrescription(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function updatePrescription(
+  id: string,
+  input: { nome?: string | null; composicao?: Ativo[]; posologia?: string | null },
+): Promise<void> {
+  const { error } = await supabase.from('formulation_prescriptions').update(input).eq('id', id)
+  if (error) throw error
+}
+
 // ---- Biblioteca de fórmulas (CRUD — Configurações) --------------------------
 export interface FormulationLib {
   id: string

@@ -64,7 +64,7 @@ export default function AnamnesisForm({
       setRecordId(rec.id)
       setMsg('Anamnese salva com sucesso.')
     } catch (e) {
-      setMsg('Não foi possível salvar. Verifique a conexão.')
+      setMsg('Não foi possível salvar: ' + ((e as Error)?.message || 'verifique a conexão e tente novamente.'))
     } finally {
       setSalvando(false)
     }

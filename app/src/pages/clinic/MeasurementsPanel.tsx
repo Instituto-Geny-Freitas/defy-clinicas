@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createMeasurement, listMeasurements, type BodyMeasurement, type MeasurementInput } from '@/lib/measurements'
+import { createMeasurement, deleteMeasurement, listMeasurements, updateMeasurement, type BodyMeasurement, type MeasurementInput } from '@/lib/measurements'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import LineChart from '@/components/LineChart'
 import { formatDateBR } from '@/lib/format'
@@ -11,11 +11,18 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
   const [itens, setItens] = useState<BodyMeasurement[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
+  const [editando, setEditando] = useState<BodyMeasurement | null>(null)
 
   function recarregar() {
     listMeasurements(patientId).then(setItens).catch(() => {}).finally(() => setCarregando(false))
   }
   useEffect(recarregar, [patientId])
+
+  async function excluir(m: BodyMeasurement) {
+    if (!confirm(`Excluir a medição da sessão ${m.sessao ?? ''}?`)) return
+    await deleteMeasurement(m.id)
+    recarregar()
+  }
 
   const pontosPeso = itens.filter((m) => m.peso_kg != null).map((m) => ({ rotulo: `${m.sessao ?? ''}`, valor: Number(m.peso_kg) }))
   const pontosGordura = itens.filter((m) => m.gordura_corporal_pct != null).map((m) => ({ rotulo: `${m.sessao ?? ''}`, valor: Number(m.gordura_corporal_pct) }))
@@ -26,7 +33,8 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
         <h3 className="font-semibold text-texto">Medidas corporais</h3>
         <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Nova medição</button>
       </div>
-      {modal && <Modal clinicId={clinicId} patientId={patientId} professionalId={professionalId} proximaSessao={itens.length + 1} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
+      {modal && <Modal clinicId={clinicId} patientId={patientId} professionalId={professionalId} medicao={null} proximaSessao={itens.length + 1} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />}
+      {editando && <Modal clinicId={clinicId} patientId={patientId} professionalId={professionalId} medicao={editando} proximaSessao={editando.sessao ?? 1} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />}
 
       {carregando ? <p className="text-sm text-texto/50">Carregando…</p> : itens.length === 0 ? (
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma medição registrada.</p>
@@ -41,7 +49,7 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
               <thead className="bg-black/[0.02] text-left text-texto/60">
                 <tr>
                   <th className="px-3 py-2 font-medium">Sessão</th><th className="px-3 py-2 font-medium">Data</th><th className="px-3 py-2 font-medium">Peso</th><th className="px-3 py-2 font-medium">IMC</th>
-                  <th className="px-3 py-2 font-medium">Gord.%</th><th className="px-3 py-2 font-medium">Músc.%</th><th className="px-3 py-2 font-medium">Visceral</th>
+                  <th className="px-3 py-2 font-medium">Gord.%</th><th className="px-3 py-2 font-medium">Músc.%</th><th className="px-3 py-2 font-medium">Visceral</th><th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -54,6 +62,10 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
                     <td className="px-3 py-2 text-texto/70">{m.gordura_corporal_pct ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/70">{m.musculo_pct ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/70">{m.gordura_visceral ?? '—'}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button onClick={() => setEditando(m)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
+                      <button onClick={() => excluir(m)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -65,18 +77,26 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
   )
 }
 
-function Modal({ clinicId, patientId, professionalId, proximaSessao, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; proximaSessao: number; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState<MeasurementInput>({ data: new Date().toISOString().slice(0, 10), sessao: proximaSessao })
+function Modal({ clinicId, patientId, professionalId, medicao, proximaSessao, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; medicao: BodyMeasurement | null; proximaSessao: number; onClose: () => void; onSaved: () => void }) {
+  const [f, setF] = useState<MeasurementInput>(
+    medicao
+      ? { data: medicao.data, sessao: medicao.sessao, peso_kg: medicao.peso_kg, imc: medicao.imc, gordura_corporal_pct: medicao.gordura_corporal_pct, musculo_pct: medicao.musculo_pct, rm: medicao.rm, kcal: medicao.kcal, idade_corporal: medicao.idade_corporal, gordura_visceral: medicao.gordura_visceral }
+      : { data: new Date().toISOString().slice(0, 10), sessao: proximaSessao },
+  )
   const [salvando, setSalvando] = useState(false)
   const num = (k: keyof MeasurementInput) => (e: React.ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.value === '' ? null : Number(e.target.value) }))
 
   async function salvar() {
     setSalvando(true)
-    try { await createMeasurement(clinicId, patientId, professionalId, f); onSaved() } catch { setSalvando(false) }
+    try {
+      if (medicao) await updateMeasurement(medicao.id, f)
+      else await createMeasurement(clinicId, patientId, professionalId, f)
+      onSaved()
+    } catch { setSalvando(false) }
   }
 
   return (
-    <Shell titulo="Nova medição" onClose={onClose}>
+    <Shell titulo={medicao ? 'Editar medição' : 'Nova medição'} onClose={onClose}>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div><label className="mb-1 block text-sm text-texto/70">Sessão</label><input type="number" className={field} value={f.sessao ?? ''} onChange={num('sessao')} /></div>
         <div><label className="mb-1 block text-sm text-texto/70">Data</label><input type="date" className={field} value={f.data} onChange={(e) => setF((s) => ({ ...s, data: e.target.value }))} /></div>

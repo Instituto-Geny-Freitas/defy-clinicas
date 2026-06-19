@@ -186,6 +186,11 @@ export async function requestAppointment(args: {
   if (error) throw error
 }
 
+export async function deleteAppointment(id: string): Promise<void> {
+  const { error } = await supabase.from('appointments').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {
   const patch: Record<string, unknown> = { status }
   if (status === 'confirmado') patch.confirmado_em = new Date().toISOString()

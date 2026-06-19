@@ -4,6 +4,8 @@ import {
   listFormulationLibrary,
   listPrescriptions,
   prescribeFormula,
+  updatePrescription,
+  type Ativo,
   type FormulationLib,
   type FormulationPrescription,
 } from '@/lib/formulations'
@@ -39,6 +41,7 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId,
   const [presc, setPresc] = useState<FormulationPrescription[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
+  const [editando, setEditando] = useState<FormulationPrescription | null>(null)
   const [receita, setReceita] = useState<FormulationPrescription[] | null>(null)
 
   function recarregar() {
@@ -77,6 +80,9 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId,
           }}
         />
       )}
+      {editando && (
+        <EditarPrescricaoModal presc={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
+      )}
       {receita && (
         <ReceitaModal
           clinicId={clinicId}
@@ -100,6 +106,7 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId,
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
                   <button onClick={() => setReceita([p])} className="text-xs text-primaria hover:underline">Receita</button>
+                  <button onClick={() => setEditando(p)} className="text-xs text-texto/60 hover:underline">Editar</button>
                   <button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Remover</button>
                 </div>
               </div>
@@ -112,6 +119,52 @@ export default function FormulationsPanel({ patientId, clinicId, professionalId,
         </div>
       )}
     </div>
+  )
+}
+
+const fieldCls = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+
+function EditarPrescricaoModal({ presc, onClose, onSaved }: { presc: FormulationPrescription; onClose: () => void; onSaved: () => void }) {
+  const [nome, setNome] = useState(presc.nome ?? presc.formulations?.nome ?? '')
+  const [posologia, setPosologia] = useState(presc.posologia ?? '')
+  const [composicao, setComposicao] = useState<Ativo[]>(presc.composicao?.length ? presc.composicao.map((a) => ({ ...a })) : [{ ativo: '', quantidade: '', unidade: '' }])
+  const [salvando, setSalvando] = useState(false)
+
+  function setItem(i: number, patch: Partial<Ativo>) { setComposicao((arr) => arr.map((a, idx) => (idx === i ? { ...a, ...patch } : a))) }
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    try {
+      await updatePrescription(presc.id, { nome: nome.trim(), posologia: posologia || null, composicao: composicao.filter((a) => a.ativo.trim()) })
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <Shell titulo="Editar fórmula" onClose={onClose}>
+      <div className="space-y-3">
+        <div><label className="mb-1 block text-sm text-texto/70">Nome *</label><input className={fieldCls} value={nome} onChange={(e) => setNome(e.target.value)} /></div>
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="text-sm text-texto/70">Composição</label>
+            <button onClick={() => setComposicao((a) => [...a, { ativo: '', quantidade: '', unidade: '' }])} className="text-xs font-medium text-primaria hover:underline">+ Adicionar ativo</button>
+          </div>
+          <div className="space-y-2">
+            {composicao.map((a, i) => (
+              <div key={i} className="flex gap-2">
+                <input className={`${fieldCls} flex-1`} placeholder="Ativo" value={a.ativo} onChange={(e) => setItem(i, { ativo: e.target.value })} />
+                <input className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Qtd" value={a.quantidade} onChange={(e) => setItem(i, { quantidade: e.target.value })} />
+                <input className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm" placeholder="Un." value={a.unidade} onChange={(e) => setItem(i, { unidade: e.target.value })} />
+                <button onClick={() => setComposicao((arr) => arr.filter((_, idx) => idx !== i))} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div><label className="mb-1 block text-sm text-texto/70">Posologia</label><textarea rows={2} className={fieldCls} value={posologia} onChange={(e) => setPosologia(e.target.value)} /></div>
+        <Footer onClose={onClose} onSave={salvar} disabled={salvando || !nome.trim()} label={salvando ? 'Salvando…' : 'Salvar'} />
+      </div>
+    </Shell>
   )
 }
 

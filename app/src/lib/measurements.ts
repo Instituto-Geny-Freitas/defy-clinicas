@@ -53,3 +53,13 @@ export async function createMeasurement(
   })
   if (error) throw error
 }
+
+export async function updateMeasurement(id: string, input: MeasurementInput): Promise<void> {
+  const { error } = await supabase.from('body_measurements').update(input).eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteMeasurement(id: string): Promise<void> {
+  const { error } = await supabase.from('body_measurements').delete().eq('id', id)
+  if (error) throw error
+}

@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import {
   createAppointment,
   createRecurringAppointments,
+  deleteAppointment,
   listAppointments,
   rescheduleAppointment,
   updateAppointmentStatus,
@@ -63,6 +64,14 @@ export default function Agenda() {
 
   async function mudarStatus(id: string, status: AppointmentStatus) {
     await updateAppointmentStatus(id, status)
+    recarregar()
+    carregarMarcados()
+  }
+
+  async function excluir(a: Appointment) {
+    const quem = a.patients?.nome ?? a.nome_avulso ?? 'paciente'
+    if (!confirm(`Excluir o agendamento de ${quem} em ${new Date(a.inicio).toLocaleString('pt-BR')}?`)) return
+    await deleteAppointment(a.id)
     recarregar()
     carregarMarcados()
   }
@@ -144,16 +153,19 @@ export default function Agenda() {
                       </div>
                     </div>
                     <ApptStatusBadge status={a.status} />
-                    {a.status !== 'cancelado' && a.status !== 'realizado' && (
-                      <div className="flex flex-wrap gap-1 text-xs">
-                        {a.status === 'agendado' && (
-                          <button onClick={() => mudarStatus(a.id, 'confirmado')} className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-700 hover:bg-emerald-100">Confirmar</button>
-                        )}
-                        <button onClick={() => setRemarcando(a)} className="rounded-md bg-sky-50 px-2 py-1 font-medium text-sky-700 hover:bg-sky-100">Remarcar</button>
-                        <button onClick={() => mudarStatus(a.id, 'realizado')} className="rounded-md bg-black/5 px-2 py-1 font-medium text-texto/70 hover:bg-black/10">Realizado</button>
-                        <button onClick={() => mudarStatus(a.id, 'cancelado')} className="rounded-md bg-rose-50 px-2 py-1 font-medium text-rose-700 hover:bg-rose-100">Cancelar</button>
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-1 text-xs">
+                      {a.status !== 'cancelado' && a.status !== 'realizado' && (
+                        <>
+                          {a.status === 'agendado' && (
+                            <button onClick={() => mudarStatus(a.id, 'confirmado')} className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-700 hover:bg-emerald-100">Confirmar</button>
+                          )}
+                          <button onClick={() => setRemarcando(a)} className="rounded-md bg-sky-50 px-2 py-1 font-medium text-sky-700 hover:bg-sky-100">Remarcar</button>
+                          <button onClick={() => mudarStatus(a.id, 'realizado')} className="rounded-md bg-black/5 px-2 py-1 font-medium text-texto/70 hover:bg-black/10">Realizado</button>
+                          <button onClick={() => mudarStatus(a.id, 'cancelado')} className="rounded-md bg-rose-50 px-2 py-1 font-medium text-rose-700 hover:bg-rose-100">Cancelar</button>
+                        </>
+                      )}
+                      <button onClick={() => excluir(a)} className="rounded-md px-2 py-1 font-medium text-secundaria hover:bg-secundaria/10">Excluir</button>
+                    </div>
                   </div>
                 ))}
               </div>
