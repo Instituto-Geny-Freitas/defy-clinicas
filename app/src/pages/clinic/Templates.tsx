@@ -11,7 +11,7 @@ import {
   type TemplateField,
   type TemplateInput,
 } from '@/lib/templates'
-import type { FieldType } from '@/forms/types'
+import type { AutoFonte, FieldType, PreenchidoPor } from '@/forms/types'
 
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
@@ -21,6 +21,21 @@ const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
   { v: 'date', l: 'Data' },
   { v: 'boolean', l: 'Sim/Não' },
 ]
+const PREENCHIDO_POR = [
+  { v: 'profissional', l: 'Profissional' },
+  { v: 'paciente', l: 'Paciente (portal)' },
+  { v: 'sistema', l: 'Sistema (automático)' },
+] as const
+const AUTO_FONTES = [
+  { v: 'data_emissao', l: 'Data da emissão' },
+  { v: 'data_ciencia', l: 'Data da ciência (paciente)' },
+  { v: 'paciente_nome', l: 'Nome do paciente' },
+  { v: 'paciente_cpf', l: 'CPF do paciente' },
+  { v: 'profissional_nome', l: 'Nome do profissional' },
+  { v: 'profissional_conselho', l: 'Conselho (tipo)' },
+  { v: 'profissional_conselho_numero', l: 'Número do conselho' },
+  { v: 'profissional_conselho_uf', l: 'UF do conselho' },
+] as const
 
 export default function Templates() {
   const { profile } = useAuth()
@@ -231,28 +246,56 @@ function Editor({
             </div>
             {campos.length === 0 && <p className="text-xs text-texto/40">Sem campos (documento de texto fixo).</p>}
             <div className="space-y-2">
-              {campos.map((c, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/5 p-2">
-                  <input className="flex-1 rounded-lg border border-black/10 px-2 py-1.5 text-sm" placeholder="Rótulo" value={c.label} onChange={(e) => setCampo(i, { label: e.target.value })} />
-                  <input className="w-32 rounded-lg border border-black/10 px-2 py-1.5 text-xs text-texto/60" placeholder="chave" value={c.key} onChange={(e) => setCampo(i, { key: e.target.value })} />
-                  <select className="rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.type} onChange={(e) => setCampo(i, { type: e.target.value as FieldType })}>
-                    {TIPOS_CAMPO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
-                  </select>
-                  <label className="flex items-center gap-1 text-xs text-texto/60">
-                    <input type="checkbox" checked={!!c.required} onChange={(e) => setCampo(i, { required: e.target.checked })} /> obrig.
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => inserirNoCorpo(c.key || slugify(c.label))}
-                    disabled={!c.label.trim()}
-                    className="rounded-md border border-primaria px-2 py-1 text-xs font-medium text-primaria hover:bg-primaria/5 disabled:opacity-40"
-                    title="Inserir {{chave}} no corpo, na posição do cursor"
-                  >
-                    inserir no corpo
-                  </button>
-                  <button onClick={() => setCampos((a) => a.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
-                </div>
-              ))}
+              {campos.map((c, i) => {
+                const pp = c.preenchidoPor ?? 'profissional'
+                const podeOrcamento = pp === 'profissional' && (c.type === 'number' || c.type === 'text')
+                return (
+                  <div key={i} className="space-y-2 rounded-lg border border-black/5 p-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input className="flex-1 rounded-lg border border-black/10 px-2 py-1.5 text-sm" placeholder="Rótulo" value={c.label} onChange={(e) => setCampo(i, { label: e.target.value })} />
+                      <input className="w-32 rounded-lg border border-black/10 px-2 py-1.5 text-xs text-texto/60" placeholder="chave" value={c.key} onChange={(e) => setCampo(i, { key: e.target.value })} />
+                      <select className="rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.type} onChange={(e) => setCampo(i, { type: e.target.value as FieldType })}>
+                        {TIPOS_CAMPO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                      </select>
+                      <button type="button" onClick={() => inserirNoCorpo(c.key || slugify(c.label))} disabled={!c.label.trim()}
+                        className="rounded-md border border-primaria px-2 py-1 text-xs font-medium text-primaria hover:bg-primaria/5 disabled:opacity-40"
+                        title="Inserir {{chave}} no corpo, na posição do cursor">
+                        inserir no corpo
+                      </button>
+                      <button onClick={() => setCampos((a) => a.filter((_, idx) => idx !== i))} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 pl-0.5 text-xs text-texto/60">
+                      <label className="flex items-center gap-1">
+                        Preenchido por
+                        <select className="rounded-md border border-black/10 px-1.5 py-1" value={pp}
+                          onChange={(e) => {
+                            const v = e.target.value as PreenchidoPor
+                            setCampo(i, { preenchidoPor: v, auto: v === 'sistema' ? (c.auto ?? 'data_emissao') : undefined, fonteOrcamento: v === 'profissional' ? c.fonteOrcamento : false })
+                          }}>
+                          {PREENCHIDO_POR.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+                        </select>
+                      </label>
+                      {pp === 'sistema' ? (
+                        <label className="flex items-center gap-1">
+                          Fonte automática
+                          <select className="rounded-md border border-black/10 px-1.5 py-1" value={c.auto ?? 'data_emissao'} onChange={(e) => setCampo(i, { auto: e.target.value as AutoFonte })}>
+                            {AUTO_FONTES.map((a) => <option key={a.v} value={a.v}>{a.l}</option>)}
+                          </select>
+                        </label>
+                      ) : (
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" checked={!!c.required} onChange={(e) => setCampo(i, { required: e.target.checked })} /> obrigatório
+                        </label>
+                      )}
+                      {podeOrcamento && (
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" checked={!!c.fonteOrcamento} onChange={(e) => setCampo(i, { fonteOrcamento: e.target.checked })} /> sugerir valor do orçamento
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 

@@ -31,6 +31,20 @@ export interface ShowIf {
   truthy?: boolean
 }
 
+/** Quem preenche o campo dinâmico de um documento. */
+export type PreenchidoPor = 'profissional' | 'paciente' | 'sistema'
+
+/** Fonte automática (quando preenchidoPor === 'sistema'). */
+export type AutoFonte =
+  | 'data_emissao'                  // data do dia, no momento da emissão
+  | 'data_ciencia'                  // data do dia, no momento da ciência do paciente
+  | 'paciente_nome'
+  | 'paciente_cpf'
+  | 'profissional_nome'
+  | 'profissional_conselho'         // tipo (ex.: COREN)
+  | 'profissional_conselho_numero'
+  | 'profissional_conselho_uf'
+
 export interface FormField {
   key: string
   label: string
@@ -41,6 +55,13 @@ export interface FormField {
   showIf?: ShowIf
   full?: boolean // ocupa a linha inteira no grid
   grid?: GridConfig // obrigatório quando type === 'grid'
+  required?: boolean
+  /** Documentos: quem preenche (default 'profissional'). */
+  preenchidoPor?: PreenchidoPor
+  /** Documentos: fonte automática quando preenchidoPor === 'sistema'. */
+  auto?: AutoFonte
+  /** Documentos: campo de valor sugerido a partir dos orçamentos do paciente. */
+  fonteOrcamento?: boolean
 }
 
 export interface FormSection {

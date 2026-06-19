@@ -1,11 +1,14 @@
 import { supabase } from '@/lib/supabase'
-import type { FieldType } from '@/forms/types'
+import type { AutoFonte, FieldType, PreenchidoPor } from '@/forms/types'
 
 export interface TemplateField {
   key: string
   label: string
   type: FieldType
   required?: boolean
+  preenchidoPor?: PreenchidoPor
+  auto?: AutoFonte
+  fonteOrcamento?: boolean
 }
 
 export interface ReminderItem {

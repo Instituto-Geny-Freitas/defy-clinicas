@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import {
+  camposDe,
   getTemplate,
   issueDocument,
   listActiveTemplates,
   listPatientDocuments,
   renderCorpo,
-  templateToFormSchema,
+  resolveAuto,
   updateDocumentInstance,
+  type DocContext,
   type DocInstance,
   type DocTemplate,
 } from '@/lib/documents'
-import type { FormValues } from '@/forms/types'
+import { listQuotes, brl } from '@/lib/finance'
+import type { FormField, FormValues } from '@/forms/types'
 import type { Patient } from '@/lib/types'
 import DynamicForm from '@/forms/DynamicForm'
 import DocStatusBadge from '@/components/DocStatusBadge'
@@ -33,7 +36,7 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
   const [editando, setEditando] = useState<DocInstance | null>(null)
 
   const prof = profile?.professional
-    ? { nome: profile.professional.nome, conselho_tipo: profile.professional.conselho_tipo, conselho_numero: profile.professional.conselho_numero }
+    ? { nome: profile.professional.nome, conselho_tipo: profile.professional.conselho_tipo, conselho_numero: profile.professional.conselho_numero, conselho_uf: profile.professional.conselho_uf }
     : null
 
   function recarregar() {
@@ -64,8 +67,9 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
       {emitindo && (
         <IssueModal
           clinicId={clinicId}
-          patientId={patient.id}
+          patient={patient}
           professionalId={professionalId}
+          contexto={{ paciente: { nome: patient.nome, cpf: patient.cpf }, profissional: prof }}
           onClose={() => setEmitindo(false)}
           onIssued={() => { setEmitindo(false); recarregar() }}
         />
@@ -116,22 +120,40 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
   )
 }
 
-function IssueModal({ clinicId, patientId, professionalId, onClose, onIssued }: {
-  clinicId: string; patientId: string; professionalId?: string | null; onClose: () => void; onIssued: () => void
+function IssueModal({ clinicId, patient, professionalId, contexto, onClose, onIssued }: {
+  clinicId: string; patient: Patient; professionalId?: string | null; contexto: DocContext; onClose: () => void; onIssued: () => void
 }) {
   const [templates, setTemplates] = useState<DocTemplate[]>([])
   const [selecionado, setSelecionado] = useState<DocTemplate | null>(null)
   const [valores, setValores] = useState<FormValues>({})
+  const [orcTotais, setOrcTotais] = useState<{ id: string; label: string; valor: number }[]>([])
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => { listActiveTemplates().then(setTemplates).catch(() => {}) }, [])
+  useEffect(() => {
+    listQuotes(patient.id).then((qs) => setOrcTotais(qs.map((q) => ({ id: q.id, label: `${new Date(q.created_at).toLocaleDateString('pt-BR')} · ${brl(q.valor_total)}`, valor: Number(q.valor_total) })))).catch(() => {})
+  }, [patient.id])
+
+  // Campos que o PROFISSIONAL preenche (exclui automáticos e do paciente).
+  const camposProf = selecionado ? camposDe(selecionado.schema, 'profissional') : []
+  const camposForm = camposProf.filter((f) => !f.fonteOrcamento)
+  const camposOrc = camposProf.filter((f) => f.fonteOrcamento)
+  const camposPaciente = selecionado ? camposDe(selecionado.schema, 'paciente') : []
+
+  // Preview com os automáticos resolvidos.
+  const dadosPreview: FormValues = { ...valores }
+  for (const f of selecionado?.schema ?? []) {
+    if (f.preenchidoPor === 'sistema' && f.auto && dadosPreview[f.key] === undefined) dadosPreview[f.key] = resolveAuto(f.auto, contexto)
+  }
 
   async function emitir() {
     if (!selecionado) return
+    const faltando = camposProf.filter((f) => f.required && (valores[f.key] === undefined || valores[f.key] === '' || valores[f.key] === null))
+    if (faltando.length > 0) { setErro(`Preencha: ${faltando.map((f) => f.label).join(', ')}.`); return }
     setSalvando(true); setErro(null)
     try {
-      await issueDocument({ template: selecionado, clinicId, patientId, professionalId, dados: valores })
+      await issueDocument({ template: selecionado, clinicId, patientId: patient.id, professionalId, dados: valores, contexto })
       onIssued()
     } catch { setErro('Não foi possível emitir o documento.'); setSalvando(false) }
   }
@@ -150,15 +172,51 @@ function IssueModal({ clinicId, patientId, professionalId, onClose, onIssued }: 
 
       {selecionado && (
         <>
-          {selecionado.schema?.length > 0 && (
-            <DynamicForm schema={templateToFormSchema(selecionado.schema)} values={valores} onChange={(k, v) => setValores((s) => ({ ...s, [k]: v }))} />
+          {camposForm.length > 0 && (
+            <DynamicForm schema={{ sections: [{ title: 'Preenchimento do profissional', fields: camposForm }] }} values={valores} onChange={(k, v) => setValores((s) => ({ ...s, [k]: v }))} />
           )}
-          <Preview corpo={renderCorpo(selecionado.corpo, valores)} />
+
+          {camposOrc.map((f) => (
+            <OrcamentoField key={f.key} field={f} orcamentos={orcTotais} value={valores[f.key]} onChange={(v) => setValores((s) => ({ ...s, [f.key]: v }))} />
+          ))}
+
+          {camposPaciente.length > 0 && (
+            <p className="mt-4 rounded-lg bg-sky-50 p-3 text-xs text-sky-800">
+              <strong>Preenchido pelo paciente no portal:</strong> {camposPaciente.map((f) => f.label).join(', ')}.
+              {' '}Estes campos só serão exigidos quando o paciente ler e der ciência.
+            </p>
+          )}
+
+          <Preview corpo={renderCorpo(selecionado.corpo, dadosPreview)} />
         </>
       )}
       {erro && <p className="mt-3 text-sm text-secundaria">{erro}</p>}
       <ModalFooter onClose={onClose} onSave={emitir} disabled={!selecionado || salvando} label={salvando ? 'Emitindo…' : 'Emitir para o paciente'} />
     </ModalShell>
+  )
+}
+
+/** Campo de valor sugerido a partir dos orçamentos do paciente, ou preenchimento livre. */
+function OrcamentoField({ field, orcamentos, value, onChange }: {
+  field: FormField; orcamentos: { id: string; label: string; valor: number }[]; value: unknown; onChange: (v: unknown) => void
+}) {
+  const [modo, setModo] = useState<'orcamento' | 'livre'>('orcamento')
+  return (
+    <div className="mt-3 rounded-xl border border-black/5 bg-white p-4">
+      <label className="mb-1 block text-sm font-medium text-texto/80">{field.label}</label>
+      <div className="mb-2 flex gap-2 text-xs">
+        <button type="button" onClick={() => setModo('orcamento')} className={`rounded-md px-2 py-1 ${modo === 'orcamento' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>Do orçamento</button>
+        <button type="button" onClick={() => setModo('livre')} className={`rounded-md px-2 py-1 ${modo === 'livre' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>Preenchimento livre</button>
+      </div>
+      {modo === 'orcamento' ? (
+        <select className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" value={typeof value === 'number' ? String(value) : ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}>
+          <option value="">Selecione um orçamento…</option>
+          {orcamentos.map((o) => <option key={o.id} value={o.valor}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm" inputMode="decimal" placeholder="0,00" value={(value as string | number) ?? ''} onChange={(e) => onChange(e.target.value)} />
+      )}
+    </div>
   )
 }
 
@@ -185,10 +243,10 @@ function EditModal({ inst, onClose, onSaved }: { inst: DocInstance; onClose: () 
         <p className="text-sm text-texto/50">Carregando modelo…</p>
       ) : (
         <>
-          {template.schema?.length > 0 ? (
-            <DynamicForm schema={templateToFormSchema(template.schema)} values={valores} onChange={(k, v) => setValores((s) => ({ ...s, [k]: v }))} />
+          {camposDe(template.schema, 'profissional').filter((f) => !f.fonteOrcamento).length > 0 ? (
+            <DynamicForm schema={{ sections: [{ title: 'Preenchimento do profissional', fields: camposDe(template.schema, 'profissional').filter((f) => !f.fonteOrcamento) }] }} values={valores} onChange={(k, v) => setValores((s) => ({ ...s, [k]: v }))} />
           ) : (
-            <p className="text-sm text-texto/50">Este modelo não possui campos editáveis.</p>
+            <p className="text-sm text-texto/50">Sem campos do profissional para editar (os demais são automáticos ou do paciente).</p>
           )}
           <Preview corpo={renderCorpo(template.corpo, valores)} />
         </>

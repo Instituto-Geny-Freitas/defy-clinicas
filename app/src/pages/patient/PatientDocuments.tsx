@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import {
-  acceptDocument,
+  camposDe,
+  confirmPatientDocument,
+  getTemplate,
   listPatientDocuments,
+  renderCorpo,
+  resolveAuto,
   type DocInstance,
+  type DocTemplate,
 } from '@/lib/documents'
+import type { FormValues } from '@/forms/types'
+import DynamicForm from '@/forms/DynamicForm'
 import DocStatusBadge from '@/components/DocStatusBadge'
 import { printDocument } from '@/lib/printDoc'
 import { useClinic } from '@/theme/ThemeProvider'
@@ -105,18 +112,38 @@ function DocumentViewer({
   const { profile } = useAuth()
   const requerAssinatura = inst.document_templates?.requer_assinatura ?? false
   const jaConcluido = inst.status === 'assinado' || inst.status === 'lido'
+  const [template, setTemplate] = useState<DocTemplate | null>(null)
+  const [valores, setValores] = useState<FormValues>({})
   const [aceito, setAceito] = useState(false)
-  const [usoImagem, setUsoImagem] = useState<boolean | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => { if (!jaConcluido) getTemplate(inst.template_id).then(setTemplate).catch(() => {}) }, [inst.template_id, jaConcluido])
+
+  const camposPaciente = template ? camposDe(template.schema, 'paciente') : []
+
+  // Pré-visualização ao vivo: dados emitidos + o que o paciente preenche + data da ciência.
+  const corpoPreview = (() => {
+    if (!template) return inst.corpo_final ?? ''
+    const dados: FormValues = { ...(inst.dados ?? {}), ...valores }
+    for (const f of template.schema ?? []) {
+      if (f.preenchidoPor === 'sistema' && f.auto === 'data_ciencia' && dados[f.key] === undefined) dados[f.key] = resolveAuto(f.auto, {})
+    }
+    return renderCorpo(template.corpo, dados)
+  })()
 
   async function confirmar() {
-    setSalvando(true)
+    const faltando = camposPaciente.filter((f) => f.required && (valores[f.key] === undefined || valores[f.key] === '' || valores[f.key] === null))
+    if (faltando.length > 0) { setErro(`Preencha: ${faltando.map((f) => f.label).join(', ')}.`); return }
+    if (!template) return
+    setSalvando(true); setErro(null)
     try {
-      await acceptDocument(inst, requerAssinatura, { usoImagem })
+      await confirmPatientDocument({
+        inst, template, valoresPaciente: valores, requerAssinatura,
+        paciente: { nome: profile?.patient?.nome, cpf: profile?.patient?.cpf, nascimento: profile?.patient?.nascimento },
+      })
       onAccepted()
-    } catch {
-      setSalvando(false)
-    }
+    } catch { setErro('Não foi possível registrar.'); setSalvando(false) }
   }
 
   return (
@@ -128,14 +155,14 @@ function DocumentViewer({
         </div>
 
         <p className="whitespace-pre-wrap rounded-xl bg-black/[0.02] p-4 text-sm text-texto/80">
-          {inst.corpo_final}
+          {jaConcluido ? inst.corpo_final : corpoPreview}
         </p>
 
         {jaConcluido && (
           <button
             onClick={() =>
               printDocument(
-                { nome: inst.document_templates?.nome ?? 'Documento', corpo_final: inst.corpo_final, status: inst.status, assinado_em: inst.assinado_em, lido_em: inst.lido_em, content_hash: inst.content_hash, uso_imagem_autorizado: inst.uso_imagem_autorizado },
+                { nome: inst.document_templates?.nome ?? 'Documento', corpo_final: inst.corpo_final, status: inst.status, assinado_em: inst.assinado_em, lido_em: inst.lido_em, content_hash: inst.assinatura_hash ?? inst.content_hash, uso_imagem_autorizado: inst.uso_imagem_autorizado },
                 clinic,
                 { patient: profile?.patient ? { nome: profile.patient.nome, cpf: profile.patient.cpf, nascimento: profile.patient.nascimento } : null },
               )
@@ -151,39 +178,37 @@ function DocumentViewer({
             {requerAssinatura ? 'Documento assinado' : 'Leitura confirmada'}
             {inst.assinado_em && ` em ${new Date(inst.assinado_em).toLocaleString('pt-BR')}`}
             {!inst.assinado_em && inst.lido_em && ` em ${new Date(inst.lido_em).toLocaleString('pt-BR')}`}.
+            {inst.assinatura_hash && <div className="mt-1 break-all text-[10px] text-emerald-700/70">Autenticação: {inst.assinatura_hash.slice(0, 24)}…</div>}
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {requerAssinatura && (
-              <div className="text-sm">
-                <span className="text-texto/70">Autoriza uso de imagem (redes sociais, sem identidade)?</span>
-                <div className="mt-1 flex gap-4">
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" checked={usoImagem === true} onChange={() => setUsoImagem(true)} /> Sim
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input type="radio" checked={usoImagem === false} onChange={() => setUsoImagem(false)} /> Não
-                  </label>
-                </div>
-              </div>
+            {camposPaciente.length > 0 && (
+              <DynamicForm
+                schema={{ sections: [{ title: 'Confirme as informações', fields: camposPaciente }] }}
+                values={valores}
+                onChange={(k, v) => setValores((s) => ({ ...s, [k]: v }))}
+              />
             )}
 
             <label className="flex items-start gap-2 text-sm text-texto/80">
               <input type="checkbox" className="mt-0.5" checked={aceito} onChange={(e) => setAceito(e.target.checked)} />
               <span>
                 {requerAssinatura
-                  ? 'Li e concordo com o termo acima, e assino eletronicamente.'
+                  ? 'Li e concordo com o documento acima, e assino eletronicamente.'
                   : 'Li e estou ciente das orientações acima.'}
               </span>
             </label>
 
+            {erro && <p className="text-sm text-secundaria">{erro}</p>}
+
             <button
               onClick={confirmar}
-              disabled={!aceito || salvando}
+              disabled={!aceito || salvando || !template}
               className="w-full rounded-lg bg-primaria px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
             >
               {salvando ? 'Registrando…' : requerAssinatura ? 'Assinar' : 'Confirmar leitura'}
             </button>
+            <p className="text-center text-[11px] text-texto/40">Ao confirmar, registramos data, hora e um código de autenticidade do seu aceite.</p>
           </div>
         )}
       </div>
