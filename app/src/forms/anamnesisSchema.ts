@@ -139,7 +139,7 @@ export const anamnesisSchema: FormSchema = {
         { key: 'exames_alterados', label: 'Possui alterações em exames recentes?', type: 'boolean' },
         { key: 'exames_alterados_quais', label: 'Quais?', type: 'text', showIf: { field: 'exames_alterados', truthy: true } },
         { key: 'peso_kg', label: 'Peso atual', type: 'number', suffix: 'kg' },
-        { key: 'altura_m', label: 'Altura', type: 'number', suffix: 'm' },
+        { key: 'altura_m', label: 'Altura (m)', type: 'number', placeholder: 'ex.: 1,70' },
         { key: 'peso_meta_kg', label: 'Peso desejado / meta', type: 'number', suffix: 'kg' },
       ],
     },
