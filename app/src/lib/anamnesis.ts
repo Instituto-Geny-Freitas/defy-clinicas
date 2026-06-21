@@ -30,11 +30,25 @@ export async function getLatestAnamnesis(patientId: string): Promise<AnamnesisRe
   return data
 }
 
-function calcImc(values: FormValues): number | null {
-  const peso = Number(values.peso_kg)
-  const altura = Number(values.altura_m)
-  if (!peso || !altura) return null
-  return Math.round((peso / (altura * altura)) * 100) / 100
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/** Altura digitada em cm (ex.: 170) é convertida para metros (1,70). */
+function alturaEmMetros(v: unknown): number | null {
+  let a = toNum(v)
+  if (a == null) return null
+  if (a > 3) a = a / 100 // veio em centímetros
+  return Math.round(a * 100) / 100
+}
+
+/** Garante que o número cabe na coluna (numeric(p,2)); senão devolve null. */
+function fit(n: number | null, max: number): number | null {
+  if (n == null) return null
+  if (Math.abs(n) > max) return null
+  return Math.round(n * 100) / 100
 }
 
 interface SaveArgs {
@@ -62,16 +76,24 @@ async function syncPatientFields(patientId: string, values: FormValues): Promise
 
 /** Cria ou atualiza a anamnese (upsert manual: update se id, senão insert). */
 export async function saveAnamnesis(args: SaveArgs): Promise<AnamnesisRecord> {
+  // Normaliza/valida os numéricos para caber nas colunas (evita "numeric field overflow").
+  const altura = alturaEmMetros(args.values.altura_m)            // numeric(4,2) → máx 99,99
+  const peso = fit(toNum(args.values.peso_kg), 9999.99)          // numeric(6,2)
+  const meta = fit(toNum(args.values.peso_meta_kg), 9999.99)
+  const imc = peso != null && altura != null && altura > 0 ? fit(Math.round((peso / (altura * altura)) * 100) / 100, 9999.99) : null
+  // Reflete a altura normalizada (em metros) no JSON exibido.
+  const dados = { ...args.values, altura_m: altura ?? args.values.altura_m }
+
   const payload = {
     patient_id: args.patientId,
     clinic_id: args.clinicId,
     professional_id: args.professionalId ?? null,
     preenchido_por: args.preenchidoPor,
-    dados: args.values,
-    peso_kg: (args.values.peso_kg as number) ?? null,
-    altura_m: (args.values.altura_m as number) ?? null,
-    imc: calcImc(args.values),
-    peso_meta_kg: (args.values.peso_meta_kg as number) ?? null,
+    dados,
+    peso_kg: peso,
+    altura_m: fit(altura, 99.99),
+    imc,
+    peso_meta_kg: meta,
     ...(args.consentir ? { consentimento_em: new Date().toISOString() } : {}),
   }
 

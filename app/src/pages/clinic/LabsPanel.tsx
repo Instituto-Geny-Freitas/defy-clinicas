@@ -62,7 +62,7 @@ export default function LabsPanel({ patientId, clinicId, professionalId, pacient
     try {
       await uploadLabResult({ patientId, clinicId, file })
       recarregar()
-    } catch { /* noop */ } finally {
+    } catch (err) { alert('Não foi possível anexar o resultado: ' + ((err as Error)?.message ?? 'erro')) } finally {
       setEnviando(false)
       if (fileRef.current) fileRef.current.value = ''
     }

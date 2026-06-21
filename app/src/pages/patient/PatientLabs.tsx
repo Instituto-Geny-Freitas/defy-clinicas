@@ -36,7 +36,7 @@ export default function PatientLabs() {
     try {
       await uploadLabResult({ patientId, clinicId, file })
       recarregar()
-    } catch { /* noop */ } finally {
+    } catch (err) { alert('Não foi possível enviar o resultado: ' + ((err as Error)?.message ?? 'erro')) } finally {
       setEnviando(false)
       if (fileRef.current) fileRef.current.value = ''
     }

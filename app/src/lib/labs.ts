@@ -83,15 +83,18 @@ export async function uploadLabResult(args: {
 }): Promise<void> {
   const ext = args.file.name.split('.').pop()?.toLowerCase() || 'pdf'
   const path = `${args.patientId}/exames/${crypto.randomUUID()}.${ext}`
-  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, args.file, { contentType: args.file.type })
+  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, args.file, { contentType: args.file.type || 'application/octet-stream' })
   if (upErr) throw upErr
+  // Obs.: lab_results não possui coluna clinic_id.
   const { error } = await supabase.from('lab_results').insert({
-    clinic_id: args.clinicId,
     patient_id: args.patientId,
     order_id: args.orderId ?? null,
     arquivo_url: path,
   })
-  if (error) throw error
+  if (error) {
+    await supabase.storage.from(BUCKET).remove([path]) // evita arquivo órfão
+    throw error
+  }
 }
 
 /** Remove um resultado de exame (arquivo + registro). */
