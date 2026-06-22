@@ -106,14 +106,17 @@ export default function Finance() {
           <h1 className="text-2xl font-semibold text-texto">Financeiro</h1>
           <p className="mt-1 text-sm text-texto/60">Fluxo de caixa — receitas, despesas e balanço</p>
         </div>
-        <div className="flex gap-2">
-          <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
-            {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
-          </select>
-          <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
-            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
+        {/* O Relatório tem seu próprio seletor de período; o global não se aplica lá. */}
+        {tab !== 'relatorio' && (
+          <div className="flex gap-2">
+            <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
+              {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+            </select>
+            <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+              {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 mb-6 flex gap-1 overflow-x-auto border-b border-black/5">
@@ -984,8 +987,9 @@ function RelatorioView({ anoAtual, mesAtual }: { anoAtual: number; mesAtual: num
         </button>
       </div>
 
-      {/* Evolução mês a mês (ano selecionado) */}
+      {/* Evolução mês a mês (depende apenas do ANO selecionado) */}
       <Bloco titulo={`Evolução mês a mês — ${ano}`}>
+        <p className="-mt-1 mb-2 text-xs text-texto/50">Mostra os 12 meses do ano {ano}. Depende apenas do <strong>ano</strong> — trocar só o mês não altera este gráfico.</p>
         <EvolucaoChart serie={serie} />
       </Bloco>
 
