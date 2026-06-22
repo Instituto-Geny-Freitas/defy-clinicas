@@ -32,7 +32,10 @@ export default function Agenda() {
   const clinicId = profile?.professional?.clinic_id
   const [appts, setAppts] = useState<Appointment[]>([])
   const [profissionais, setProfissionais] = useState<Professional[]>([])
+  const [pacientes, setPacientes] = useState<Patient[]>([])
   const [filtroProf, setFiltroProf] = useState('')
+  const [filtroPac, setFiltroPac] = useState('')        // id do paciente selecionado
+  const [buscaPac, setBuscaPac] = useState('')          // texto digitado na busca
   const [dataFiltro, setDataFiltro] = useState<string | null>(null) // YYYY-MM-DD
   const [mostrarCal, setMostrarCal] = useState(false)
   const [diasComAgenda, setDiasComAgenda] = useState<Set<string>>(new Set())
@@ -41,17 +44,28 @@ export default function Agenda() {
   const [remarcando, setRemarcando] = useState<Appointment | null>(null)
 
   function recarregar() {
-    let desde: string, ate: string | undefined
+    let desde: string | undefined, ate: string | undefined
     if (dataFiltro) {
       desde = new Date(`${dataFiltro}T00:00:00`).toISOString()
       ate = new Date(`${dataFiltro}T23:59:59`).toISOString()
-    } else {
+    } else if (!filtroPac) {
+      // Sem paciente selecionado, mostra de ontem em diante; com paciente, mostra todo o histórico.
       desde = new Date(Date.now() - 86400000).toISOString()
     }
-    listAppointments(desde, filtroProf || undefined, ate).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
+    listAppointments(desde, filtroProf || undefined, ate, filtroPac || undefined).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
   }
-  useEffect(recarregar, [filtroProf, dataFiltro])
+  useEffect(recarregar, [filtroProf, filtroPac, dataFiltro])
   useEffect(() => { listProfessionals().then((p) => setProfissionais(p.filter((x) => x.ativo))).catch(() => {}) }, [])
+  useEffect(() => { listPatients().then(setPacientes).catch(() => {}) }, [])
+
+  // Resolve o texto digitado para o id do paciente (casamento exato pelo nome).
+  function aplicarBuscaPac(texto: string) {
+    setBuscaPac(texto)
+    const achado = pacientes.find((p) => p.nome.toLowerCase() === texto.trim().toLowerCase())
+    setFiltroPac(achado ? achado.id : '')
+  }
+  function limparPac() { setBuscaPac(''); setFiltroPac('') }
+  const pacienteSel = pacientes.find((p) => p.id === filtroPac) ?? null
 
   // Marca no calendário os dias que têm agendamento (janela ampla, independe do filtro).
   function carregarMarcados() {
@@ -95,6 +109,32 @@ export default function Agenda() {
         </div>
       </div>
 
+      {/* Busca por paciente (mostra todas as agendas dele) */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <input
+            list="agenda-pacientes"
+            value={buscaPac}
+            onChange={(e) => aplicarBuscaPac(e.target.value)}
+            placeholder="🔍 Buscar paciente…"
+            className="w-64 rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria"
+          />
+          <datalist id="agenda-pacientes">
+            {pacientes.map((p) => <option key={p.id} value={p.nome} />)}
+          </datalist>
+        </div>
+        {filtroPac && (
+          <button onClick={limparPac} className="rounded-lg bg-black/5 px-3 py-2 text-sm text-texto/70 hover:bg-black/10">
+            Limpar paciente
+          </button>
+        )}
+        {filtroPac && pacienteSel && (
+          <span className="rounded-full bg-primaria/10 px-3 py-1 text-xs font-medium text-primaria">
+            Agendas de {pacienteSel.nome}
+          </span>
+        )}
+      </div>
+
       {/* Busca por data + calendário visual */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <input
@@ -130,7 +170,9 @@ export default function Agenda() {
         <p className="mt-4 text-sm text-texto/50">Carregando…</p>
       ) : appts.length === 0 ? (
         <p className="mt-4 rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">
-          {dataFiltro ? `Nenhum agendamento em ${new Date(dataFiltro + 'T12:00:00').toLocaleDateString('pt-BR')}.` : 'Nenhum agendamento.'}
+          {pacienteSel
+            ? `Nenhum agendamento para ${pacienteSel.nome}${dataFiltro ? ` em ${new Date(dataFiltro + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}.`
+            : dataFiltro ? `Nenhum agendamento em ${new Date(dataFiltro + 'T12:00:00').toLocaleDateString('pt-BR')}.` : 'Nenhum agendamento.'}
         </p>
       ) : (
         <div className="mt-6 space-y-6">
