@@ -158,6 +158,36 @@ export async function deleteExpense(id: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Atualiza campos comuns das parcelas de uma compra parcelada (mesmo grupo).
+ * Não altera data nem o status de pago de cada parcela (esses ficam por parcela).
+ * `desdeData` aplica só a partir daquela data (esta e as futuras).
+ */
+export async function updateExpensesByGroup(
+  grupo: string,
+  patch: {
+    expenseTypeId?: string | null
+    descricao?: string | null
+    valor?: number
+    classificacao?: Classificacao
+    formaPagamento?: FormaPagamento | null
+    quantidade?: number
+  },
+  opts?: { desdeData?: string },
+): Promise<void> {
+  const row: Record<string, unknown> = {}
+  if (patch.expenseTypeId !== undefined) row.expense_type_id = patch.expenseTypeId
+  if (patch.descricao !== undefined) row.descricao = patch.descricao
+  if (patch.valor !== undefined) row.valor = patch.valor
+  if (patch.classificacao !== undefined) row.classificacao = patch.classificacao
+  if (patch.formaPagamento !== undefined) row.forma_pagamento = patch.formaPagamento
+  if (patch.quantidade !== undefined) row.quantidade = Math.max(1, patch.quantidade)
+  let q = supabase.from('expenses').update(row).eq('recorrencia_grupo', grupo)
+  if (opts?.desdeData) q = q.gte('data', opts.desdeData)
+  const { error } = await q
+  if (error) throw error
+}
+
 // ---- Movimentos financeiros (caixa/aplicação/aporte) ------------------------
 export type MovTipo = 'caixa' | 'aplicacao' | 'aporte'
 export interface FinancialMovement {

@@ -16,6 +16,7 @@ import {
   listPaymentsPeriodo,
   setExpensePaid,
   updateExpense,
+  updateExpensesByGroup,
   type Classificacao,
   type Expense,
   type ExpenseType,
@@ -531,6 +532,9 @@ function DespesaModal(props: {
   const [recorrente, setRecorrente] = useState(false)
   const [periodo, setPeriodo] = useState<Periodo>('mensal')
   const [repeticoes, setRepeticoes] = useState('12')
+  // Edição de parcela: escopo do ajuste (só esta / esta + futuras / todas)
+  const ehParcelada = !!(despesa?.recorrencia_grupo && despesa?.parcela_total)
+  const [escopo, setEscopo] = useState<'esta' | 'futuras' | 'todas'>('esta')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -553,10 +557,19 @@ function DespesaModal(props: {
     setSalvando(true)
     try {
       if (despesa) {
+        // Esta parcela: inclui data e status (que são por parcela).
         await updateExpense(despesa.id, {
           expenseTypeId: tipoId || null, descricao: descricao || null, valor: v, data, pago,
           classificacao, formaPagamento, quantidade: Number(quantidade) || 1,
         })
+        // Compra parcelada: propaga os campos comuns para a série (sem mexer em data/pago).
+        if (ehParcelada && escopo !== 'esta' && despesa.recorrencia_grupo) {
+          await updateExpensesByGroup(
+            despesa.recorrencia_grupo,
+            { expenseTypeId: tipoId || null, descricao: descricao || null, valor: v, classificacao, formaPagamento, quantidade: Number(quantidade) || 1 },
+            escopo === 'futuras' ? { desdeData: despesa.data } : undefined,
+          )
+        }
       } else {
         await createExpense({
           clinicId,
@@ -584,6 +597,19 @@ function DespesaModal(props: {
       <div className="max-h-[92vh] w-full max-w-md overflow-auto rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-4 text-lg font-semibold text-texto">{editar ? 'Editar despesa' : 'Nova despesa'}</h3>
         <div className="space-y-3">
+          {ehParcelada && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <label className="mb-1 block text-xs font-medium text-amber-800">
+                Compra parcelada (parcela {despesa?.parcela_num}/{despesa?.parcela_total}) — aplicar alterações em:
+              </label>
+              <select className={field} value={escopo} onChange={(e) => setEscopo(e.target.value as 'esta' | 'futuras' | 'todas')}>
+                <option value="esta">Somente esta parcela</option>
+                <option value="futuras">Esta e as próximas parcelas</option>
+                <option value="todas">Todas as parcelas da compra</option>
+              </select>
+              <p className="mt-1 text-[11px] text-amber-700">Valor, tipo, descrição e forma de pagamento são propagados; a data e o status “pago” permanecem por parcela.</p>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-xs font-medium text-texto/60">Classificação</label>
             <div className="flex gap-2">
