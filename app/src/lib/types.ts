@@ -19,6 +19,12 @@ export interface Professional {
   conselho_uf: string | null
   ativo: boolean
   senha_provisoria: boolean
+  // Corpo técnico (Área Administrativa)
+  formacao?: string | null
+  responsavel_tecnico?: boolean
+  cpf?: string | null
+  servicos_prestados?: string[]
+  vacinas?: Record<string, boolean>
 }
 
 export interface Patient {

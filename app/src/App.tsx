@@ -13,6 +13,7 @@ import Inventory from '@/pages/clinic/Inventory'
 import Agenda from '@/pages/clinic/Agenda'
 import Finance from '@/pages/clinic/Finance'
 import Reports from '@/pages/clinic/Reports'
+import Administrativo from '@/pages/clinic/Administrativo'
 import Settings from '@/pages/clinic/Settings'
 import Templates from '@/pages/clinic/Templates'
 import PatientHome from '@/pages/patient/PatientHome'
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="estoque" element={<RouteGuard perm="menu.estoque"><Inventory /></RouteGuard>} />
             <Route path="financeiro" element={<RouteGuard perm="menu.financeiro"><Finance /></RouteGuard>} />
             <Route path="relatorios" element={<RouteGuard perm="menu.relatorios"><Reports /></RouteGuard>} />
+            <Route path="administrativo" element={<RouteGuard perm="menu.administrativo"><Administrativo /></RouteGuard>} />
             <Route path="configuracoes" element={<RouteGuard perm="admin"><Settings /></RouteGuard>} />
           </Route>
         ) : (

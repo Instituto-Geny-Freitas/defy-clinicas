@@ -22,6 +22,7 @@ export const FEATURES: FeatureDef[] = [
   { key: 'menu.estoque', label: 'Estoque', group: 'Menu lateral' },
   { key: 'menu.financeiro', label: 'Financeiro', group: 'Menu lateral' },
   { key: 'menu.relatorios', label: 'Relatórios', group: 'Menu lateral' },
+  { key: 'menu.administrativo', label: 'Administrativo', group: 'Menu lateral' },
   // Abas da ficha do paciente
   { key: 'paciente.resumo', label: 'Resumo', group: 'Abas do paciente' },
   { key: 'paciente.agenda', label: 'Agenda', group: 'Abas do paciente' },

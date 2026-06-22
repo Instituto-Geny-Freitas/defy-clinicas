@@ -49,6 +49,12 @@ export interface ProfessionalInput {
   conselho_numero?: string | null
   conselho_uf?: string | null
   especialidade?: string | null
+  // Corpo técnico (Área Administrativa)
+  formacao?: string | null
+  responsavel_tecnico?: boolean
+  cpf?: string | null
+  servicos_prestados?: string[]
+  vacinas?: Record<string, boolean>
 }
 
 export async function listProfessionals(): Promise<Professional[]> {

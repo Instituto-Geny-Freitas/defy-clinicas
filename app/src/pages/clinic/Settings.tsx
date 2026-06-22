@@ -62,9 +62,17 @@ import {
 import { createExpenseType, deleteExpenseType, listExpenseTypes, updateExpenseType, type ExpenseType } from '@/lib/cashflow'
 import { FEATURES, NIVEIS_EDITAVEIS, NIVEL_LABEL as PERM_NIVEL_LABEL, defaultsMatrix, getPermissions, savePermissions, type PermMatrix } from '@/lib/permissions'
 import { usePermissions } from '@/auth/PermissionsProvider'
+import {
+  createServico, createVacina, deleteServico, deleteVacina, listServicos, listVacinas,
+  updateServico, updateVacina, type DomItem,
+} from '@/lib/admin'
+import {
+  DEFAULT_FORMS, getForms, getClinicCodigo, resetFormDef, saveClinicCodigo, saveFormDef,
+  type FieldType, type FormDef, type FormField,
+} from '@/lib/adminForms'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -97,6 +105,9 @@ export default function Settings() {
           { k: 'formulas', l: 'Fórmulas' },
           { k: 'procedimentos', l: 'Procedimentos' },
           { k: 'despesas', l: 'Tipos de Despesa' },
+          { k: 'servicos', l: 'Serviços Prestados' },
+          { k: 'vacinas', l: 'Vacinas' },
+          { k: 'formularios', l: 'Formulários (Admin)' },
           { k: 'lgpd', l: 'LGPD' },
         ].map((t) => (
           <button
@@ -123,6 +134,9 @@ export default function Settings() {
       {sec === 'formulas' && <FormulasSection clinicId={clinicId} />}
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'despesas' && <DespesasSection clinicId={clinicId} />}
+      {sec === 'servicos' && <ServicosSection clinicId={clinicId} />}
+      {sec === 'vacinas' && <VacinasSection clinicId={clinicId} />}
+      {sec === 'formularios' && <FormulariosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
     </div>
   )
@@ -551,6 +565,202 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// --- Serviços Prestados (domínio) -------------------------------------------
+function DomainCrud({ titulo, ajuda, placeholder, itens, onAdd, onRename, onDelete }: {
+  titulo: string; ajuda: string; placeholder: string; itens: DomItem[]
+  onAdd: (nome: string) => Promise<void>; onRename: (id: string, nome: string) => Promise<void>; onDelete: (id: string) => Promise<void>
+}) {
+  const [nome, setNome] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  async function salvar() { if (!nome.trim()) return; setSalvando(true); try { await onAdd(nome.trim()); setNome('') } finally { setSalvando(false) } }
+  async function renomear(it: DomItem) { const n = prompt('Novo nome:', it.nome); if (n && n.trim() && n.trim() !== it.nome) await onRename(it.id, n.trim()) }
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">{titulo}</h3>
+        <p className="mb-3 text-xs text-texto/50">{ajuda}</p>
+        <div className="flex gap-2">
+          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder={placeholder} />
+          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm"><tbody>
+          {itens.map((it) => (
+            <tr key={it.id} className="border-t border-black/5 first:border-t-0">
+              <td className="px-4 py-2 text-texto">{it.nome}</td>
+              <td className="px-4 py-2 text-right whitespace-nowrap">
+                <button onClick={() => renomear(it)} className="mr-3 text-xs font-medium text-primaria hover:underline">Renomear</button>
+                <button onClick={() => onDelete(it.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+              </td>
+            </tr>
+          ))}
+          {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum item.</td></tr>}
+        </tbody></table>
+      </div>
+    </div>
+  )
+}
+
+function ServicosSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<DomItem[]>([])
+  function recarregar() { listServicos().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  return (
+    <DomainCrud
+      titulo="Serviços Prestados" placeholder="Ex.: Microagulhamento"
+      ajuda="Domínio usado no cadastro do profissional (Corpo Técnico). Cada profissional pode ter um ou mais serviços."
+      itens={itens}
+      onAdd={async (n) => { await createServico(clinicId, n); recarregar() }}
+      onRename={async (id, n) => { await updateServico(id, n); recarregar() }}
+      onDelete={async (id) => { if (confirm('Excluir este serviço?')) { await deleteServico(id); recarregar() } }}
+    />
+  )
+}
+
+function VacinasSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<DomItem[]>([])
+  function recarregar() { listVacinas().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  return (
+    <DomainCrud
+      titulo="Vacinas obrigatórias" placeholder="Ex.: Hepatite B"
+      ajuda="Domínio usado no cadastro do profissional (flags Sim/Não por vacina)."
+      itens={itens}
+      onAdd={async (n) => { await createVacina(clinicId, n); recarregar() }}
+      onRename={async (id, n) => { await updateVacina(id, n); recarregar() }}
+      onDelete={async (id) => { if (confirm('Excluir esta vacina?')) { await deleteVacina(id); recarregar() } }}
+    />
+  )
+}
+
+// --- Construtor de formulários administrativos ------------------------------
+const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
+  { v: 'text', l: 'Texto' }, { v: 'textarea', l: 'Texto longo' }, { v: 'number', l: 'Número' },
+  { v: 'date', l: 'Data' }, { v: 'time', l: 'Hora' }, { v: 'boolean', l: 'Sim/Não' },
+  { v: 'select', l: 'Lista (uma opção)' }, { v: 'multiselect', l: 'Lista (várias)' },
+  { v: 'upload', l: 'Upload de arquivo' }, { v: 'ativo', l: 'Ativo (produto)' },
+  { v: 'profissional', l: 'Profissional' }, { v: 'paciente', l: 'Paciente' },
+]
+const slugKey = (s: string) =>
+  (s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'campo')
+
+function FormulariosSection({ clinicId }: { clinicId: string }) {
+  const [forms, setForms] = useState<FormDef[]>(DEFAULT_FORMS)
+  const [chave, setChave] = useState<string>(DEFAULT_FORMS[0].chave)
+  const [def, setDef] = useState<FormDef | null>(null)
+  const [codigo, setCodigo] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { getForms().then((fs) => { setForms(fs); setDef(fs.find((f) => f.chave === chave) ?? null) }).catch(() => {}) }
+  useEffect(() => { getForms().then(setForms).catch(() => {}); getClinicCodigo().then(setCodigo).catch(() => {}) }, [])
+  useEffect(() => { setDef(forms.find((f) => f.chave === chave) ?? null) }, [chave, forms])
+
+  function setCampos(campos: FormField[]) { setDef((d) => (d ? { ...d, campos } : d)) }
+  function editarCampo(i: number, patch: Partial<FormField>) { if (!def) return; setCampos(def.campos.map((c, idx) => idx === i ? { ...c, ...patch } : c)) }
+  function moverCampo(i: number, dir: -1 | 1) {
+    if (!def) return
+    const j = i + dir
+    if (j < 0 || j >= def.campos.length) return
+    const arr = def.campos.slice();[arr[i], arr[j]] = [arr[j], arr[i]]; setCampos(arr)
+  }
+  function addCampo() {
+    if (!def) return
+    const label = 'Novo campo'
+    let key = slugKey(label); let n = 1
+    while (def.campos.some((c) => c.key === key)) key = `${slugKey(label)}_${++n}`
+    setCampos([...def.campos, { key, label, tipo: 'text' }])
+  }
+  function removerCampo(i: number) { if (!def) return; setCampos(def.campos.filter((_, idx) => idx !== i)) }
+
+  async function salvar() {
+    if (!def) return
+    setSalvando(true); setMsg(null)
+    try {
+      await saveFormDef(clinicId, def.chave, { titulo: def.titulo, descricao: def.descricao, campoData: def.campoData, campos: def.campos })
+      setMsg('Formulário salvo.'); recarregar()
+    } catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+  async function restaurar() {
+    if (!def || !confirm('Restaurar este formulário para o padrão de fábrica?')) return
+    await resetFormDef(clinicId, def.chave); setMsg('Restaurado ao padrão.'); recarregar()
+  }
+  async function salvarCodigo() { await saveClinicCodigo(clinicId, codigo); setMsg('Código da clínica salvo.') }
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Construtor de formulários (Área Administrativa)</h3>
+        <p className="mb-3 text-xs text-texto/50">Personalize os campos de cada formulário. Registros já gravados são preservados; campos removidos deixam de aparecer e campos novos surgem em branco.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select className={`${field} max-w-xs`} value={chave} onChange={(e) => setChave(e.target.value)}>
+            {forms.map((f) => <option key={f.chave} value={f.chave}>{f.titulo}</option>)}
+          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs text-texto/50">Código da clínica (numerador):</label>
+            <input className="w-28 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} />
+            <button onClick={salvarCodigo} className="rounded-lg border border-black/10 px-3 py-1.5 text-sm hover:bg-black/5">Salvar código</button>
+          </div>
+        </div>
+      </div>
+
+      {def && (
+        <div className="space-y-4 rounded-xl border border-black/5 bg-white p-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><label className="mb-1 block text-sm text-texto/70">Título</label><input className={field} value={def.titulo} onChange={(e) => setDef({ ...def, titulo: e.target.value })} /></div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Campo de data (filtro/PDF)</label>
+              <select className={field} value={def.campoData ?? ''} onChange={(e) => setDef({ ...def, campoData: e.target.value || undefined })}>
+                <option value="">— automático —</option>
+                {def.campos.filter((c) => c.tipo === 'date').map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Descrição</label><input className={field} value={def.descricao ?? ''} onChange={(e) => setDef({ ...def, descricao: e.target.value })} /></div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-texto/70">Campos</h4>
+            <button onClick={addCampo} className="text-xs font-medium text-primaria hover:underline">+ Adicionar campo</button>
+          </div>
+
+          <div className="space-y-2">
+            {def.campos.map((c, i) => (
+              <div key={c.key} className="rounded-lg border border-black/10 p-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-12">
+                  <input className="sm:col-span-4 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.label} onChange={(e) => editarCampo(i, { label: e.target.value })} placeholder="Rótulo" />
+                  <select className="sm:col-span-3 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.tipo} onChange={(e) => editarCampo(i, { tipo: e.target.value as FieldType })}>
+                    {TIPOS_CAMPO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                  </select>
+                  {(c.tipo === 'select' || c.tipo === 'multiselect') ? (
+                    <input className="sm:col-span-3 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={(c.opcoes ?? []).join(', ')} onChange={(e) => editarCampo(i, { opcoes: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} placeholder="Opções (vírgula)" />
+                  ) : <div className="sm:col-span-3" />}
+                  <div className="sm:col-span-2 flex items-center justify-end gap-1 text-texto/50">
+                    <button onClick={() => moverCampo(i, -1)} className="px-1 hover:text-texto" title="Subir">↑</button>
+                    <button onClick={() => moverCampo(i, 1)} className="px-1 hover:text-texto" title="Descer">↓</button>
+                    <button onClick={() => removerCampo(i)} className="px-1 text-secundaria hover:underline" title="Excluir">✕</button>
+                  </div>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-texto/60">
+                  <span className="text-texto/30">chave: {c.key}</span>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={!!c.obrigatorio} onChange={(e) => editarCampo(i, { obrigatorio: e.target.checked })} /> obrigatório</label>
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={!!c.full} onChange={(e) => editarCampo(i, { full: e.target.checked })} /> linha inteira</label>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar formulário'}</button>
+            <button onClick={restaurar} className="rounded-lg border border-black/10 px-4 py-2.5 text-sm hover:bg-black/5">Restaurar padrão</button>
+            {msg && <span className="text-sm text-texto/60">{msg}</span>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1086,13 +1296,26 @@ function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; pro
   const [f, setF] = useState<ProfessionalInput>(
     prof
       ? { nome: prof.nome, email: prof.email, telefone: prof.telefone, role: prof.role,
-          conselho_tipo: prof.conselho_tipo, conselho_numero: prof.conselho_numero, conselho_uf: prof.conselho_uf }
-      : { nome: '', role: 'profissional' },
+          conselho_tipo: prof.conselho_tipo, conselho_numero: prof.conselho_numero, conselho_uf: prof.conselho_uf,
+          formacao: prof.formacao ?? '', responsavel_tecnico: prof.responsavel_tecnico ?? false, cpf: prof.cpf ?? '',
+          servicos_prestados: prof.servicos_prestados ?? [], vacinas: prof.vacinas ?? {} }
+      : { nome: '', role: 'profissional', responsavel_tecnico: false, servicos_prestados: [], vacinas: {} },
   )
+  const [servicos, setServicos] = useState<DomItem[]>([])
+  const [vacinas, setVacinas] = useState<DomItem[]>([])
   const [salvando, setSalvando] = useState(false)
   const set = <K extends keyof ProfessionalInput>(k: K, v: ProfessionalInput[K]) => setF((s) => ({ ...s, [k]: v }))
 
   useEffect(() => { listTeamRoles().then(setPapeis).catch(() => {}) }, [])
+  useEffect(() => { listServicos().then(setServicos).catch(() => {}); listVacinas().then(setVacinas).catch(() => {}) }, [])
+
+  const servicosSel = f.servicos_prestados ?? []
+  function toggleServico(nome: string) {
+    const arr = servicosSel.includes(nome) ? servicosSel.filter((x) => x !== nome) : [...servicosSel, nome]
+    set('servicos_prestados', arr)
+  }
+  const vacinasSel = f.vacinas ?? {}
+  function toggleVacina(nome: string) { set('vacinas', { ...vacinasSel, [nome]: !vacinasSel[nome] }) }
 
   async function salvar() {
     if (!f.nome.trim()) return
@@ -1138,6 +1361,44 @@ function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; pro
             <div><label className="mb-1 block text-sm text-texto/70">Número</label><input className={field} value={f.conselho_numero ?? ''} onChange={(e) => set('conselho_numero', e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">UF</label><input className={field} value={f.conselho_uf ?? ''} onChange={(e) => set('conselho_uf', e.target.value)} /></div>
           </div>
+
+          {/* Corpo Técnico (Área Administrativa) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><label className="mb-1 block text-sm text-texto/70">Formação</label><input className={field} value={f.formacao ?? ''} onChange={(e) => set('formacao', e.target.value)} placeholder="Ex.: Enfermeira Esteta" /></div>
+            <div><label className="mb-1 block text-sm text-texto/70">CPF</label><input className={field} value={f.cpf ?? ''} onChange={(e) => set('cpf', e.target.value)} /></div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-texto/80">
+            <input type="checkbox" checked={!!f.responsavel_tecnico} onChange={(e) => set('responsavel_tecnico', e.target.checked)} /> É o Responsável Técnico?
+          </label>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Serviços prestados</label>
+            {servicos.length === 0 ? (
+              <p className="text-xs text-texto/40">Cadastre serviços em Configurações → Serviços Prestados.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 rounded-lg border border-black/10 p-2">
+                {servicos.map((s) => (
+                  <label key={s.id} className="flex items-center gap-1.5 text-xs text-texto/80">
+                    <input type="checkbox" checked={servicosSel.includes(s.nome)} onChange={() => toggleServico(s.nome)} /> {s.nome}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Vacinações obrigatórias</label>
+            {vacinas.length === 0 ? (
+              <p className="text-xs text-texto/40">Cadastre vacinas em Configurações → Vacinas.</p>
+            ) : (
+              <div className="flex flex-wrap gap-3 rounded-lg border border-black/10 p-2">
+                {vacinas.map((vac) => (
+                  <label key={vac.id} className="flex items-center gap-1.5 text-xs text-texto/80">
+                    <input type="checkbox" checked={!!vacinasSel[vac.nome]} onChange={() => toggleVacina(vac.nome)} /> {vac.nome}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           {!editar && <p className="text-xs text-texto/50">O vínculo de login é feito automaticamente no primeiro acesso (por e-mail).</p>}
           <div className="mt-2 flex justify-end gap-2">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
