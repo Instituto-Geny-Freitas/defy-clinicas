@@ -70,9 +70,14 @@ import {
   DEFAULT_FORMS, getForms, getClinicCodigo, resetFormDef, saveClinicCodigo, saveFormDef,
   type FieldType, type FormDef, type FormField,
 } from '@/lib/adminForms'
+import {
+  DIAS_SEMANA, createAvailability, createBlock, deleteAvailability, deleteBlock,
+  listAvailability, listBlocks, type AvailabilityWindow, type BlockRange,
+} from '@/lib/availability'
+import { formatDateBR } from '@/lib/format'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -95,6 +100,7 @@ export default function Settings() {
         {[
           { k: 'visual', l: 'Identidade visual' },
           { k: 'equipe', l: 'Equipe' },
+          { k: 'disponibilidade', l: 'Disponibilidade' },
           { k: 'papeis', l: 'Papéis' },
           { k: 'permissoes', l: 'Permissões' },
           { k: 'integracoes', l: 'Integrações' },
@@ -124,6 +130,7 @@ export default function Settings() {
 
       {sec === 'visual' && <VisualSection />}
       {sec === 'equipe' && <EquipeSection clinicId={clinicId} />}
+      {sec === 'disponibilidade' && <DisponibilidadeSection clinicId={clinicId} />}
       {sec === 'papeis' && <RolesSection clinicId={clinicId} />}
       {sec === 'permissoes' && <PermissoesSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
@@ -975,6 +982,119 @@ function VisualSection() {
           {salvando ? 'Salvando…' : 'Salvar'}
         </button>
         {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+// --- Disponibilidade do profissional ----------------------------------------
+function DisponibilidadeSection({ clinicId }: { clinicId: string }) {
+  const { profile } = useAuth()
+  const [profs, setProfs] = useState<Professional[]>([])
+  const [profId, setProfId] = useState('')
+  const [janelas, setJanelas] = useState<AvailabilityWindow[]>([])
+  const [blocks, setBlocks] = useState<BlockRange[]>([])
+  // form de nova janela
+  const [dia, setDia] = useState(1)
+  const [hi, setHi] = useState('09:00')
+  const [hf, setHf] = useState('18:00')
+  // form de novo bloqueio
+  const [bIni, setBIni] = useState('')
+  const [bFim, setBFim] = useState('')
+  const [bMotivo, setBMotivo] = useState('')
+
+  useEffect(() => {
+    listProfessionals().then((ps) => {
+      const ativos = ps.filter((p) => p.ativo)
+      setProfs(ativos)
+      // padrão: o próprio profissional logado, senão o primeiro
+      const meu = ativos.find((p) => p.id === profile?.professional?.id)
+      setProfId((cur) => cur || meu?.id || ativos[0]?.id || '')
+    }).catch(() => {})
+  }, [profile?.professional?.id])
+
+  function recarregar() {
+    if (!profId) return
+    listAvailability(profId).then(setJanelas).catch(() => {})
+    listBlocks(profId).then(setBlocks).catch(() => {})
+  }
+  useEffect(recarregar, [profId])
+
+  async function addJanela() {
+    if (hf <= hi) return
+    await createAvailability(clinicId, profId, dia, hi, hf); recarregar()
+  }
+  async function addBlock() {
+    if (!bIni) return
+    await createBlock(clinicId, profId, bIni, bFim || bIni, bMotivo || null)
+    setBIni(''); setBFim(''); setBMotivo(''); recarregar()
+  }
+
+  const porDia = (d: number) => janelas.filter((j) => j.dia_semana === d)
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Disponibilidade de atendimento</h3>
+        <p className="mb-3 text-xs text-texto/50">Defina os horários de atendimento por profissional e bloqueie datas (férias/ausências). Pacientes só conseguem solicitar horários dentro da disponibilidade e que não estejam ocupados. Sem nenhuma janela cadastrada, o profissional é considerado sempre disponível.</p>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Profissional</label>
+          <select className={`${field} max-w-sm`} value={profId} onChange={(e) => setProfId(e.target.value)}>
+            {profs.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Janelas semanais */}
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h4 className="mb-3 text-sm font-semibold text-texto/70">Horários por dia da semana</h4>
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="mb-1 block text-xs text-texto/50">Dia</label>
+            <select className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={dia} onChange={(e) => setDia(Number(e.target.value))}>
+              {DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}
+            </select>
+          </div>
+          <div><label className="mb-1 block text-xs text-texto/50">Início</label><input type="time" className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={hi} onChange={(e) => setHi(e.target.value)} /></div>
+          <div><label className="mb-1 block text-xs text-texto/50">Fim</label><input type="time" className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={hf} onChange={(e) => setHf(e.target.value)} /></div>
+          <button onClick={addJanela} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Adicionar faixa</button>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {DIAS_SEMANA.map((d, i) => (
+            <div key={i} className="rounded-lg border border-black/5 p-3">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-texto/50">{d}</div>
+              {porDia(i).length === 0 ? <div className="text-xs text-texto/30">— sem atendimento —</div> : (
+                <div className="flex flex-wrap gap-1.5">
+                  {porDia(i).map((j) => (
+                    <span key={j.id} className="flex items-center gap-1 rounded-full bg-primaria/10 px-2 py-0.5 text-xs text-primaria">
+                      {j.hora_inicio.slice(0, 5)}–{j.hora_fim.slice(0, 5)}
+                      <button onClick={async () => { await deleteAvailability(j.id); recarregar() }} className="text-primaria/60 hover:text-secundaria">✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bloqueios de datas */}
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h4 className="mb-3 text-sm font-semibold text-texto/70">Datas indisponíveis (férias/ausências)</h4>
+        <div className="flex flex-wrap items-end gap-2">
+          <div><label className="mb-1 block text-xs text-texto/50">De</label><input type="date" className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={bIni} onChange={(e) => setBIni(e.target.value)} /></div>
+          <div><label className="mb-1 block text-xs text-texto/50">Até (opcional)</label><input type="date" className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={bFim} onChange={(e) => setBFim(e.target.value)} /></div>
+          <div className="flex-1 min-w-[10rem]"><label className="mb-1 block text-xs text-texto/50">Motivo</label><input className={field} value={bMotivo} onChange={(e) => setBMotivo(e.target.value)} placeholder="Ex.: Férias" /></div>
+          <button onClick={addBlock} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Bloquear</button>
+        </div>
+        <div className="mt-3 space-y-1">
+          {blocks.length === 0 ? <p className="text-xs text-texto/40">Nenhuma data bloqueada.</p> : blocks.map((b) => (
+            <div key={b.id} className="flex items-center justify-between rounded-lg border border-black/5 px-3 py-1.5 text-sm">
+              <span className="text-texto/80">{formatDateBR(b.data_inicio)}{b.data_fim !== b.data_inicio ? ` a ${formatDateBR(b.data_fim)}` : ''}{b.motivo ? ` · ${b.motivo}` : ''}</span>
+              <button onClick={async () => { await deleteBlock(b.id); recarregar() }} className="text-xs text-secundaria hover:underline">Remover</button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

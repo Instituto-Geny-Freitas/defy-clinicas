@@ -58,7 +58,7 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
               <div className="flex items-start justify-between gap-3">
                 <div className="font-medium text-texto">{p.procedimento}</div>
                 <div className="flex items-center gap-3">
-                  <div className="text-xs text-texto/50">{new Date(p.data).toLocaleDateString('pt-BR')}</div>
+                  <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
                   <button onClick={() => setEditando(p)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
                   <button onClick={() => excluir(p)} className="text-xs font-medium text-secundaria hover:underline">Excluir</button>
                 </div>
@@ -140,13 +140,13 @@ function RegistrarModal({
       const valor = avulso ? parseMoneyBR(valorCobrado) : 0
       if (proc) {
         await updateProcedure({
-          clinicId, anterior: proc, procedimento, data: new Date(data).toISOString(),
+          clinicId, anterior: proc, procedimento, data,
           regiao, observacoes: obs, valorCobrado: valor, produtos: prods,
         })
       } else {
         await createProcedure({
           clinicId, patientId, professionalId, quoteId: quoteId || null, procedimento,
-          data: new Date(data).toISOString(), regiao, observacoes: obs,
+          data, regiao, observacoes: obs,
           valorCobrado: valor, produtos: prods,
         })
       }

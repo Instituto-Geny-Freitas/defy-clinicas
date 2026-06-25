@@ -16,6 +16,14 @@ export interface PatientInput {
   observacoes?: string | null
 }
 
+/** Lista enxuta de profissionais ativos (para o paciente escolher no agendamento). */
+export interface PublicProfessional { id: string; nome: string }
+export async function listPublicProfessionals(): Promise<PublicProfessional[]> {
+  const { data, error } = await supabase.from('professionals').select('id, nome').eq('ativo', true).order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
 export async function listPatients(): Promise<Patient[]> {
   const { data, error } = await supabase.from('patients').select('*').eq('ativo', true).order('nome')
   if (error) throw error

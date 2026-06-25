@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import { listMeasurements, type BodyMeasurement } from '@/lib/measurements'
 import { listLabOrders, listLabResults, uploadLabResult, type LabOrder, type LabResult } from '@/lib/labs'
+import { formatDateBR } from '@/lib/format'
 import LineChart from '@/components/LineChart'
 
 export default function PatientEvolution() {
@@ -66,7 +67,7 @@ export default function PatientEvolution() {
           <div className="mb-2 space-y-1">
             {orders.map((o) => (
               <div key={o.id} className="rounded-lg border border-black/5 bg-white p-3 text-xs text-texto/70">
-                Requisição de {new Date(o.data).toLocaleDateString('pt-BR')}: {o.exames.slice(0, 6).join(', ')}{o.exames.length > 6 ? '…' : ''}
+                Requisição de {formatDateBR(o.data)}: {o.exames.slice(0, 6).join(', ')}{o.exames.length > 6 ? '…' : ''}
               </div>
             ))}
           </div>

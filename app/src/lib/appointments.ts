@@ -15,6 +15,7 @@ export interface Appointment {
   confirmado_em: string | null
   nome_avulso: string | null
   telefone_avulso: string | null
+  recorrencia_grupo: string | null
   patients?: { nome: string; whatsapp: string | null } | null
   professionals?: { nome: string } | null
 }
@@ -112,6 +113,7 @@ export async function createRecurringAppointments(args: {
 }): Promise<number> {
   const limite = new Date(args.ateAno, 11, 31, 23, 59, 59) // 31/dez do ano, hora local
   let cursor = new Date(`${args.date}T12:00:00`)
+  const grupo = crypto.randomUUID() // agrupa a série p/ editar/excluir todas
   const rows: Record<string, unknown>[] = []
   const MAX = 600 // trava de segurança
   while (cursor <= limite && rows.length < MAX) {
@@ -128,6 +130,7 @@ export async function createRecurringAppointments(args: {
       telefone_avulso: args.telefoneAvulso ?? null,
       status: 'agendado',
       origem: 'profissional',
+      recorrencia_grupo: grupo,
     })
     cursor = proximaData(cursor, args.periodo)
   }
@@ -171,15 +174,19 @@ export async function rescheduleAppointment(id: string, inicio: string, fim?: st
 export async function requestAppointment(args: {
   clinicId: string
   patientId: string
+  professionalId?: string | null
   inicio: string
+  fim?: string | null
   procedimento?: string | null
   observacoes?: string | null
 }): Promise<void> {
   const { error } = await supabase.from('appointments').insert({
     clinic_id: args.clinicId,
     patient_id: args.patientId,
+    professional_id: args.professionalId ?? null,
     procedimento: args.procedimento ?? null,
     inicio: args.inicio,
+    fim: args.fim ?? null,
     status: 'agendado',
     origem: 'paciente',
     observacoes: args.observacoes ?? null,
@@ -190,6 +197,54 @@ export async function requestAppointment(args: {
 export async function deleteAppointment(id: string): Promise<void> {
   const { error } = await supabase.from('appointments').delete().eq('id', id)
   if (error) throw error
+}
+
+/**
+ * Exclui uma série recorrente inteira. `desde` (ISO) limita a "esta e as
+ * futuras"; sem ele, exclui todas as ocorrências do grupo.
+ */
+export async function deleteAppointmentSeries(grupo: string, desde?: string): Promise<void> {
+  let q = supabase.from('appointments').delete().eq('recorrencia_grupo', grupo)
+  if (desde) q = q.gte('inicio', desde)
+  const { error } = await q
+  if (error) throw error
+}
+
+/**
+ * Edita campos comuns de uma série recorrente (procedimento, profissional,
+ * status). `desde` limita a "esta e as futuras". A hora (início/fim) é aplicada
+ * preservando a DATA de cada ocorrência, quando informada.
+ */
+export async function updateAppointmentSeries(
+  grupo: string,
+  patch: { procedimento?: string | null; professionalId?: string | null; status?: AppointmentStatus; horaInicio?: string; horaFim?: string | null },
+  desde?: string,
+): Promise<void> {
+  // Campos diretos (mesmo valor para todas as ocorrências).
+  const row: Record<string, unknown> = {}
+  if (patch.procedimento !== undefined) row.procedimento = patch.procedimento
+  if (patch.professionalId !== undefined) row.professional_id = patch.professionalId
+  if (patch.status !== undefined) row.status = patch.status
+  if (Object.keys(row).length > 0) {
+    let q = supabase.from('appointments').update(row).eq('recorrencia_grupo', grupo)
+    if (desde) q = q.gte('inicio', desde)
+    const { error } = await q
+    if (error) throw error
+  }
+
+  // Reaplicar a hora preservando a data de cada ocorrência (precisa ler as linhas).
+  if (patch.horaInicio) {
+    let sel = supabase.from('appointments').select('id, inicio').eq('recorrencia_grupo', grupo)
+    if (desde) sel = sel.gte('inicio', desde)
+    const { data, error } = await sel
+    if (error) throw error
+    for (const ap of data ?? []) {
+      const ymd = ap.inicio.slice(0, 10)
+      const novoInicio = new Date(`${ymd}T${patch.horaInicio}:00`).toISOString()
+      const novoFim = patch.horaFim ? new Date(`${ymd}T${patch.horaFim}:00`).toISOString() : null
+      await supabase.from('appointments').update({ inicio: novoInicio, fim: novoFim, lembrete_enviado_em: null }).eq('id', ap.id)
+    }
+  }
 }
 
 export async function updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<void> {

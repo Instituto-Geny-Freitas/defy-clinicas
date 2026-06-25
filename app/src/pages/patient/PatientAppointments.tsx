@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listPatientAppointments, requestAppointment, type Appointment } from '@/lib/appointments'
+import { checkSlot, SLOT_MENSAGEM, type SlotStatus } from '@/lib/availability'
+import { listPublicProfessionals, type PublicProfessional } from '@/lib/patients'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
 import MonthCalendar from '@/components/MonthCalendar'
 
@@ -71,25 +73,52 @@ export default function PatientAppointments() {
 }
 
 function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: string; patientId: string; onClose: () => void; onSaved: () => void }) {
+  const [profissionais, setProfissionais] = useState<PublicProfessional[]>([])
+  const [professionalId, setProfessionalId] = useState('')
   const [data, setData] = useState<string | null>(null)
   const [hora, setHora] = useState('09:00')
   const [procedimento, setProcedimento] = useState('')
   const [obs, setObs] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [slot, setSlot] = useState<SlotStatus | null>(null)
+  const [checando, setChecando] = useState(false)
+
+  useEffect(() => { listPublicProfessionals().then(setProfissionais).catch(() => {}) }, [])
+
+  // Verifica disponibilidade sempre que profissional + data + hora mudarem.
+  useEffect(() => {
+    setSlot(null)
+    if (!professionalId || !data || !hora) return
+    let cancelado = false
+    setChecando(true)
+    const inicio = new Date(`${data}T${hora}:00`).toISOString()
+    checkSlot(professionalId, inicio).then((s) => { if (!cancelado) setSlot(s) }).catch(() => {}).finally(() => { if (!cancelado) setChecando(false) })
+    return () => { cancelado = true }
+  }, [professionalId, data, hora])
 
   async function salvar() {
     if (!data) { setErro('Escolha uma data.'); return }
-    setSalvando(true); setErro(null)
+    const inicio = new Date(`${data}T${hora}:00`).toISOString()
+    setErro(null)
+    // Bloqueia se o horário não estiver disponível para o profissional escolhido.
+    if (professionalId) {
+      try {
+        const s = await checkSlot(professionalId, inicio)
+        if (s !== 'ok') { setSlot(s); setErro(SLOT_MENSAGEM[s] + ' Escolha outro horário.'); return }
+      } catch { /* se falhar a checagem, segue (a clínica confirma) */ }
+    }
+    setSalvando(true)
     try {
       await requestAppointment({
-        clinicId, patientId,
-        inicio: new Date(`${data}T${hora}:00`).toISOString(),
+        clinicId, patientId, professionalId: professionalId || null, inicio,
         procedimento: procedimento || null, observacoes: obs || null,
       })
       onSaved()
     } catch { setErro('Não foi possível enviar a solicitação.'); setSalvando(false) }
   }
+
+  const slotCor = slot === 'ok' ? 'text-emerald-600' : 'text-rose-600'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
@@ -99,17 +128,29 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
         </div>
         <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Profissional</label>
+            <select className={field} value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
+              <option value="">Sem preferência</option>
+              {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
           <MonthCalendar value={data} onChange={setData} />
           <div className="grid grid-cols-2 gap-3">
             <div><label className="mb-1 block text-sm text-texto/70">Horário preferido</label><input type="time" className={field} value={hora} onChange={(e) => setHora(e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Procedimento</label><input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} /></div>
           </div>
+          {professionalId && data && (
+            <p className={`text-sm font-medium ${checando ? 'text-texto/50' : slotCor}`}>
+              {checando ? 'Verificando disponibilidade…' : slot ? (slot === 'ok' ? '✓ ' : '⚠ ') + SLOT_MENSAGEM[slot] : ''}
+            </p>
+          )}
           <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
           {erro && <p className="text-sm text-secundaria">{erro}</p>}
           <p className="text-xs text-texto/50">A clínica confirmará (ou ajustará) o horário solicitado.</p>
           <div className="flex justify-end gap-2">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
-            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Enviando…' : 'Solicitar'}</button>
+            <button onClick={salvar} disabled={salvando || (!!professionalId && slot != null && slot !== 'ok')} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Enviando…' : 'Solicitar'}</button>
           </div>
         </div>
       </div>

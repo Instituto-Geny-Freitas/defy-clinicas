@@ -4,13 +4,17 @@ import {
   createAppointment,
   createRecurringAppointments,
   deleteAppointment,
+  deleteAppointmentSeries,
+  linkAppointmentsToPatient,
   listAppointments,
   rescheduleAppointment,
+  updateAppointmentSeries,
   updateAppointmentStatus,
   type Appointment,
   type AppointmentStatus,
   type ApptPeriodo,
 } from '@/lib/appointments'
+import { checkSlot, SLOT_MENSAGEM } from '@/lib/availability'
 import { listPatients } from '@/lib/patients'
 import { listProfessionals } from '@/lib/settings'
 import type { Patient, Professional } from '@/lib/types'
@@ -33,7 +37,8 @@ export default function Agenda() {
   const [appts, setAppts] = useState<Appointment[]>([])
   const [profissionais, setProfissionais] = useState<Professional[]>([])
   const [pacientes, setPacientes] = useState<Patient[]>([])
-  const [filtroProf, setFiltroProf] = useState('')
+  // Agenda individualizada: por padrão mostra a do profissional logado.
+  const [filtroProf, setFiltroProf] = useState(profile?.professional?.id ?? '')
   const [filtroPac, setFiltroPac] = useState('')        // id do paciente selecionado
   const [buscaPac, setBuscaPac] = useState('')          // texto digitado na busca
   const [dataFiltro, setDataFiltro] = useState<string | null>(null) // YYYY-MM-DD
@@ -42,6 +47,8 @@ export default function Agenda() {
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [remarcando, setRemarcando] = useState<Appointment | null>(null)
+  const [serieDe, setSerieDe] = useState<Appointment | null>(null)
+  const [regularizando, setRegularizando] = useState<Appointment | null>(null)
 
   function recarregar() {
     let desde: string | undefined, ate: string | undefined
@@ -165,6 +172,12 @@ export default function Agenda() {
       {remarcando && (
         <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar(); carregarMarcados() }} />
       )}
+      {serieDe && (
+        <SerieModal appt={serieDe} profissionais={profissionais} onClose={() => setSerieDe(null)} onSaved={() => { setSerieDe(null); recarregar(); carregarMarcados() }} />
+      )}
+      {regularizando && (
+        <RegularizarModal appt={regularizando} onClose={() => setRegularizando(null)} onSaved={() => { setRegularizando(null); recarregar(); carregarMarcados() }} />
+      )}
 
       {carregando ? (
         <p className="mt-4 text-sm text-texto/50">Carregando…</p>
@@ -196,6 +209,9 @@ export default function Agenda() {
                     </div>
                     <ApptStatusBadge status={a.status} />
                     <div className="flex flex-wrap gap-1 text-xs">
+                      {!a.patient_id && (
+                        <button onClick={() => setRegularizando(a)} className="rounded-md bg-amber-50 px-2 py-1 font-medium text-amber-700 hover:bg-amber-100">Regularizar</button>
+                      )}
                       {a.status !== 'cancelado' && a.status !== 'realizado' && (
                         <>
                           {a.status === 'agendado' && (
@@ -205,6 +221,9 @@ export default function Agenda() {
                           <button onClick={() => mudarStatus(a.id, 'realizado')} className="rounded-md bg-black/5 px-2 py-1 font-medium text-texto/70 hover:bg-black/10">Realizado</button>
                           <button onClick={() => mudarStatus(a.id, 'cancelado')} className="rounded-md bg-rose-50 px-2 py-1 font-medium text-rose-700 hover:bg-rose-100">Cancelar</button>
                         </>
+                      )}
+                      {a.recorrencia_grupo && (
+                        <button onClick={() => setSerieDe(a)} className="rounded-md bg-violet-50 px-2 py-1 font-medium text-violet-700 hover:bg-violet-100">Série ⋯</button>
                       )}
                       <button onClick={() => excluir(a)} className="rounded-md px-2 py-1 font-medium text-secundaria hover:bg-secundaria/10">Excluir</button>
                     </div>
@@ -249,6 +268,13 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
     if (semCadastro ? !nomeAvulso.trim() : !patientId) { setErro(semCadastro ? 'Informe o nome.' : 'Selecione o paciente.'); return }
     if (!data) { setErro('Escolha a data no calendário.'); return }
     setSalvando(true); setErro(null)
+    // Conflito de horário com a agenda do profissional (a equipe pode sobrepor).
+    if (professionalId) {
+      try {
+        const st = await checkSlot(professionalId, toISO(data, horaInicio), horaFim ? toISO(data, horaFim) : null)
+        if (st !== 'ok' && !confirm(`${SLOT_MENSAGEM[st]} Deseja agendar mesmo assim?`)) { setSalvando(false); return }
+      } catch { /* se a verificação falhar, segue o fluxo normal */ }
+    }
     const comum = {
       clinicId,
       patientId: semCadastro ? null : patientId,
@@ -369,6 +395,104 @@ function RemarcarModal({ appt, onClose, onSaved }: { appt: Appointment; onClose:
           <div><label className="mb-1 block text-sm text-texto/70">Novo fim</label><input type="time" className={field} value={horaFim} onChange={(e) => setHoraFim(e.target.value)} /></div>
         </div>
         <Footer onClose={onClose} onSave={salvar} disabled={salvando || !data} label={salvando ? 'Salvando…' : 'Remarcar'} />
+      </div>
+    </Shell>
+  )
+}
+
+function SerieModal({ appt, profissionais, onClose, onSaved }: { appt: Appointment; profissionais: Professional[]; onClose: () => void; onSaved: () => void }) {
+  const grupo = appt.recorrencia_grupo as string
+  const [escopo, setEscopo] = useState<'todas' | 'futuras'>('futuras')
+  const [procedimento, setProcedimento] = useState(appt.procedimento ?? '')
+  const [professionalId, setProfessionalId] = useState(appt.professional_id ?? '')
+  const [horaInicio, setHoraInicio] = useState(new Date(appt.inicio).toTimeString().slice(0, 5))
+  const [horaFim, setHoraFim] = useState(appt.fim ? new Date(appt.fim).toTimeString().slice(0, 5) : '')
+  const [busy, setBusy] = useState(false)
+  const desde = () => (escopo === 'futuras' ? appt.inicio : undefined)
+
+  async function salvarEdicao() {
+    setBusy(true)
+    try {
+      await updateAppointmentSeries(grupo, {
+        procedimento, professionalId: professionalId || null, horaInicio, horaFim: horaFim || null,
+      }, desde())
+      onSaved()
+    } catch { setBusy(false) }
+  }
+  async function excluir() {
+    const txt = escopo === 'futuras' ? 'esta e as próximas ocorrências' : 'TODAS as ocorrências'
+    if (!confirm(`Excluir ${txt} desta série recorrente?`)) return
+    setBusy(true)
+    try { await deleteAppointmentSeries(grupo, desde()); onSaved() } catch { setBusy(false) }
+  }
+
+  return (
+    <Shell titulo="Série recorrente" onClose={onClose}>
+      <div className="space-y-3">
+        <div className="rounded-lg bg-violet-50 p-3 text-xs text-violet-800">
+          Alterações abaixo valem para o escopo selecionado. A data de cada ocorrência é preservada; apenas o horário é reaplicado.
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Aplicar em</label>
+          <select className={field} value={escopo} onChange={(e) => setEscopo(e.target.value as 'todas' | 'futuras')}>
+            <option value="futuras">Esta e as próximas</option>
+            <option value="todas">Todas as ocorrências</option>
+          </select>
+        </div>
+        <div><label className="mb-1 block text-sm text-texto/70">Procedimento</label><input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} /></div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Profissional</label>
+          <select className={field} value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
+            <option value="">— Não atribuído —</option>
+            {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="mb-1 block text-sm text-texto/70">Início</label><input type="time" className={field} value={horaInicio} onChange={(e) => setHoraInicio(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Fim</label><input type="time" className={field} value={horaFim} onChange={(e) => setHoraFim(e.target.value)} /></div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <button onClick={excluir} disabled={busy} className="rounded-lg bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Excluir série</button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+            <button onClick={salvarEdicao} disabled={busy} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar série'}</button>
+          </div>
+        </div>
+      </div>
+    </Shell>
+  )
+}
+
+function RegularizarModal({ appt, onClose, onSaved }: { appt: Appointment; onClose: () => void; onSaved: () => void }) {
+  const [pacientes, setPacientes] = useState<Patient[]>([])
+  const [busca, setBusca] = useState('')
+  const [sel, setSel] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { listPatients().then(setPacientes).catch(() => {}) }, [])
+  const filtrados = busca ? pacientes.filter((p) => p.nome.toLowerCase().includes(busca.toLowerCase())) : pacientes
+
+  async function vincular() {
+    if (!sel) return
+    setBusy(true)
+    try { await linkAppointmentsToPatient(sel, [appt.id]); onSaved() } catch { setBusy(false) }
+  }
+
+  return (
+    <Shell titulo="Regularizar agendamento" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm text-texto/60">
+          Vincule este agendamento prévio (<strong>{appt.nome_avulso ?? 'sem nome'}</strong>
+          {appt.telefone_avulso ? ` · ${appt.telefone_avulso}` : ''}) a um paciente já cadastrado.
+        </p>
+        <input className={field} placeholder="🔍 Buscar paciente…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <select className={field} size={6} value={sel} onChange={(e) => setSel(e.target.value)}>
+          {filtrados.map((p) => <option key={p.id} value={p.id}>{p.nome}{p.cpf ? ` · ${p.cpf}` : ''}</option>)}
+        </select>
+        <p className="text-xs text-texto/50">Não encontrou? Cadastre o paciente em Pacientes → Novo e marque a regularização lá.</p>
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={vincular} disabled={busy || !sel} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{busy ? 'Vinculando…' : 'Vincular'}</button>
+        </div>
       </div>
     </Shell>
   )
