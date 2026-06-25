@@ -3,6 +3,7 @@ import {
   EXAMES_PADRAO,
   createLabOrder,
   deleteLabResult,
+  listExamTypes,
   listLabOrders,
   listLabResults,
   uploadLabResult,
@@ -148,9 +149,15 @@ function Modal(props: {
 }) {
   const { clinicId, patientId, professionalId, clinic, paciente, profissional, onClose, onSaved } = props
   const [sel, setSel] = useState<Set<string>>(new Set())
+  const [exames, setExames] = useState<string[]>(EXAMES_PADRAO)
   const [extra, setExtra] = useState('')
   const [obs, setObs] = useState('')
   const [salvando, setSalvando] = useState(false)
+
+  // Carrega o painel configurável (Configurações → Exames); cai no padrão se vazio.
+  useEffect(() => {
+    listExamTypes().then((ts) => { if (ts.length) setExames(ts.map((t) => t.nome)) }).catch(() => {})
+  }, [])
 
   function toggle(e: string) {
     setSel((s) => { const n = new Set(s); n.has(e) ? n.delete(e) : n.add(e); return n })
@@ -183,10 +190,10 @@ function Modal(props: {
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs text-texto/50">
           <span>Selecione os exames do painel padrão</span>
-          <button onClick={() => setSel(new Set(EXAMES_PADRAO))} className="font-medium text-primaria hover:underline">marcar todos</button>
+          <button onClick={() => setSel(new Set(exames))} className="font-medium text-primaria hover:underline">marcar todos</button>
         </div>
         <div className="grid max-h-60 grid-cols-2 gap-x-3 gap-y-1 overflow-auto rounded-lg border border-black/10 p-3 sm:grid-cols-3">
-          {EXAMES_PADRAO.map((e) => (
+          {exames.map((e) => (
             <label key={e} className="flex items-center gap-1.5 text-xs text-texto/80">
               <input type="checkbox" checked={sel.has(e)} onChange={() => toggle(e)} /> {e}
             </label>

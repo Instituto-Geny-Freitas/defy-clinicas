@@ -21,14 +21,46 @@ export interface LabResult {
   signedUrl?: string
 }
 
-/** Painel laboratorial padrão (do documento da clínica). */
+/** Painel laboratorial padrão (fallback caso o domínio não esteja carregado). */
 export const EXAMES_PADRAO = [
-  'Vitamina D', 'Vit. B12', 'Testosterona', 'Testost. Livre', 'Hemoglobina Glicada', 'Glicemia',
-  'Insulina', 'PCR', 'Vit. C', 'Ferro', 'Ferritina', 'Cortisol sérico', 'Ácido Fólico', 'TSH',
-  'T4 Livre', 'T3', 'T4', 'Hemograma Completo', 'HB + HT', 'Plaquetas', 'Na+', 'K+', 'Ca+', 'Mg',
-  'Cálcio Iônico', 'Colesterol total', 'HDL', 'LDL', 'VLDL', 'Triglicerídeos', 'Cobre', 'Zinco',
-  'Amilase', 'Lipase', 'TGO', 'TGP', 'Ureia', 'Creatinina', 'Homocisteína', 'Eosinófilos',
+  'Sódio', 'Potássio', 'Cálcio', 'Magnésio', 'Fósforo', 'Ca iônico', 'Colesterol Total',
+  'HDL Colesterol', 'LDL Colesterol', 'VLDL Colesterol', 'Triglicérides', 'Cobre', 'Zinco',
+  'Hemoglobina Glicada', 'Glicose', 'Insulina', 'Apolipoproteína A1', 'Apolipoproteína B',
+  'Proteínas Totais e Frações', 'Proteína C Reativa', 'Ácido Fólico', 'Vitamina B12', 'Vitamina C',
+  'Vitamina A', '25 Vitamina D', 'Amilase', 'Bilirrubina total e frações', 'Fosfatase alcalina',
+  'Gama GT', 'Lipase', 'TGO/AST Aspartato Aminotransferase', 'TGP/ALT Alanina Aminotransferase',
+  'Creatinina', 'Uréia', 'Hemograma Completo', 'Hb + Ht', 'Plaquetas', 'Coagulograma (TP e TTPA)',
+  'TSH', 'T4L', 'T3', 'T4', 'Cortisol sérico', 'Cortisol urinário', 'Cortisol salivar',
+  'Homocisteína', 'Ácido Úrico', 'Ferritina', 'Ferro', 'Transferrina', 'LH+FSH', 'Prolactina',
+  'Estradiol', 'Progesterona', 'Testosterona', 'Testosterona Livre',
 ]
+
+// ---- Domínio configurável de exames (CRUD em Configurações) ----------------
+export interface ExamType { id: string; nome: string; ativo: boolean; ordem: number }
+
+/** Lista os exames cadastrados (ordenados). Se vazio, use EXAMES_PADRAO. */
+export async function listExamTypes(): Promise<ExamType[]> {
+  const { data, error } = await supabase
+    .from('exam_types')
+    .select('id, nome, ativo, ordem')
+    .eq('ativo', true)
+    .order('ordem').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function createExamType(clinicId: string, nome: string, ordem: number): Promise<void> {
+  const { error } = await supabase.from('exam_types').insert({ clinic_id: clinicId, nome, ordem })
+  if (error) throw error
+}
+export async function updateExamType(id: string, patch: { nome?: string; ordem?: number }): Promise<void> {
+  const { error } = await supabase.from('exam_types').update(patch).eq('id', id)
+  if (error) throw error
+}
+export async function deleteExamType(id: string): Promise<void> {
+  const { error } = await supabase.from('exam_types').delete().eq('id', id)
+  if (error) throw error
+}
 
 export async function listLabOrders(patientId: string): Promise<LabOrder[]> {
   const { data, error } = await supabase

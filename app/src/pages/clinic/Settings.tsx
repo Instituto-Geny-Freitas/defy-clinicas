@@ -75,9 +75,10 @@ import {
   listAvailability, listBlocks, type AvailabilityWindow, type BlockRange,
 } from '@/lib/availability'
 import { formatDateBR } from '@/lib/format'
+import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -111,6 +112,7 @@ export default function Settings() {
           { k: 'formulas', l: 'Fórmulas' },
           { k: 'procedimentos', l: 'Procedimentos' },
           { k: 'despesas', l: 'Tipos de Despesa' },
+          { k: 'exames', l: 'Exames' },
           { k: 'servicos', l: 'Serviços Prestados' },
           { k: 'vacinas', l: 'Vacinas' },
           { k: 'formularios', l: 'Formulários (Admin)' },
@@ -141,6 +143,7 @@ export default function Settings() {
       {sec === 'formulas' && <FormulasSection clinicId={clinicId} />}
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'despesas' && <DespesasSection clinicId={clinicId} />}
+      {sec === 'exames' && <ExamesSection clinicId={clinicId} />}
       {sec === 'servicos' && <ServicosSection clinicId={clinicId} />}
       {sec === 'vacinas' && <VacinasSection clinicId={clinicId} />}
       {sec === 'formularios' && <FormulariosSection clinicId={clinicId} />}
@@ -571,6 +574,64 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
             {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// --- Exames laboratoriais (domínio ordenado) --------------------------------
+function ExamesSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<ExamType[]>([])
+  const [nome, setNome] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listExamTypes().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    const ordem = (itens[itens.length - 1]?.ordem ?? 0) + 1
+    try { await createExamType(clinicId, nome.trim(), ordem); setNome(''); recarregar() } finally { setSalvando(false) }
+  }
+  async function renomear(it: ExamType) { const n = prompt('Novo nome do exame:', it.nome); if (n && n.trim() && n.trim() !== it.nome) { await updateExamType(it.id, { nome: n.trim() }); recarregar() } }
+  async function remover(id: string) { if (confirm('Excluir este exame?')) { await deleteExamType(id); recarregar() } }
+  // Troca a ordem com o vizinho (persistindo as duas ordens).
+  async function mover(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= itens.length) return
+    const a = itens[i], b = itens[j]
+    await Promise.all([updateExamType(a.id, { ordem: b.ordem }), updateExamType(b.id, { ordem: a.ordem })])
+    recarregar()
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Exames laboratoriais</h3>
+        <p className="mb-3 text-xs text-texto/50">Painel usado em “Requisitar exames”. A ordem aqui define a ordem na tela e no PDF. Novos exames entram no fim da lista.</p>
+        <div className="flex gap-2">
+          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Vitamina D" onKeyDown={(e) => { if (e.key === 'Enter') salvar() }} />
+          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <div className="border-b border-black/5 px-4 py-2 text-xs text-texto/50">{itens.length} exames</div>
+        <table className="w-full text-sm"><tbody>
+          {itens.map((it, i) => (
+            <tr key={it.id} className="border-t border-black/5 first:border-t-0">
+              <td className="w-8 px-2 py-2 text-texto/30">{i + 1}</td>
+              <td className="px-2 py-2 text-texto">{it.nome}</td>
+              <td className="px-4 py-2 text-right whitespace-nowrap text-texto/50">
+                <button onClick={() => mover(i, -1)} className="px-1 hover:text-texto" title="Subir">↑</button>
+                <button onClick={() => mover(i, 1)} className="px-1 hover:text-texto" title="Descer">↓</button>
+                <button onClick={() => renomear(it)} className="ml-2 text-xs font-medium text-primaria hover:underline">Renomear</button>
+                <button onClick={() => remover(it.id)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
+              </td>
+            </tr>
+          ))}
+          {itens.length === 0 && <tr><td colSpan={3} className="px-4 py-3 text-sm text-texto/50">Nenhum exame. Aplique a migração 0040 para semear a lista padrão.</td></tr>}
+        </tbody></table>
       </div>
     </div>
   )
