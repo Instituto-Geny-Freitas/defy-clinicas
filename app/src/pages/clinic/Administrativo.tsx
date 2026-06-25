@@ -36,7 +36,16 @@ export default function Administrativo() {
   const [forms, setForms] = useState<FormDef[]>(DEFAULT_FORMS)
   const [sel, setSel] = useState<string>('corpo_tecnico')
 
-  useEffect(() => { getForms().then(setForms).catch(() => {}) }, [])
+  // Recarrega as definições ao montar e sempre que a aba voltar ao foco — assim
+  // personalizações feitas em Configurações (mesmo em outra aba) refletem aqui.
+  useEffect(() => {
+    const reload = () => getForms().then(setForms).catch(() => {})
+    reload()
+    const onVis = () => { if (document.visibilityState === 'visible') reload() }
+    window.addEventListener('focus', reload)
+    document.addEventListener('visibilitychange', onVis)
+    return () => { window.removeEventListener('focus', reload); document.removeEventListener('visibilitychange', onVis) }
+  }, [])
 
   if (!clinicId) return null
   const defAtual = forms.find((f) => f.chave === sel) ?? null
@@ -181,8 +190,9 @@ function FormModule({ clinicId, def }: { clinicId: string; def: FormDef }) {
     abrirPdf(blob)
   }
 
-  // Colunas curtas para a lista (date + até 3 campos não-longos).
-  const colsLista = def.campos.filter((c) => c.tipo !== 'textarea' && c.tipo !== 'upload').slice(0, 4)
+  // Colunas da lista: todos os campos simples (a tabela rola na horizontal).
+  // Textareas e uploads ficam fora das colunas para não estourar a largura.
+  const colsLista = def.campos.filter((c) => c.tipo !== 'textarea' && c.tipo !== 'upload')
 
   return (
     <div className="space-y-4">
