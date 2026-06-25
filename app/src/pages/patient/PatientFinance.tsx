@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
-import { brl, listQuotes, listPaymentsByPatient, totalPago, type Payment, type Quote } from '@/lib/finance'
+import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Payment, type Quote } from '@/lib/finance'
 import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
+import { formatDateBR } from '@/lib/format'
 
 export default function PatientFinance() {
   const { profile } = useAuth()
@@ -31,9 +32,11 @@ export default function PatientFinance() {
       ) : (
         <div className="space-y-3">
           {quotes.map((q) => {
-            const pago = totalPago(pagamentos, q.id)
+            const pago = totalLiquidado(pagamentos, q.id)
             const saldo = q.valor_total - pago
             const produtos = produtosDoOrcamento(procedimentos, q.id)
+            const parcelas = pagamentos.filter((p) => p.quote_id === q.id && p.parcelamento_grupo).sort((a, b) => a.parcela - b.parcela)
+            const estornadas = parcelas.filter((p) => p.status === 'estornado')
             return (
               <div key={q.id} className="rounded-xl border border-black/5 bg-white p-4">
                 <div className="space-y-0.5 text-sm text-texto/80">
@@ -47,6 +50,23 @@ export default function PatientFinance() {
                     {saldo > 0 ? `Saldo ${brl(saldo)}` : 'Quitado'}
                   </span>
                 </div>
+                {parcelas.length > 0 && (
+                  <div className="mt-2 border-t border-black/5 pt-2">
+                    <div className="mb-1 text-xs font-medium text-texto/60">Pagamento no cartão ({parcelas[0].total_parcelas}×)</div>
+                    {estornadas.length > 0 && (
+                      <p className="mb-1 rounded-lg bg-rose-50 p-2 text-xs text-rose-700">
+                        {estornadas.length === parcelas.length ? 'Pagamento estornado (chargeback)' : `${estornadas.length} parcela(s) estornada(s)`} — o valor de {brl(estornadas.reduce((s, p) => s + Number(p.valor), 0))} voltou a ficar <strong>pendente</strong>.
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {parcelas.map((p) => (
+                        <span key={p.id} className={`rounded-full px-2 py-0.5 text-[11px] ${p.status === 'estornado' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {p.parcela}/{p.total_parcelas} {p.status === 'estornado' ? 'estornada' : 'paga'}{p.vencimento ? ` · ${formatDateBR(p.vencimento)}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {produtos.length > 0 && (
                   <div className="mt-2 border-t border-black/5 pt-2">
                     <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados</div>

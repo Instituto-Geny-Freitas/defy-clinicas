@@ -36,6 +36,10 @@ export interface Payment {
   valor: number
   metodo: PaymentMethod
   status: PaymentStatus
+  parcela: number
+  total_parcelas: number
+  parcelamento_grupo: string | null
+  liquidado_paciente: boolean
   vencimento: string | null
   pago_em: string | null
   pix_copia_cola: string | null
@@ -172,9 +176,108 @@ export async function deletePayment(id: string): Promise<void> {
   if (error) throw error
 }
 
-/** Total já pago (status 'pago') de um orçamento, a partir da lista de pagamentos. */
+/** Total já pago (status 'pago') de um orçamento — caixa efetivamente realizado. */
 export function totalPago(payments: Payment[], quoteId: string): number {
   return payments
     .filter((p) => p.quote_id === quoteId && p.status === 'pago')
     .reduce((s, p) => s + Number(p.valor), 0)
+}
+
+/** O paciente liquidou esta linha? (pago à vista OU parcela de cartão não estornada) */
+export function liquidadoPaciente(p: Payment): boolean {
+  if (p.status === 'estornado' || p.status === 'cancelado') return false
+  return p.status === 'pago' || p.liquidado_paciente
+}
+
+/** Total liquidado pelo PACIENTE (à vista + cartão parcelado não estornado). */
+export function totalLiquidado(payments: Payment[], quoteId: string): number {
+  return payments
+    .filter((p) => p.quote_id === quoteId && liquidadoPaciente(p))
+    .reduce((s, p) => s + Number(p.valor), 0)
+}
+
+// ---- Parcelamento no cartão de crédito -------------------------------------
+const pad2 = (n: number) => String(n).padStart(2, '0')
+function addMeses(base: Date, n: number): string {
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate())
+  d.setMonth(d.getMonth() + n)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+/**
+ * Registra uma venda parcelada no cartão: o paciente liquida no ato, mas a clínica
+ * recebe em N parcelas mensais (1ª após ~30 dias). Cada parcela é um "a receber".
+ */
+export async function registerCardInstallments(args: {
+  clinicId: string
+  quoteId: string
+  patientId: string
+  valorTotal: number
+  parcelas: number
+  baseDate?: string // YYYY-MM-DD (default: hoje)
+}): Promise<void> {
+  const n = Math.max(2, Math.floor(args.parcelas))
+  const grupo = crypto.randomUUID()
+  const base = args.baseDate ? new Date(`${args.baseDate}T12:00:00`) : new Date()
+  const cada = Math.round((args.valorTotal / n) * 100) / 100
+  const ajuste = Math.round((args.valorTotal - cada * n) * 100) / 100 // sobra de centavos na 1ª
+  const rows = Array.from({ length: n }, (_, i) => ({
+    clinic_id: args.clinicId,
+    quote_id: args.quoteId,
+    patient_id: args.patientId,
+    valor: i === 0 ? cada + ajuste : cada,
+    metodo: 'cartao_credito' as PaymentMethod,
+    status: 'pendente' as PaymentStatus,
+    parcela: i + 1,
+    total_parcelas: n,
+    vencimento: addMeses(base, i + 1), // +1 mês .. +N meses (1ª após ~30 dias)
+    liquidado_paciente: true,
+    parcelamento_grupo: grupo,
+  }))
+  const { error } = await supabase.from('payments').insert(rows)
+  if (error) throw error
+}
+
+/** Marca uma parcela como efetivamente recebida pela clínica (vira caixa). */
+export async function markInstallmentReceived(id: string): Promise<void> {
+  const { error } = await supabase.from('payments').update({ status: 'pago', pago_em: new Date().toISOString() }).eq('id', id)
+  if (error) throw error
+}
+
+/** Chargeback de uma parcela: reabre a obrigação do paciente e sai do a receber. */
+export async function chargebackPayment(id: string): Promise<void> {
+  const { error } = await supabase.from('payments').update({ status: 'estornado', liquidado_paciente: false }).eq('id', id)
+  if (error) throw error
+}
+
+/** Chargeback de toda a venda parcelada (grupo). */
+export async function chargebackGroup(grupo: string): Promise<void> {
+  const { error } = await supabase.from('payments').update({ status: 'estornado', liquidado_paciente: false }).eq('parcelamento_grupo', grupo)
+  if (error) throw error
+}
+
+export interface Receivable {
+  id: string
+  quote_id: string | null
+  valor: number
+  vencimento: string | null
+  parcela: number
+  total_parcelas: number
+  patients?: { nome: string } | null
+}
+
+/** Parcelas de cartão a receber (status pendente) num intervalo de vencimento. */
+export async function listCardReceivables(de: string, ate: string): Promise<Receivable[]> {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('id, quote_id, valor, vencimento, parcela, total_parcelas, patients(nome)')
+    .not('parcelamento_grupo', 'is', null)
+    .eq('status', 'pendente')
+    .gte('vencimento', de).lte('vencimento', ate)
+    .order('vencimento', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    ...r,
+    patients: Array.isArray(r.patients) ? (r.patients[0] ?? null) : r.patients,
+  })) as Receivable[]
 }

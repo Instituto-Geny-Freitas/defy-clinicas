@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
-import { listAllQuotes, registerPayment, updatePayment, deletePayment, brl, type PaymentMethod, type Quote } from '@/lib/finance'
+import {
+  listAllQuotes, registerPayment, registerCardInstallments, updatePayment, deletePayment,
+  listCardReceivables, markInstallmentReceived, chargebackPayment, brl,
+  type PaymentMethod, type Quote, type Receivable,
+} from '@/lib/finance'
 import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
@@ -207,9 +211,36 @@ function ReceitasView(props: {
   onChange: () => void
 }) {
   const { clinicId, pagamentos, totalReceitas, totalAReceber, quotes, saldos, onChange } = props
-  const [view, setView] = useState<'pagos' | 'receber'>('pagos')
+  const [view, setView] = useState<'pagos' | 'receber' | 'cartao'>('pagos')
   const [cobranca, setCobranca] = useState(false)
   const [editandoPg, setEditandoPg] = useState<PaymentRow | null>(null)
+  const [cartao, setCartao] = useState<Receivable[]>([])
+
+  function loadCartao() { listCardReceivables('2000-01-01', '2100-01-01').then(setCartao).catch(() => {}) }
+  useEffect(loadCartao, [])
+
+  // Agrupa as parcelas a receber por mês de vencimento (YYYY-MM).
+  const cartaoPorMes = useMemo(() => {
+    const m = new Map<string, Receivable[]>()
+    for (const r of cartao) {
+      const k = (r.vencimento ?? '').slice(0, 7)
+      if (!k) continue
+      const arr = m.get(k) ?? []
+      arr.push(r)
+      m.set(k, arr)
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [cartao])
+  const totalCartao = cartao.reduce((s, r) => s + Number(r.valor), 0)
+
+  async function receberParcela(r: Receivable) {
+    if (!confirm(`Confirmar recebimento da parcela ${r.parcela}/${r.total_parcelas} (${brl(Number(r.valor))})?`)) return
+    await markInstallmentReceived(r.id); loadCartao(); onChange()
+  }
+  async function estornarParcela(r: Receivable) {
+    if (!confirm(`Chargeback da parcela ${r.parcela}/${r.total_parcelas}? A obrigação volta a pendente para o paciente.`)) return
+    await chargebackPayment(r.id); loadCartao(); onChange()
+  }
 
   async function excluirPagamento(p: PaymentRow) {
     if (!confirm(`Excluir o pagamento de ${brl(Number(p.valor))}?`)) return
@@ -233,9 +264,12 @@ function ReceitasView(props: {
         </button>
       </div>
 
-      <div className="mb-3 flex gap-1 text-sm">
+      <div className="mb-3 flex flex-wrap gap-1 text-sm">
         <button onClick={() => setView('pagos')} className={`rounded-lg px-3 py-1.5 ${view === 'pagos' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>Realizado (Pagos)</button>
-        <button onClick={() => setView('receber')} className={`rounded-lg px-3 py-1.5 ${view === 'receber' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>Não pagos (A receber)</button>
+        <button onClick={() => setView('receber')} className={`rounded-lg px-3 py-1.5 ${view === 'receber' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>Saldo do paciente (A receber)</button>
+        <button onClick={() => setView('cartao')} className={`rounded-lg px-3 py-1.5 ${view === 'cartao' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>
+          Cartão parcelado {totalCartao > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-700">{brl(totalCartao)}</span>}
+        </button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
@@ -262,7 +296,7 @@ function ReceitasView(props: {
               {pagamentos.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">Nenhum pagamento no mês.</td></tr>}
             </tbody>
           </table>
-        ) : (
+        ) : view === 'receber' ? (
           <table className="w-full text-sm">
             <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
               <th className="px-4 py-2 font-medium">Paciente</th><th className="px-4 py-2 font-medium">Orçamento</th>
@@ -280,6 +314,35 @@ function ReceitasView(props: {
               {aReceber.length === 0 && <tr><td colSpan={4} className="px-4 py-3 text-texto/50">Nada a receber.</td></tr>}
             </tbody>
           </table>
+        ) : (
+          <div className="p-3">
+            <p className="mb-3 text-xs text-texto/50">Parcelas de cartão de crédito a receber, por mês de vencimento. O paciente já está quitado; estes valores são o repasse do cartão à clínica.</p>
+            {cartaoPorMes.length === 0 ? (
+              <p className="px-1 py-3 text-sm text-texto/50">Nenhuma parcela a receber.</p>
+            ) : cartaoPorMes.map(([mes, itens]) => {
+              const [ano, m] = mes.split('-')
+              const totalMes = itens.reduce((s, r) => s + Number(r.valor), 0)
+              return (
+                <div key={mes} className="mb-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-sm font-semibold capitalize text-texto/70">{MESES[Number(m) - 1]}/{ano}</span>
+                    <span className="text-sm font-medium text-amber-600">{brl(totalMes)}</span>
+                  </div>
+                  <div className="space-y-1">
+                    {itens.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between rounded-lg border border-black/5 px-3 py-1.5 text-sm">
+                        <span className="text-texto/70">{r.patients?.nome ?? '—'} · parcela {r.parcela}/{r.total_parcelas} · {brl(Number(r.valor))}{r.vencimento && <span className="text-texto/40"> · vence {formatDateBR(r.vencimento)}</span>}</span>
+                        <span className="whitespace-nowrap">
+                          <button onClick={() => receberParcela(r)} className="text-xs font-medium text-emerald-600 hover:underline">Recebida</button>
+                          <button onClick={() => estornarParcela(r)} className="ml-3 text-xs text-secundaria hover:underline">Chargeback</button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -353,11 +416,13 @@ function CobrancaModal(props: {
   const [quoteId, setQuoteId] = useState('')
   const [valor, setValor] = useState('')
   const [metodo, setMetodo] = useState<PaymentMethod>('pix')
+  const [parcelas, setParcelas] = useState(1)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
   const orcsDoPaciente = quotes.filter((q) => q.patient_id === patientId)
   const saldoSel = quoteId && saldos[quoteId] ? Number(saldos[quoteId].saldo_a_receber) : null
+  const parcelado = metodo === 'cartao_credito' && parcelas > 1
 
   function escolherOrc(id: string) {
     setQuoteId(id)
@@ -372,7 +437,11 @@ function CobrancaModal(props: {
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
     setSalvando(true)
     try {
-      await registerPayment({ clinicId, quoteId, patientId, valor: v, metodo, status: 'pago' })
+      if (parcelado) {
+        await registerCardInstallments({ clinicId, quoteId, patientId, valorTotal: v, parcelas })
+      } else {
+        await registerPayment({ clinicId, quoteId, patientId, valor: v, metodo, status: 'pago' })
+      }
       onSaved()
     } catch (e) {
       setErro((e as Error).message ?? 'Erro ao registrar.')
@@ -419,6 +488,22 @@ function CobrancaModal(props: {
               </select>
             </div>
           </div>
+          {metodo === 'cartao_credito' && (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-texto/60">Parcelas</label>
+              <select className={field} value={parcelas} onChange={(e) => setParcelas(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
+                  const v = parseMoneyBR(valor)
+                  return <option key={n} value={n}>{n}× {n === 1 ? '(à vista)' : v ? `de ${brl(v / n)}` : ''}</option>
+                })}
+              </select>
+              {parcelado && (
+                <p className="mt-1 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
+                  Paciente <strong>quitado</strong> agora; clínica recebe {parcelas}× (1ª em ~30 dias) — entram como <strong>a receber</strong> nos próximos meses.
+                </p>
+              )}
+            </div>
+          )}
           {erro && <p className="text-sm text-secundaria">{erro}</p>}
         </div>
         <div className="mt-5 flex justify-end gap-2">

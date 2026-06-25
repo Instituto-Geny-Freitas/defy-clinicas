@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react'
 import {
   brl,
   calcItensTotal,
+  chargebackGroup,
+  chargebackPayment,
   createQuote,
   deletePayment,
   deleteQuote,
   listPaymentsByPatient,
   listQuotes,
+  markInstallmentReceived,
+  registerCardInstallments,
   registerPayment,
-  totalPago,
+  totalLiquidado,
   updatePayment,
   updateQuote,
   type Payment,
@@ -49,13 +53,28 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
     await deletePayment(p.id)
     recarregar()
   }
+  async function receberParcela(p: Payment) {
+    if (!confirm(`Confirmar recebimento da parcela ${p.parcela}/${p.total_parcelas} (${brl(Number(p.valor))})?`)) return
+    await markInstallmentReceived(p.id)
+    recarregar()
+  }
+  async function estornarParcela(p: Payment) {
+    if (!confirm(`Registrar chargeback da parcela ${p.parcela}/${p.total_parcelas}? A obrigação volta a ficar pendente para o paciente.`)) return
+    await chargebackPayment(p.id)
+    recarregar()
+  }
+  async function estornarGrupo(grupo: string) {
+    if (!confirm('Registrar chargeback de TODAS as parcelas desta venda? A obrigação volta a ficar pendente para o paciente.')) return
+    await chargebackGroup(grupo)
+    recarregar()
+  }
   const metodoLabel: Record<string, string> = {
     pix: 'PIX', cartao_credito: 'Cartão crédito', cartao_debito: 'Cartão débito',
     dinheiro: 'Dinheiro', transferencia: 'Transferência', outro: 'Outro',
   }
 
   async function excluirOrc(q: Quote) {
-    const pago = totalPago(pagamentos, q.id)
+    const pago = totalLiquidado(pagamentos, q.id)
     if (pago > 0) { alert('Este orçamento já tem pagamento registrado. Exclua/estorne os pagamentos antes.'); return }
     if (!confirm('Excluir este orçamento?')) return
     try { await deleteQuote(q.id); recarregar() }
@@ -132,7 +151,7 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
           clinicId={clinicId}
           patientId={patientId}
           quote={pagandoQuote}
-          saldo={pagandoQuote.valor_total - totalPago(pagamentos, pagandoQuote.id)}
+          saldo={pagandoQuote.valor_total - totalLiquidado(pagamentos, pagandoQuote.id)}
           onClose={() => setPagandoQuote(null)}
           onSaved={() => { setPagandoQuote(null); recarregar() }}
         />
@@ -150,7 +169,7 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
       ) : (
         <div className="space-y-3">
           {quotes.map((q) => {
-            const pago = totalPago(pagamentos, q.id)
+            const pago = totalLiquidado(pagamentos, q.id)
             const saldo = q.valor_total - pago
             const produtos = produtosDoOrcamento(procedimentos, q.id)
             return (
@@ -199,13 +218,17 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                 </div>
 
                 {(() => {
-                  const pgs = pagamentos.filter((p) => p.quote_id === q.id && p.status === 'pago')
-                  if (pgs.length === 0) return null
+                  const doQuote = pagamentos.filter((p) => p.quote_id === q.id)
+                  const avista = doQuote.filter((p) => !p.parcelamento_grupo && p.status === 'pago')
+                  const parcelas = doQuote.filter((p) => p.parcelamento_grupo).sort((a, b) => a.parcela - b.parcela)
+                  const grupo = parcelas[0]?.parcelamento_grupo ?? null
+                  const algumAtivo = parcelas.some((p) => p.status !== 'estornado')
+                  if (avista.length === 0 && parcelas.length === 0) return null
                   return (
                     <div className="mt-3 border-t border-black/5 pt-3">
-                      <div className="mb-1 text-xs font-medium text-texto/60">Pagamentos</div>
+                      {avista.length > 0 && <div className="mb-1 text-xs font-medium text-texto/60">Pagamentos</div>}
                       <div className="space-y-1">
-                        {pgs.map((p) => (
+                        {avista.map((p) => (
                           <div key={p.id} className="flex items-center justify-between text-sm">
                             <span className="text-texto/70">
                               {brl(Number(p.valor))} · {metodoLabel[p.metodo] ?? p.metodo}
@@ -218,6 +241,38 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                           </div>
                         ))}
                       </div>
+
+                      {parcelas.length > 0 && (
+                        <div className="mt-2">
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-xs font-medium text-texto/60">Cartão parcelado ({parcelas[0].total_parcelas}×)</span>
+                            {grupo && algumAtivo && (
+                              <button onClick={() => estornarGrupo(grupo)} className="text-xs font-medium text-secundaria hover:underline">Chargeback total</button>
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            {parcelas.map((p) => {
+                              const badge = p.status === 'estornado'
+                                ? <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">estornada</span>
+                                : p.status === 'pago'
+                                  ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">recebida</span>
+                                  : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">a receber</span>
+                              return (
+                                <div key={p.id} className="flex items-center justify-between text-sm">
+                                  <span className="text-texto/70">
+                                    {p.parcela}/{p.total_parcelas} · {brl(Number(p.valor))}
+                                    {p.vencimento && <span className="text-texto/40"> · vence {formatDateBR(p.vencimento)}</span>} {badge}
+                                  </span>
+                                  <span className="whitespace-nowrap">
+                                    {p.status === 'pendente' && <button onClick={() => receberParcela(p)} className="text-xs font-medium text-emerald-600 hover:underline">Recebida</button>}
+                                    {p.status !== 'estornado' && <button onClick={() => estornarParcela(p)} className="ml-3 text-xs text-secundaria hover:underline">Chargeback</button>}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )
                 })()}
@@ -511,13 +566,21 @@ function PagamentoModal({ clinicId, patientId, quote, saldo, onClose, onSaved }:
 }) {
   const [valor, setValor] = useState(saldo)
   const [metodo, setMetodo] = useState<PaymentMethod>('pix')
+  const [parcelas, setParcelas] = useState(1)
   const [salvando, setSalvando] = useState(false)
+
+  const parcelado = metodo === 'cartao_credito' && parcelas > 1
+  const valorParcela = parcelado ? valor / parcelas : valor
 
   async function salvar() {
     if (valor <= 0) return
     setSalvando(true)
     try {
-      await registerPayment({ clinicId, quoteId: quote.id, patientId, valor, metodo, status: 'pago' })
+      if (parcelado) {
+        await registerCardInstallments({ clinicId, quoteId: quote.id, patientId, valorTotal: valor, parcelas })
+      } else {
+        await registerPayment({ clinicId, quoteId: quote.id, patientId, valor, metodo, status: 'pago' })
+      }
       onSaved()
     } catch {
       setSalvando(false)
@@ -548,6 +611,22 @@ function PagamentoModal({ clinicId, patientId, quote, saldo, onClose, onSaved }:
               <option value="outro">Outro</option>
             </select>
           </div>
+          {metodo === 'cartao_credito' && (
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Parcelas</label>
+              <select className={field} value={parcelas} onChange={(e) => setParcelas(Number(e.target.value))}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>{n}× {n === 1 ? '(à vista)' : `de ${brl(valor / n)}`}</option>
+                ))}
+              </select>
+              {parcelado && (
+                <p className="mt-1 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
+                  O paciente fica <strong>quitado</strong> agora. A clínica recebe {parcelas}× de <strong>{brl(valorParcela)}</strong>,
+                  a 1ª em ~30 dias — aparecem como <strong>a receber</strong> no fluxo de caixa.
+                </p>
+              )}
+            </div>
+          )}
           {metodo === 'pix' && (
             <p className="rounded-lg bg-primaria/5 p-2 text-xs text-texto/60">
               Cobrança PIX automática via gateway será gerada quando um gateway for configurado em Configurações → Integrações.
