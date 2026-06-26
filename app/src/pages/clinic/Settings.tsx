@@ -1055,10 +1055,6 @@ function DisponibilidadeSection({ clinicId }: { clinicId: string }) {
   const [profId, setProfId] = useState('')
   const [janelas, setJanelas] = useState<AvailabilityWindow[]>([])
   const [blocks, setBlocks] = useState<BlockRange[]>([])
-  // form de nova janela
-  const [dia, setDia] = useState(1)
-  const [hi, setHi] = useState('09:00')
-  const [hf, setHf] = useState('18:00')
   // form de novo bloqueio
   const [bIni, setBIni] = useState('')
   const [bFim, setBFim] = useState('')
@@ -1081,9 +1077,9 @@ function DisponibilidadeSection({ clinicId }: { clinicId: string }) {
   }
   useEffect(recarregar, [profId])
 
-  async function addJanela() {
-    if (hf <= hi) return
-    await createAvailability(clinicId, profId, dia, hi, hf); recarregar()
+  async function addJanela(diaSemana: number, ini: string, fim: string) {
+    if (!profId || fim <= ini) return
+    await createAvailability(clinicId, profId, diaSemana, ini, fim); recarregar()
   }
   async function addBlock() {
     if (!bIni) return
@@ -1106,35 +1102,17 @@ function DisponibilidadeSection({ clinicId }: { clinicId: string }) {
         </div>
       </div>
 
-      {/* Janelas semanais */}
+      {/* Janelas semanais — várias faixas por dia */}
       <div className="rounded-xl border border-black/5 bg-white p-5">
-        <h4 className="mb-3 text-sm font-semibold text-texto/70">Horários por dia da semana</h4>
-        <div className="flex flex-wrap items-end gap-2">
-          <div>
-            <label className="mb-1 block text-xs text-texto/50">Dia</label>
-            <select className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={dia} onChange={(e) => setDia(Number(e.target.value))}>
-              {DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}
-            </select>
-          </div>
-          <div><label className="mb-1 block text-xs text-texto/50">Início</label><input type="time" className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={hi} onChange={(e) => setHi(e.target.value)} /></div>
-          <div><label className="mb-1 block text-xs text-texto/50">Fim</label><input type="time" className="rounded-lg border border-black/10 px-2 py-2 text-sm" value={hf} onChange={(e) => setHf(e.target.value)} /></div>
-          <button onClick={addJanela} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Adicionar faixa</button>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <h4 className="mb-1 text-sm font-semibold text-texto/70">Horários por dia da semana</h4>
+        <p className="mb-3 text-xs text-texto/50">Você pode cadastrar <strong>várias faixas no mesmo dia</strong> (ex.: 08:00–12:00 e 14:00–17:00). Para intervalo de almoço, basta deixar uma lacuna entre as faixas.</p>
+        <div className="space-y-2">
           {DIAS_SEMANA.map((d, i) => (
-            <div key={i} className="rounded-lg border border-black/5 p-3">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-texto/50">{d}</div>
-              {porDia(i).length === 0 ? <div className="text-xs text-texto/30">— sem atendimento —</div> : (
-                <div className="flex flex-wrap gap-1.5">
-                  {porDia(i).map((j) => (
-                    <span key={j.id} className="flex items-center gap-1 rounded-full bg-primaria/10 px-2 py-0.5 text-xs text-primaria">
-                      {j.hora_inicio.slice(0, 5)}–{j.hora_fim.slice(0, 5)}
-                      <button onClick={async () => { await deleteAvailability(j.id); recarregar() }} className="text-primaria/60 hover:text-secundaria">✕</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            <DiaDisponibilidade
+              key={i} nome={d} faixas={porDia(i)}
+              onAdd={(ini, fim) => addJanela(i, ini, fim)}
+              onRemove={async (id) => { await deleteAvailability(id); recarregar() }}
+            />
           ))}
         </div>
       </div>
@@ -1157,6 +1135,45 @@ function DisponibilidadeSection({ clinicId }: { clinicId: string }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function DiaDisponibilidade({ nome, faixas, onAdd, onRemove }: {
+  nome: string; faixas: AvailabilityWindow[]
+  onAdd: (ini: string, fim: string) => void | Promise<void>; onRemove: (id: string) => void | Promise<void>
+}) {
+  const [ini, setIni] = useState('08:00')
+  const [fim, setFim] = useState('12:00')
+  const [erro, setErro] = useState(false)
+  const ordenadas = [...faixas].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+
+  async function adicionar() {
+    if (fim <= ini) { setErro(true); return }
+    setErro(false)
+    await onAdd(ini, fim)
+  }
+
+  return (
+    <div className="rounded-lg border border-black/5 p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="w-24 shrink-0 text-sm font-semibold text-texto/70">{nome}</div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          {ordenadas.length === 0 ? <span className="text-xs text-texto/30">— sem atendimento —</span> : ordenadas.map((j) => (
+            <span key={j.id} className="flex items-center gap-1 rounded-full bg-primaria/10 px-2 py-0.5 text-xs text-primaria">
+              {j.hora_inicio.slice(0, 5)}–{j.hora_fim.slice(0, 5)}
+              <button onClick={() => onRemove(j.id)} className="text-primaria/60 hover:text-secundaria" title="Remover faixa">✕</button>
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          <input type="time" className={`rounded-lg border px-2 py-1.5 text-sm ${erro ? 'border-secundaria' : 'border-black/10'}`} value={ini} onChange={(e) => setIni(e.target.value)} />
+          <span className="text-xs text-texto/40">às</span>
+          <input type="time" className={`rounded-lg border px-2 py-1.5 text-sm ${erro ? 'border-secundaria' : 'border-black/10'}`} value={fim} onChange={(e) => setFim(e.target.value)} />
+          <button onClick={adicionar} className="rounded-lg border border-primaria px-2.5 py-1.5 text-sm font-semibold text-primaria hover:bg-primaria/5" title="Adicionar faixa neste dia">+</button>
+        </div>
+      </div>
+      {erro && <p className="mt-1 text-xs text-secundaria">O horário final deve ser maior que o inicial.</p>}
     </div>
   )
 }
