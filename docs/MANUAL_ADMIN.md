@@ -213,6 +213,10 @@ Nos agendamentos que fazem parte de uma série, o botão **"Série ···"** per
 Na lista de agendamentos, o botão **Regularizar** (em agendamentos "sem cadastro") abre
 o vínculo com um paciente já cadastrado, sem precisar remarcar o horário.
 
+> **Séries recorrentes:** se o agendamento fizer parte de uma **série recorrente** (agendado
+> como avulso repetido), ao vincular um único agendamento da série todos os demais da mesma
+> série (passados e futuros) são vinculados automaticamente ao mesmo paciente.
+
 ---
 
 ## 5. Pacientes (o coração do sistema)
@@ -221,10 +225,14 @@ o vínculo com um paciente já cadastrado, sem precisar remarcar o horário.
 - Busque por nome. Cada paciente na lista tem **Abrir**, **Editar** e **Excluir**
   (o excluir preserva o histórico e apenas tira o paciente da lista).
 - **+ Novo paciente** abre o cadastro:
-  - Dados pessoais (nome, nascimento — **idade automática**, CPF, WhatsApp, e-mail,
-    profissão, estilo de trabalho, alergias).
-  - **Regularizar agendamento prévio:** se houver agendamentos "sem cadastro", aparece a
-    opção de **vinculá-los** a este novo paciente.
+  - Dados pessoais: **nome**, **nascimento** (com **idade automática**), **CPF**,
+    **WhatsApp** e **e-mail**.
+  - Campos clínicos (profissão, estilo de trabalho, alergias) ficam na **Anamnese** —
+    não precisam ser preenchidos no momento do cadastro.
+  - **Regularizar agendamento prévio:** se houver agendamentos "sem cadastro" com nome
+    compatível, o sistema exibe a opção de **vinculá-los** a este novo paciente. Ao
+    marcar um agendamento que faz parte de uma **série recorrente**, todos os outros
+    agendamentos da mesma série (passados e futuros) são vinculados automaticamente.
   - **Acesso ao sistema:** defina a **senha provisória**. Ao salvar, o sistema cria o
     login (usando o **e-mail** cadastrado; se não houver, usa o CPF) e mostra **login + senha**.
   - **Consentimento LGPD** e **Limite de relatórios** (ao editar).
@@ -236,7 +244,7 @@ Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro.
 |-----|-----------|
 | **Resumo** | Dados pessoais, idade, status do consentimento LGPD |
 | **Agenda** | Agendamentos **deste paciente** + calendário só dele; realizados/cancelados ficam no fim da lista |
-| **Anamnese** | Ficha clínica (também preenchida pelo paciente). O **Estilo de trabalho** preenchido aqui reflete no Resumo |
+| **Anamnese** | Ficha clínica completa: hábitos, queixas, histórico de saúde, **profissão**, **estilo de trabalho** e **alergias** (também preenchida pelo próprio paciente no portal) |
 | **Avaliações** | Fichas Dermato Funcional, Capilar e Corporal (escalas e perimetria) |
 | **Plano** | Plano de tratamento — texto livre, **textos-padrão** e **Sugerir com IA**. Editar/excluir |
 | **Procedimentos** | Registra o atendimento; **Editar/Excluir**, **CRUD de produtos** (baixa/estorno de estoque), vínculo a Orçamento ou **valor avulso** |
@@ -370,10 +378,22 @@ Receitas recebidas, despesas pagas, **resultado do mês**, pendências (a recebe
 e **posição patrimonial** (caixa + aplicações + aportes).
 
 ### 8.2 Receitas
-- **Realizado (Pagos)** e **Não pagos (A receber)**.
+- **Realizado (Pagos)**, **Saldo do Paciente (A receber)** e **Cartão Parcelado**.
 - **Registrar cobrança recebida:** escolha **paciente → orçamento** (saldo pré-preenchido)
   sem precisar entrar na ficha do paciente.
 - Cada pagamento tem **Editar** e **Excluir**.
+
+#### Filtros de pesquisa nas abas de Receitas
+
+Cada aba tem filtros rápidos para localizar registros sem precisar rolar a lista:
+
+| Aba | Filtros disponíveis |
+|-----|---------------------|
+| **Realizado (Pagos)** | Paciente (busca por nome) · Método de pagamento · Status (Pago / Não pago) |
+| **Saldo do Paciente** | Paciente (busca por nome) |
+| **Cartão Parcelado** | Paciente (busca por nome) |
+
+Os filtros são aplicados na hora, sem recarregar a página.
 
 #### Cartão de crédito parcelado
 Ao registrar um pagamento com **Cartão de crédito**, é possível escolher o **número de
@@ -480,7 +500,7 @@ A marca da clínica (logo/nome/cores) aparece também no portal e no app instala
 - **Agendamentos:** ver consultas e **solicitar horário** (a clínica confirma). Ao solicitar,
   o paciente escolhe o **profissional** e o sistema exibe a **disponibilidade em tempo real**
   (disponível / ocupado / fora de horário / bloqueado).
-- **Anamnese:** preencher a própria ficha (inclui **estilo de trabalho**).
+- **Anamnese:** preencher a própria ficha (hábitos, queixas, **profissão**, **estilo de trabalho**, **alergias** e histórico de saúde).
 - **Documentos:** ler/**assinar** termos e orientações; **abrir as receitas, orçamentos e
   arquivos** enviados pela clínica (PDFs).
 - **Exames:** ver as **requisições** da clínica e **enviar/abrir/excluir resultados**.
@@ -519,6 +539,44 @@ A marca da clínica (logo/nome/cores) aparece também no portal e no app instala
   e seguem a identidade visual da clínica.
 - Para os relatórios financeiros baterem, mantenha os **Tipos de Despesa classificados**
   (Produto/Gasto fixo) e registre os pagamentos/recebimentos no mês correto.
+
+---
+
+---
+
+## 14. Administrativo (Controles de qualidade e biossegurança)
+
+O módulo **Administrativo** reúne os registros obrigatórios de qualidade da clínica —
+temperatura do refrigerador, higienização de equipamentos, limpeza de ambientes, etc.
+
+### 14.1 Navegar pelos formulários
+- No menu lateral, clique em **Administrativo**.
+- Selecione o **formulário** no painel esquerdo (ex.: "Temperatura do Refrigerador").
+- A lista de registros é exibida com **filtros por período** (Tudo / Mês-Ano / Faixa de datas).
+
+### 14.2 Criar um registro
+1. Clique em **+ Novo registro**.
+2. Preencha todos os campos (data, hora, valores numéricos, responsável etc.).
+3. Clique em **Salvar** — o registro aparece na lista imediatamente.
+
+> Campos numéricos (ex.: temperatura máxima, mínima) devem ser preenchidos com número.
+> Se um campo for deixado em branco, a coluna exibe "—" na lista.
+
+### 14.3 Editar e excluir
+- Clique em **Editar** na linha do registro para corrigir qualquer campo.
+- Clique em **Excluir** para remover o registro (ação irreversível).
+
+### 14.4 Exportar PDF
+- Clique em **PDF** na barra de filtros para gerar o relatório do período selecionado,
+  com cabeçalho da clínica e assinatura do responsável técnico.
+
+### 14.5 Personalizar formulários (Configurações → Administrativo)
+O admin pode **personalizar** qualquer formulário padrão:
+- Renomear campos, alterar a obrigatoriedade, adicionar opções de seleção ou remover campos.
+- A personalização **substitui completamente** a definição padrão daquele formulário;
+  se precisar voltar ao padrão, use o botão **Restaurar padrão**.
+- Os dados já gravados nos registros anteriores **não são apagados** — a personalização
+  afeta apenas a exibição e o formulário de criação/edição.
 
 ---
 
