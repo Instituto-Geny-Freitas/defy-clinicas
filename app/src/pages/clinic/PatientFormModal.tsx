@@ -172,25 +172,6 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
           <label className="mb-1 block text-sm text-texto/70">E-mail</label>
           <input className={field} value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} />
         </div>
-        <div>
-          <label className="mb-1 block text-sm text-texto/70">Profissão</label>
-          <input className={field} value={form.profissao ?? ''} onChange={(e) => set('profissao', e.target.value)} />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1 block text-sm text-texto/70">Estilo de trabalho</label>
-          <div className="flex gap-4 py-1 text-sm">
-            {[{ v: 'sentado', l: 'Sentado' }, { v: 'em_pe_ativo', l: 'Em pé / Ativo' }].map((o) => (
-              <label key={o.v} className="flex items-center gap-1.5">
-                <input type="radio" checked={form.estilo_trabalho === o.v} onChange={() => set('estilo_trabalho', o.v)} />
-                {o.l}
-              </label>
-            ))}
-          </div>
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1 block text-sm text-texto/70">Alergias</label>
-          <input className={field} value={form.alergias ?? ''} onChange={(e) => set('alergias', e.target.value)} />
-        </div>
 
         {/* Regularização de agendamento prévio sem cadastro */}
         {!editando && walkins.length > 0 && (
