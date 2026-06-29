@@ -216,13 +216,36 @@ function ReceitasView(props: {
   const [editandoPg, setEditandoPg] = useState<PaymentRow | null>(null)
   const [cartao, setCartao] = useState<Receivable[]>([])
 
+  // Filtros — Realizado (Pagos)
+  const [filtroPaciente, setFiltroPaciente] = useState('')
+  const [filtroMetodo, setFiltroMetodo] = useState('')
+  const [filtroPago, setFiltroPago] = useState('')
+  // Filtros — Saldo do Paciente
+  const [filtroRecebPaciente, setFiltroRecebPaciente] = useState('')
+  // Filtros — Cartão Parcelado
+  const [filtroCartaoPaciente, setFiltroCartaoPaciente] = useState('')
+
   function loadCartao() { listCardReceivables('2000-01-01', '2100-01-01').then(setCartao).catch(() => {}) }
   useEffect(loadCartao, [])
+
+  const pagamentosFiltrados = useMemo(() => pagamentos.filter((p) => {
+    if (filtroPaciente && !(p.patients?.nome ?? '').toLowerCase().includes(filtroPaciente.toLowerCase())) return false
+    if (filtroMetodo && p.metodo !== filtroMetodo) return false
+    if (filtroPago === 'pago' && !p.pago_em) return false
+    if (filtroPago === 'nao_pago' && p.pago_em) return false
+    return true
+  }), [pagamentos, filtroPaciente, filtroMetodo, filtroPago])
+
+  const cartaoFiltrado = useMemo(() => {
+    if (!filtroCartaoPaciente) return cartao
+    const lower = filtroCartaoPaciente.toLowerCase()
+    return cartao.filter((r) => (r.patients?.nome ?? '').toLowerCase().includes(lower))
+  }, [cartao, filtroCartaoPaciente])
 
   // Agrupa as parcelas a receber por mês de vencimento (YYYY-MM).
   const cartaoPorMes = useMemo(() => {
     const m = new Map<string, Receivable[]>()
-    for (const r of cartao) {
+    for (const r of cartaoFiltrado) {
       const k = (r.vencimento ?? '').slice(0, 7)
       if (!k) continue
       const arr = m.get(k) ?? []
@@ -230,7 +253,7 @@ function ReceitasView(props: {
       m.set(k, arr)
     }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  }, [cartao])
+  }, [cartaoFiltrado])
   const totalCartao = cartao.reduce((s, r) => s + Number(r.valor), 0)
 
   async function receberParcela(r: Receivable) {
@@ -248,9 +271,14 @@ function ReceitasView(props: {
     onChange()
   }
 
-  const aReceber = quotes
-    .map((q) => ({ q, saldo: saldos[q.id] ? Number(saldos[q.id].saldo_a_receber) : Number(q.valor_total) }))
-    .filter((x) => x.saldo > 0.005)
+  const aReceber = useMemo(() => {
+    const base = quotes
+      .map((q) => ({ q, saldo: saldos[q.id] ? Number(saldos[q.id].saldo_a_receber) : Number(q.valor_total) }))
+      .filter((x) => x.saldo > 0.005)
+    if (!filtroRecebPaciente) return base
+    const lower = filtroRecebPaciente.toLowerCase()
+    return base.filter(({ q }) => (q.patients?.nome ?? '').toLowerCase().includes(lower))
+  }, [quotes, saldos, filtroRecebPaciente])
 
   return (
     <div>
@@ -272,6 +300,36 @@ function ReceitasView(props: {
         </button>
       </div>
 
+      {view === 'pagos' && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          <input className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Paciente…" value={filtroPaciente} onChange={(e) => setFiltroPaciente(e.target.value)} />
+          <select className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" value={filtroMetodo} onChange={(e) => setFiltroMetodo(e.target.value)}>
+            <option value="">Todos os métodos</option>
+            <option value="pix">PIX</option>
+            <option value="cartao_credito">Cartão crédito</option>
+            <option value="cartao_debito">Cartão débito</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="transferencia">Transferência</option>
+            <option value="outro">Outro</option>
+          </select>
+          <select className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" value={filtroPago} onChange={(e) => setFiltroPago(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="pago">Pago</option>
+            <option value="nao_pago">Não pago</option>
+          </select>
+        </div>
+      )}
+      {view === 'receber' && (
+        <div className="mb-3">
+          <input className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Paciente…" value={filtroRecebPaciente} onChange={(e) => setFiltroRecebPaciente(e.target.value)} />
+        </div>
+      )}
+      {view === 'cartao' && (
+        <div className="mb-3">
+          <input className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Paciente…" value={filtroCartaoPaciente} onChange={(e) => setFiltroCartaoPaciente(e.target.value)} />
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
         {view === 'pagos' ? (
           <table className="w-full text-sm">
@@ -281,7 +339,7 @@ function ReceitasView(props: {
               <th className="px-4 py-2 font-medium text-right">Ações</th>
             </tr></thead>
             <tbody>
-              {pagamentos.map((p) => (
+              {pagamentosFiltrados.map((p) => (
                 <tr key={p.id} className="border-t border-black/5">
                   <td className="px-4 py-2 text-texto">{p.patients?.nome ?? '—'}</td>
                   <td className="px-4 py-2 text-texto/60">{p.metodo}</td>
@@ -293,7 +351,7 @@ function ReceitasView(props: {
                   </td>
                 </tr>
               ))}
-              {pagamentos.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">Nenhum pagamento no mês.</td></tr>}
+              {pagamentosFiltrados.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">Nenhum pagamento encontrado.</td></tr>}
             </tbody>
           </table>
         ) : view === 'receber' ? (

@@ -129,6 +129,26 @@ As mudanças se aplicam **na hora** (menu e abas se ajustam; a aba ativa muda se
 ### 2.13 LGPD
 - Edite o **texto** e a **versão** do termo de consentimento, apresentado no cadastro do paciente.
 
+### 2.14 Exames (painel configurável)
+- Lista os **tipos de exame** disponíveis para requisição. CRUD completo: criar, renomear,
+  excluir e **reordenar** (botões ↑/↓).
+- A ordem definida aqui é a mesma que aparece na tela de requisição e no **PDF impresso**.
+- O sistema já vem com **56 exames pré-cadastrados**; basta ajustar à realidade da clínica.
+
+### 2.15 Disponibilidade (horários e bloqueios por profissional)
+Configure os horários de atendimento de cada profissional. Na aba **Disponibilidade**:
+
+**Horários por dia da semana:**
+- Selecione o **profissional** e defina **uma ou mais faixas de horário** para cada dia
+  (ex.: "08:00–12:00" e "14:00–17:00" para o intervalo do almoço).
+- As faixas são **ordenadas automaticamente** e validadas (fim > início).
+- Use o botão **+** da linha do dia para adicionar uma nova faixa; o **×** para remover.
+
+**Bloqueios (datas indisponíveis):**
+- Cadastre períodos em que o profissional **não atende** (ex.: férias, congresso).
+- Informe: profissional, data de início, data de fim e um **motivo** (opcional).
+- Os bloqueios aparecem na verificação de disponibilidade ao agendar (status "Bloqueado").
+
 ---
 
 ## 3. Navegação geral (Área da Clínica)
@@ -163,6 +183,35 @@ Menu lateral (no celular, abre pelo menu):
   com os dias que têm agendamento marcados).
 - Em cada agendamento: **Confirmar**, **Remarcar**, **Realizado** ou **Cancelar**.
 - **Lembretes automáticos** de consulta são enviados conforme configurado.
+
+### 4.1 Verificação de disponibilidade em tempo real
+
+Ao criar ou solicitar um agendamento, o sistema consulta a disponibilidade do profissional
+escolhido e exibe um indicador ao lado do horário:
+
+| Indicador | Significado |
+|-----------|-------------|
+| **Disponível** | Dentro do horário configurado e sem conflito |
+| **Ocupado** | Já há um agendamento naquele horário |
+| **Fora de horário** | Fora das janelas de atendimento do profissional |
+| **Bloqueado** | Data dentro de um bloqueio (ex.: férias) |
+
+A equipe recebe um **aviso de conflito** caso tente confirmar um horário ocupado, mas pode
+prosseguir. O paciente, no portal, vê apenas a disponibilidade sem poder forçar o horário.
+
+### 4.2 Gerenciar uma série de agendamentos recorrentes
+
+Nos agendamentos que fazem parte de uma série, o botão **"Série ···"** permite:
+- **Editar a série:** alterar procedimento, profissional ou horário.
+- **Excluir — três opções:**
+  - *Apenas esta* — exclui só o agendamento selecionado.
+  - *Esta e as próximas* — exclui o atual e todos os seguintes da série.
+  - *Todas* — remove todos os agendamentos da série.
+
+### 4.3 Regularizar agendamento sem cadastro (diretamente na Agenda)
+
+Na lista de agendamentos, o botão **Regularizar** (em agendamentos "sem cadastro") abre
+o vínculo com um paciente já cadastrado, sem precisar remarcar o horário.
 
 ---
 
@@ -242,8 +291,11 @@ totalmente editáveis.
 
 ### 5.7 Exames
 - **Requisição em PDF (A4):** cabeçalho com **dados do cliente**, lista de exames do
-  painel padrão, **Outros exames** e **Observações**, e **duas linhas para o carimbo** da
-  profissional (preenchidas à mão). Botão **Gerar PDF / Imprimir** no modal e em cada requisição.
+  painel configurável (Configurações → Exames), **Outros exames** e **Observações**, e
+  **duas linhas para o carimbo** da profissional (preenchidas à mão). Botão
+  **Gerar PDF / Imprimir** no modal e em cada requisição.
+- A **ordem dos exames** no PDF e na requisição segue a ordem definida em
+  **Configurações → Exames** (ver item 2.14).
 - **Resultados:** o profissional pode **anexar** PDF/imagem no dossiê do paciente (e o
   paciente também pode enviar pelo portal).
 
@@ -323,6 +375,57 @@ e **posição patrimonial** (caixa + aplicações + aportes).
   sem precisar entrar na ficha do paciente.
 - Cada pagamento tem **Editar** e **Excluir**.
 
+#### Cartão de crédito parcelado
+Ao registrar um pagamento com **Cartão de crédito**, é possível escolher o **número de
+parcelas** (1–12×). O sistema então:
+- **Quita o saldo do paciente imediatamente** (o orçamento fecha como pago).
+- **Distribui as parcelas** nos meses futuros como *a receber da operadora*.
+- A mensagem de confirmação avisa: *"Paciente quitado agora; clínica recebe N× (1ª em ~30 dias)"*.
+
+A aba **Cartão parcelado** (dentro de Receitas) exibe as parcelas agrupadas por **mês de
+vencimento**, com: nome do paciente, número da parcela (ex.: 2/12), valor e data de vencimento.
+Cada parcela tem dois botões:
+- **Recebida** — marca a parcela como recebida e lança no caixa do mês.
+- **Chargeback** — estorna a transação: o saldo do paciente no orçamento é **reaberto** e
+  a parcela volta para pendente. O paciente vê o estorno no portal (badge **"estornada"**)
+  e um aviso de alerta é exibido na ficha financeira dele.
+
+#### Como cancelar/excluir um parcelamento no cartão (via interface)
+
+O processo correto depende do estado de cada parcela. **Nunca exclua parcelas diretamente
+sem antes desfazer as que já foram marcadas como recebidas** — isso evita inconsistência
+no caixa.
+
+**Cenário A — Nenhuma parcela foi marcada como "Recebida" (todas pendentes)**
+
+1. Acesse **Financeiro → Receitas → Cartão parcelado**.
+2. Localize o paciente (use o filtro de busca por nome).
+3. Clique em **Chargeback** em cada parcela do grupo.
+   - O saldo do orçamento do paciente volta a aberto automaticamente.
+4. Vá para a aba **Realizado (Pagos)**.
+5. As parcelas estornadas aparecem na lista — clique em **Excluir** em cada uma.
+6. (Opcional) Se quiser remover o orçamento, acesse a **ficha do paciente → Financeiro →
+   Orçamentos** e exclua o orçamento correspondente (só é possível após excluir todos os
+   pagamentos vinculados).
+
+**Cenário B — Uma ou mais parcelas já foram marcadas como "Recebida"**
+
+1. Acesse **Financeiro → Receitas → Cartão parcelado**.
+2. Clique em **Chargeback** em cada parcela que estiver marcada como recebida.
+   - Isso desfaz a entrada no caixa daquele mês e reabre o saldo do paciente.
+3. Repita o Chargeback também nas parcelas ainda pendentes.
+4. Vá para a aba **Realizado (Pagos)** e exclua todas as parcelas estornadas do grupo.
+5. (Opcional) Exclua o orçamento na ficha do paciente.
+
+**Regras importantes**
+
+| Situação | O que fazer |
+|----------|-------------|
+| Parcela `pendente` | Chargeback → Excluir |
+| Parcela `recebida` | Chargeback (desfaz caixa) → Excluir |
+| Orçamento com pagamentos | Excluir todos os pagamentos **antes** de excluir o orçamento |
+| Excluir apenas uma parcela do grupo | Não recomendado — as demais ficam com numeração inconsistente (ex.: "1/3" sem a "2/3") |
+
 ### 8.3 Despesas
 - **Realizado (Pagas)** e **Não pagas**, com **Editar**, **Excluir** e marcar pago.
 - **Nova despesa:** **Classificação** (Produto / Gasto fixo) na 1ª linha — o **Tipo de
@@ -374,7 +477,9 @@ A marca da clínica (logo/nome/cores) aparece também no portal e no app instala
 
 - **Início:** avisos/cuidados, **próxima consulta** (data e hora), ativar notificações e
   falar no WhatsApp.
-- **Agendamentos:** ver consultas e **solicitar horário** (a clínica confirma).
+- **Agendamentos:** ver consultas e **solicitar horário** (a clínica confirma). Ao solicitar,
+  o paciente escolhe o **profissional** e o sistema exibe a **disponibilidade em tempo real**
+  (disponível / ocupado / fora de horário / bloqueado).
 - **Anamnese:** preencher a própria ficha (inclui **estilo de trabalho**).
 - **Documentos:** ler/**assinar** termos e orientações; **abrir as receitas, orçamentos e
   arquivos** enviados pela clínica (PDFs).
@@ -382,7 +487,9 @@ A marca da clínica (logo/nome/cores) aparece também no portal e no app instala
 - **Evolução:** gráfico de medidas e fotos.
 - **Relatórios:** escolhe **seções** e **período**, gera um **PDF** (download + guardado),
   limitado pela quantidade definida pelo admin.
-- **Financeiro:** orçamentos, saldos e produtos utilizados.
+- **Financeiro:** orçamentos, saldos e produtos utilizados. Quando há pagamento
+  **parcelado no cartão**, as parcelas aparecem com o status de cada uma (paga / estornada);
+  parcelas estornadas exibem um aviso de alerta.
 - **LGPD:** ler o termo e **dar ciência**, com registro de data/hora.
 
 ---
@@ -415,6 +522,6 @@ A marca da clínica (logo/nome/cores) aparece também no portal e no app instala
 
 ---
 
-*Este manual cobre as funcionalidades desenvolvidas até o momento. Itens em evolução:
+*Este manual cobre as funcionalidades desenvolvidas até **junho de 2026**. Itens em evolução:
 cobrança PIX automática e **envio por WhatsApp** ao fornecedor (dependem de contas/contratos
 externos; o sistema já está preparado para ativá-los nas Integrações).*

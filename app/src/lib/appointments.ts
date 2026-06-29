@@ -28,7 +28,7 @@ export async function listAppointments(desde?: string, professionalId?: string, 
     .order('inicio', { ascending: true })
   if (desde) q = q.gte('inicio', desde)
   if (ate) q = q.lte('inicio', ate)
-  if (professionalId) q = q.eq('professional_id', professionalId)
+  if (professionalId) q = q.or(`professional_id.eq.${professionalId},professional_id.is.null`)
   if (patientId) q = q.eq('patient_id', patientId)
   const { data, error } = await q
   if (error) throw error

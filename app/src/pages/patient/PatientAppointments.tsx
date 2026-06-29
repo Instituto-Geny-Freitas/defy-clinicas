@@ -84,7 +84,13 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
   const [slot, setSlot] = useState<SlotStatus | null>(null)
   const [checando, setChecando] = useState(false)
 
-  useEffect(() => { listPublicProfessionals().then(setProfissionais).catch(() => {}) }, [])
+  useEffect(() => {
+    listPublicProfessionals().then((lista) => {
+      setProfissionais(lista)
+      // Se há apenas um profissional, seleciona automaticamente
+      if (lista.length === 1) setProfessionalId(lista[0].id)
+    }).catch(() => {})
+  }, [])
 
   // Verifica disponibilidade sempre que profissional + data + hora mudarem.
   useEffect(() => {
@@ -99,6 +105,7 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
 
   async function salvar() {
     if (!data) { setErro('Escolha uma data.'); return }
+    if (!professionalId) { setErro('Selecione a profissional desejada.'); return }
     const inicio = new Date(`${data}T${hora}:00`).toISOString()
     setErro(null)
     // Bloqueia se o horário não estiver disponível para o profissional escolhido.
@@ -131,7 +138,7 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
           <div>
             <label className="mb-1 block text-sm text-texto/70">Profissional</label>
             <select className={field} value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
-              <option value="">Sem preferência</option>
+              {profissionais.length > 1 && <option value="">Selecione a profissional…</option>}
               {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </select>
           </div>
