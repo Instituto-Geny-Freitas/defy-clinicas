@@ -161,6 +161,16 @@ export async function linkAppointmentsToPatient(patientId: string, apptIds: stri
   if (error) throw error
 }
 
+/** Vincula toda uma série recorrente (recorrencia_grupo) a um paciente — links all null-patient occurrences. */
+export async function linkGroupToPatient(patientId: string, grupo: string): Promise<void> {
+  const { error } = await supabase
+    .from('appointments')
+    .update({ patient_id: patientId, nome_avulso: null, telefone_avulso: null })
+    .eq('recorrencia_grupo', grupo)
+    .is('patient_id', null)
+  if (error) throw error
+}
+
 /** Remarca um agendamento para nova data/hora (zera o lembrete enviado). */
 export async function rescheduleAppointment(id: string, inicio: string, fim?: string | null): Promise<void> {
   const { error } = await supabase

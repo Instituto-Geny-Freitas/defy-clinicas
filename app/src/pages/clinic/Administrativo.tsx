@@ -258,6 +258,11 @@ function Cell({ field: f, value }: { field: FormField; value: unknown }) {
   }
   if (value == null || value === '') return <span className="text-texto/30">—</span>
   if (f.tipo === 'date') return <>{formatDateBR(String(value))}</>
+  if (f.tipo === 'number') {
+    const n = typeof value === 'number' ? value : Number(value)
+    if (isNaN(n)) return <span className="text-texto/30">—</span>
+    return <>{n}{f.suffix ? ` ${f.suffix}` : ''}</>
+  }
   if (f.tipo === 'multiselect' && Array.isArray(value)) return <>{value.join(', ')}</>
   return <>{String(value)}{f.suffix ? ` ${f.suffix}` : ''}</>
 }

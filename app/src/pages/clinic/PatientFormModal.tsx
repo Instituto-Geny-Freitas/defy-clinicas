@@ -9,7 +9,7 @@ import {
 } from '@/lib/patients'
 import { getClinic } from '@/lib/settings'
 import { recordConsent } from '@/lib/lgpd'
-import { linkAppointmentsToPatient, listWalkInAppointments, type Appointment } from '@/lib/appointments'
+import { linkAppointmentsToPatient, linkGroupToPatient, listWalkInAppointments, type Appointment } from '@/lib/appointments'
 import type { Patient } from '@/lib/types'
 
 interface Props {
@@ -104,7 +104,12 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
       // criação + provisionamento de acesso
       const p = await createPatient(clinicId, form)
       if (grantConsent) await recordConsent({ patientId: p.id, clinicId, versao: lgpd.versao, origem: 'profissional' })
-      if (aptsSel.size > 0) await linkAppointmentsToPatient(p.id, [...aptsSel]).catch(() => {})
+      if (aptsSel.size > 0) {
+        await linkAppointmentsToPatient(p.id, [...aptsSel]).catch(() => {})
+        // link entire recurring series for any selected appointment that belongs to a group
+        const grupos = new Set(walkins.filter((a) => aptsSel.has(a.id) && a.recorrencia_grupo).map((a) => a.recorrencia_grupo!))
+        for (const grupo of grupos) await linkGroupToPatient(p.id, grupo).catch(() => {})
+      }
       try {
         const { login } = await provisionPatientAccess(p.id, senhaAcesso)
         setResultado({ id: p.id, login, senha: senhaAcesso })

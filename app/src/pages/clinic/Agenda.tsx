@@ -6,6 +6,7 @@ import {
   deleteAppointment,
   deleteAppointmentSeries,
   linkAppointmentsToPatient,
+  linkGroupToPatient,
   listAppointments,
   rescheduleAppointment,
   updateAppointmentSeries,
@@ -474,7 +475,14 @@ function RegularizarModal({ appt, onClose, onSaved }: { appt: Appointment; onClo
   async function vincular() {
     if (!sel) return
     setBusy(true)
-    try { await linkAppointmentsToPatient(sel, [appt.id]); onSaved() } catch { setBusy(false) }
+    try {
+      if (appt.recorrencia_grupo) {
+        await linkGroupToPatient(sel, appt.recorrencia_grupo)
+      } else {
+        await linkAppointmentsToPatient(sel, [appt.id])
+      }
+      onSaved()
+    } catch { setBusy(false) }
   }
 
   return (
