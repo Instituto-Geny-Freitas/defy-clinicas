@@ -1,5 +1,5 @@
-import jsPDF from 'jspdf'
-import { formatDateBR } from '@/lib/format'
+﻿import jsPDF from 'jspdf'
+import { formatDateBR, localDateToday } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 
 const TEAL: [number, number, number] = [15, 118, 110]
@@ -80,6 +80,7 @@ export function buildDocumentoPdf(args: DocumentoPdfArgs): { blob: Blob; filenam
   if (aceite) pdf.text(`Aceite eletrônico em: ${new Date(aceite).toLocaleString('pt-BR')}`, M, y + 50)
   if (doc.hash) pdf.text(`Hash de autenticidade (SHA-256): ${doc.hash}`, M, y + 62, { maxWidth: maxW })
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: pdf.output('blob'), filename: `documento_${paciente.nome.replace(/\s+/g, '_')}_${ts}.pdf` }
 }
+

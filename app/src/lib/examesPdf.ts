@@ -1,5 +1,5 @@
-import jsPDF from 'jspdf'
-import { formatDateBR } from '@/lib/format'
+﻿import jsPDF from 'jspdf'
+import { formatDateBR, localDateToday } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 
 const TEAL: [number, number, number] = [15, 118, 110]
@@ -57,7 +57,7 @@ export function buildExamesPdf(args: ExamesPdfArgs): { blob: Blob; filename: str
   ].filter(Boolean).join('     ')
   const linha3 = [
     args.paciente.whatsapp ? `Contato: ${args.paciente.whatsapp}` : null,
-    `Data: ${formatDateBR(args.data ?? new Date().toISOString().slice(0, 10))}`,
+    `Data: ${formatDateBR(args.data ?? localDateToday())}`,
   ].filter(Boolean).join('     ')
   doc.text(linha1, M + 12, 90)
   doc.setTextColor(90)
@@ -128,6 +128,7 @@ export function buildExamesPdf(args: ExamesPdfArgs): { blob: Blob; filename: str
   doc.setFontSize(9)
   doc.text('Carimbo e assinatura do profissional', M, baseY + 50)
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `requisicao_exames_${args.paciente.nome.replace(/\s+/g, '_')}_${ts}.pdf` }
 }
+

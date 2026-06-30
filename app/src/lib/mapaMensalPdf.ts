@@ -1,5 +1,6 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { localDateToday } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 
 const TEAL: [number, number, number] = [15, 118, 110]
@@ -83,6 +84,7 @@ export function buildMapaMensalPdf(d: MapaMensalData): { blob: Blob; filename: s
     columnStyles: { 1: { halign: 'right' } },
   })
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `mapa_mensal_${ts}.pdf` }
 }
+

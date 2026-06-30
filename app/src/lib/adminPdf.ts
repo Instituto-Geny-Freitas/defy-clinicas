@@ -1,9 +1,9 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { Clinic, Professional } from '@/lib/types'
 import type { FormDef, FormField } from '@/lib/adminForms'
 import type { AdminRecord } from '@/lib/admin'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, localDateToday } from '@/lib/format'
 
 const TEAL: [number, number, number] = [15, 118, 110]
 
@@ -105,7 +105,7 @@ export function buildAdminFormPdf(args: {
     }
   }
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `${def.chave}_${ts}.pdf` }
 }
 
@@ -151,6 +151,7 @@ export function buildCorpoTecnicoPdf(args: {
 
   // Mantém o cálculo de conselho disponível (evita lint de função não usada)
   void conselho
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `corpo_tecnico_${ts}.pdf` }
 }
+

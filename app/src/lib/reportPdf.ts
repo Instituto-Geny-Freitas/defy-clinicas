@@ -1,6 +1,6 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, localDateToday } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 import type { ProcedureRecord } from '@/lib/procedures'
 import type { FormulationPrescription } from '@/lib/formulations'
@@ -92,6 +92,7 @@ export function buildPatientReportPdf(args: {
   const nada = !args.data.procedimentos?.length && !args.data.manipulacoes?.length && !args.data.medidas?.length && !args.data.suplementacoes?.length
   if (nada) { doc.setFontSize(10); doc.setTextColor(120); doc.text('Sem registros no período/seções selecionados.', 40, y + 10) }
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `relatorio_${args.pacienteNome.replace(/\s+/g, '_')}_${ts}.pdf` }
 }
+

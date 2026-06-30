@@ -13,7 +13,7 @@ import { listProfessionals } from '@/lib/settings'
 import { listPatients } from '@/lib/patients'
 import { listActiveIngredients, type ActiveIngredient } from '@/lib/domains'
 import { buildAdminFormPdf, buildCorpoTecnicoPdf } from '@/lib/adminPdf'
-import { formatDateBR, parseLocalDate } from '@/lib/format'
+import { formatDateBR, localDateToday, parseLocalDate } from '@/lib/format'
 import type { Patient, Professional } from '@/lib/types'
 
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -321,7 +321,7 @@ function RecordModal({ clinicId, def, record, onClose, onSaved }: {
     if (record) return { ...record.dados }
     // valores iniciais (auto)
     const init: Record<string, unknown> = {}
-    const hoje = new Date().toISOString().slice(0, 10)
+    const hoje = localDateToday()
     for (const c of def.campos) {
       if (c.auto === 'profissional_logado') init[c.key] = profNome
       else if (c.auto === 'hoje') init[c.key] = hoje

@@ -12,7 +12,7 @@ import {
 import { listSuppliers, type Supplier } from '@/lib/domains'
 import { buildFormulaPdf, type ProfissionalReceita } from '@/lib/formulaPdf'
 import { createSharedDocument, enviarDocumentoFornecedor } from '@/lib/sharedDocs'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, localDateToday } from '@/lib/format'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { Shell, Footer } from './TreatmentPlansPanel'
@@ -176,7 +176,7 @@ function libToPresc(f: FormulationLib): FormulationPrescription {
     nome: f.nome,
     composicao: f.composicao,
     posologia: f.posologia,
-    data: new Date().toISOString().slice(0, 10),
+    data: localDateToday(),
     created_at: new Date().toISOString(),
     formulations: { nome: f.nome },
   }

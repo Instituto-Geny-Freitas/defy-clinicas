@@ -1,3 +1,9 @@
+/** Retorna a data local de hoje no formato YYYY-MM-DD, sem deslocamento UTC. */
+export function localDateToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 /**
  * Formata datas em pt-BR sem o "deslocamento de fuso" para colunas DATE.
  * `new Date("1980-01-14")` é interpretado como UTC e, em fusos negativos,

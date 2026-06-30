@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { localDateToday } from '@/lib/format'
 import { createProcedure, deleteProcedure, listProcedures, updateProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, type InventoryItem } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
@@ -105,7 +106,7 @@ function RegistrarModal({
   const [quoteId, setQuoteId] = useState(proc?.quote_id ?? '')
   const [procSelect, setProcSelect] = useState('')
   const [procedimento, setProcedimento] = useState(proc?.procedimento ?? '')
-  const [data, setData] = useState((proc?.data ?? new Date().toISOString()).slice(0, 10))
+  const [data, setData] = useState(proc?.data ? proc.data.slice(0, 10) : localDateToday())
   const [regiao, setRegiao] = useState(proc?.regiao ?? '')
   const [obs, setObs] = useState(proc?.observacoes ?? '')
   const [valorCobrado, setValorCobrado] = useState(proc && Number(proc.valor_cobrado) > 0 ? String(Number(proc.valor_cobrado).toFixed(2)).replace('.', ',') : '')

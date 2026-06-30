@@ -1,5 +1,6 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { localDateToday } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 import type { Quote } from '@/lib/finance'
 
@@ -65,6 +66,7 @@ export function buildOrcamentoPdf(args: {
   doc.setTextColor(130)
   doc.text('Documento gerado automaticamente. Validade e condições conforme acordado com a clínica.', M, y + 20)
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `orcamento_${args.pacienteNome.replace(/\s+/g, '_')}_${ts}.pdf` }
 }
+

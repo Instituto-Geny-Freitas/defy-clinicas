@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createMeasurement, deleteMeasurement, listMeasurements, updateMeasurement, type BodyMeasurement, type MeasurementInput } from '@/lib/measurements'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import LineChart from '@/components/LineChart'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, localDateToday } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -81,7 +81,7 @@ function Modal({ clinicId, patientId, professionalId, medicao, proximaSessao, on
   const [f, setF] = useState<MeasurementInput>(
     medicao
       ? { data: medicao.data, sessao: medicao.sessao, peso_kg: medicao.peso_kg, imc: medicao.imc, gordura_corporal_pct: medicao.gordura_corporal_pct, musculo_pct: medicao.musculo_pct, rm: medicao.rm, kcal: medicao.kcal, idade_corporal: medicao.idade_corporal, gordura_visceral: medicao.gordura_visceral }
-      : { data: new Date().toISOString().slice(0, 10), sessao: proximaSessao },
+      : { data: localDateToday(), sessao: proximaSessao },
   )
   const [salvando, setSalvando] = useState(false)
   const num = (k: keyof MeasurementInput) => (e: React.ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.value === '' ? null : Number(e.target.value) }))

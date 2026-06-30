@@ -1,4 +1,5 @@
-import jsPDF from 'jspdf'
+﻿import jsPDF from 'jspdf'
+import { localDateToday } from '@/lib/format'
 import type { Clinic } from '@/lib/types'
 import type { FormulationPrescription } from '@/lib/formulations'
 
@@ -123,6 +124,7 @@ export function buildFormulaPdf(args: {
     doc.text(`Emitido em ${new Date().toLocaleDateString('pt-BR')}`, cx, y, { align: 'center' })
   }
 
-  const ts = new Date().toISOString().slice(0, 10)
+  const ts = localDateToday()
   return { blob: doc.output('blob'), filename: `formula_${args.pacienteNome.replace(/\s+/g, '_')}_${ts}.pdf` }
 }
+
