@@ -63,6 +63,12 @@ export async function updateInventoryItem(id: string, input: InventoryInput) {
   return data as InventoryItem
 }
 
+/** Ajuste direto de quantidade (uso exclusivo de admin para correções de inventário). */
+export async function setInventoryQty(id: string, qtd: number): Promise<void> {
+  const { error } = await supabase.from('inventory').update({ qtd_atual: qtd }).eq('id', id)
+  if (error) throw error
+}
+
 /** Remove (desativa) um item do estoque — soft delete para preservar histórico. */
 export async function deleteInventoryItem(id: string) {
   const { error } = await supabase.from('inventory').update({ ativo: false }).eq('id', id)

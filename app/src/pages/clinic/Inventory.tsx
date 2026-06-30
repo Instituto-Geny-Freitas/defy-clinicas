@@ -7,6 +7,7 @@ import {
   deleteInventoryItem,
   estoqueBaixo,
   listInventory,
+  setInventoryQty,
   updateInventoryItem,
   validadeProxima,
   type InventoryInput,
@@ -19,6 +20,7 @@ const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outlin
 export default function Inventory() {
   const { profile } = useAuth()
   const clinicId = profile?.professional?.clinic_id
+  const isAdmin = profile?.professional?.role === 'admin'
   const [itens, setItens] = useState<InventoryItem[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
@@ -52,10 +54,10 @@ export default function Inventory() {
       </div>
 
       {modal && clinicId && (
-        <ProdutoModal clinicId={clinicId} item={null} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
+        <ProdutoModal clinicId={clinicId} item={null} isAdmin={isAdmin} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar() }} />
       )}
       {editando && clinicId && (
-        <ProdutoModal clinicId={clinicId} item={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
+        <ProdutoModal clinicId={clinicId} item={editando} isAdmin={isAdmin} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
       )}
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-black/5 bg-white">
@@ -120,7 +122,7 @@ export default function Inventory() {
   )
 }
 
-function ProdutoModal({ clinicId, item, onClose, onSaved }: { clinicId: string; item: InventoryItem | null; onClose: () => void; onSaved: () => void }) {
+function ProdutoModal({ clinicId, item, isAdmin, onClose, onSaved }: { clinicId: string; item: InventoryItem | null; isAdmin: boolean; onClose: () => void; onSaved: () => void }) {
   const editar = !!item
   const [f, setF] = useState<InventoryInput>(
     item
@@ -139,8 +141,12 @@ function ProdutoModal({ clinicId, item, onClose, onSaved }: { clinicId: string; 
     if (!f.produto.trim()) return
     setSalvando(true)
     try {
-      if (item) await updateInventoryItem(item.id, f)
-      else await createInventoryItem(clinicId, f)
+      if (item) {
+        await updateInventoryItem(item.id, f)
+        if (isAdmin && f.qtd_atual !== item.qtd_atual) await setInventoryQty(item.id, f.qtd_atual ?? 0)
+      } else {
+        await createInventoryItem(clinicId, f)
+      }
       onSaved()
     } catch {
       setSalvando(false)
@@ -164,9 +170,16 @@ function ProdutoModal({ clinicId, item, onClose, onSaved }: { clinicId: string; 
           <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={f.validade ?? ''} onChange={(e) => set('validade', e.target.value)} /></div>
           {editar ? (
             <div>
-              <label className="mb-1 block text-sm text-texto/70">Qtd atual</label>
-              <input className={`${field} bg-black/[0.03]`} value={f.qtd_atual ?? 0} disabled readOnly />
-              <p className="mt-1 text-xs text-texto/40">Ajuste via "+ Entrada" (movimentações)</p>
+              <label className="mb-1 block text-sm text-texto/70">
+                Qtd atual
+                {isAdmin && <span className="ml-1 text-xs font-normal text-primaria">(editável — admin)</span>}
+              </label>
+              {isAdmin ? (
+                <input type="number" className={field} value={f.qtd_atual ?? 0} onChange={(e) => set('qtd_atual', Number(e.target.value))} />
+              ) : (
+                <input className={`${field} bg-black/[0.03]`} value={f.qtd_atual ?? 0} disabled readOnly />
+              )}
+              {!isAdmin && <p className="mt-1 text-xs text-texto/40">Ajuste via "+ Entrada" (movimentações)</p>}
             </div>
           ) : (
             <div><label className="mb-1 block text-sm text-texto/70">Qtd inicial</label><input type="number" className={field} value={f.qtd_atual ?? 0} onChange={(e) => set('qtd_atual', Number(e.target.value))} /></div>
