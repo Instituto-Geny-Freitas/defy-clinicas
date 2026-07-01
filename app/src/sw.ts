@@ -1,9 +1,16 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from 'workbox-precaching'
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 
 // Service worker customizado (injectManifest): precache + Web Push.
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string; revision: string | null }> }
 
+// Assume controle imediatamente ao ser instalado, sem esperar fechar abas.
+self.skipWaiting()
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
+cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
 self.addEventListener('push', (event: PushEvent) => {
