@@ -389,8 +389,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
     const token = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
-    const { data: u } = await admin.auth.getUser(token)
-    if (!u?.user) return json({ error: 'não autenticado' }, 401)
+    const { data: u, error: authErr } = await admin.auth.getUser(token)
+    if (!u?.user) {
+      const detalhe = authErr?.message ?? (token ? 'token presente mas inválido' : 'sem cabeçalho Authorization')
+      console.error('[assistant] auth falhou:', detalhe, 'len=', token.length)
+      return json({ error: `não autenticado (${detalhe})` }, 401)
+    }
     const { data: prof } = await admin
       .from('professionals')
       .select('id, clinic_id, nome, role')

@@ -13,8 +13,12 @@ export interface ChatMessage {
  */
 export async function askAssistant(messages: ChatMessage[]): Promise<string> {
   const forms = await getForms().catch(() => [])
+  // Envia o JWT da sessão explicitamente: o functions.invoke nem sempre anexa
+  // o token do usuário automaticamente, o que fazia a função responder 401.
+  const { data: { session } } = await supabase.auth.getSession()
   const { data, error } = await supabase.functions.invoke('assistant', {
     body: { messages, forms },
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
   })
   if (error) {
     // A mensagem útil da função (JSON { error }) vem no corpo da resposta HTTP,
