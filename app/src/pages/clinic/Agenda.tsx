@@ -6,6 +6,7 @@ import {
   deleteAppointment,
   deleteAppointmentSeries,
   linkAppointmentsToPatient,
+  linkByNomeAvulso,
   linkGroupToPatient,
   listAppointments,
   rescheduleAppointment,
@@ -481,6 +482,8 @@ function RegularizarModal({ appt, onClose, onSaved }: { appt: Appointment; onClo
       } else {
         await linkAppointmentsToPatient(sel, [appt.id])
       }
+      // Vincula TODOS os demais avulsos com o mesmo nome_avulso (grupos distintos ou sem grupo)
+      if (appt.nome_avulso) await linkByNomeAvulso(sel, appt.nome_avulso)
       onSaved()
     } catch { setBusy(false) }
   }

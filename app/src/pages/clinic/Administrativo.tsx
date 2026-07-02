@@ -526,7 +526,7 @@ function FieldInput({ field: c, value, profs, ativos, onChange, onAtivo, onUploa
       return (
         <div className="flex items-center gap-2">
           <input type="file" className="text-sm" onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
-          {typeof v === 'string' && v && <button type="button" onClick={() => onAbrirAnexo(v)} className="text-xs font-medium text-primaria hover:underline">Abrir anexo</button>}
+          {typeof v === 'string' && v && <button type="button" onClick={() => onAbrirAnexo(v)} className="rounded-lg bg-primaria px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">Abrir Anexo</button>}
         </div>
       )
     default:

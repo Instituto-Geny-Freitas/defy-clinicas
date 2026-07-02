@@ -171,6 +171,18 @@ export async function linkGroupToPatient(patientId: string, grupo: string): Prom
   if (error) throw error
 }
 
+/** Vincula TODOS os agendamentos avulsos (patient_id IS NULL) com nome_avulso semelhante ao paciente.
+ *  Garante que agendamentos recorrentes de grupos distintos ou sem grupo sejam regularizados juntos. */
+export async function linkByNomeAvulso(patientId: string, nomeAvulso: string): Promise<void> {
+  if (!nomeAvulso.trim()) return
+  const { error } = await supabase
+    .from('appointments')
+    .update({ patient_id: patientId, nome_avulso: null, telefone_avulso: null })
+    .is('patient_id', null)
+    .ilike('nome_avulso', `%${nomeAvulso.trim()}%`)
+  if (error) throw error
+}
+
 /** Remarca um agendamento para nova data/hora (zera o lembrete enviado). */
 export async function rescheduleAppointment(id: string, inicio: string, fim?: string | null): Promise<void> {
   const { error } = await supabase

@@ -1573,12 +1573,16 @@ function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; pro
             {servicos.length === 0 ? (
               <p className="text-xs text-texto/40">Cadastre serviços em Configurações → Serviços Prestados.</p>
             ) : (
-              <div className="flex flex-wrap gap-2 rounded-lg border border-black/10 p-2">
-                {servicos.map((s) => (
-                  <label key={s.id} className="flex items-center gap-1.5 text-xs text-texto/80">
-                    <input type="checkbox" checked={servicosSel.includes(s.nome)} onChange={() => toggleServico(s.nome)} /> {s.nome}
-                  </label>
-                ))}
+              <div className="flex flex-wrap gap-1.5 rounded-lg border border-black/10 p-2">
+                {servicos.map((s) => {
+                  const ativo = servicosSel.includes(s.nome)
+                  return (
+                    <button key={s.id} type="button" onClick={() => toggleServico(s.nome)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${ativo ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}>
+                      {ativo && <span className="mr-1">✓</span>}{s.nome}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -1587,12 +1591,16 @@ function ProfModal({ clinicId, prof, onClose, onSaved }: { clinicId: string; pro
             {vacinas.length === 0 ? (
               <p className="text-xs text-texto/40">Cadastre vacinas em Configurações → Vacinas.</p>
             ) : (
-              <div className="flex flex-wrap gap-3 rounded-lg border border-black/10 p-2">
-                {vacinas.map((vac) => (
-                  <label key={vac.id} className="flex items-center gap-1.5 text-xs text-texto/80">
-                    <input type="checkbox" checked={!!vacinasSel[vac.nome]} onChange={() => toggleVacina(vac.nome)} /> {vac.nome}
-                  </label>
-                ))}
+              <div className="flex flex-wrap gap-1.5 rounded-lg border border-black/10 p-2">
+                {vacinas.map((vac) => {
+                  const ativo = !!vacinasSel[vac.nome]
+                  return (
+                    <button key={vac.id} type="button" onClick={() => toggleVacina(vac.nome)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${ativo ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}>
+                      {ativo && <span className="mr-1">✓</span>}{vac.nome}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
