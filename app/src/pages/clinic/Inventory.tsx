@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { formatDateBR } from '@/lib/format'
 import {
@@ -17,6 +17,15 @@ import {
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
+const ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+const OPCOES_QTD = [20, 50, 100]
+
+/** Normaliza (sem acento, maiúsculo) para comparar a inicial do produto. */
+function inicial(nome: string): string {
+  const c = nome.trim().normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toUpperCase()
+  return /[A-Z]/.test(c) ? c : '#'
+}
+
 export default function Inventory() {
   const { profile } = useAuth()
   const clinicId = profile?.professional?.clinic_id
@@ -25,11 +34,43 @@ export default function Inventory() {
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<InventoryItem | null>(null)
+  const [busca, setBusca] = useState('')
+  const [letra, setLetra] = useState<string | null>(null)
+  const [porPagina, setPorPagina] = useState(20)
+  const [qtdCustom, setQtdCustom] = useState('')
+  const [pagina, setPagina] = useState(0)
 
   function recarregar() {
     listInventory().then(setItens).catch(() => {}).finally(() => setCarregando(false))
   }
   useEffect(recarregar, [])
+
+  const iniciaisExistentes = useMemo(() => {
+    const s = new Set<string>()
+    itens.forEach((i) => s.add(inicial(i.produto)))
+    return s
+  }, [itens])
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    return itens.filter((i) => {
+      if (termo && !i.produto.toLowerCase().includes(termo) && !(i.marca ?? '').toLowerCase().includes(termo)) return false
+      if (letra && inicial(i.produto) !== letra) return false
+      return true
+    })
+  }, [itens, busca, letra])
+
+  useEffect(() => { setPagina(0) }, [busca, letra, porPagina])
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina))
+  const paginaSegura = Math.min(pagina, totalPaginas - 1)
+  const inicio = paginaSegura * porPagina
+  const visiveis = filtrados.slice(inicio, inicio + porPagina)
+
+  function aplicarCustom() {
+    const n = Number(qtdCustom)
+    if (n > 0) setPorPagina(Math.floor(n))
+  }
 
   async function entrada(item: InventoryItem) {
     const qtd = Number(prompt(`Entrada de estoque para "${item.produto}" — quantidade:`, '1'))
@@ -60,64 +101,167 @@ export default function Inventory() {
         <ProdutoModal clinicId={clinicId} item={editando} isAdmin={isAdmin} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-black/5 bg-white">
-        {carregando ? (
-          <p className="p-6 text-sm text-texto/50">Carregando…</p>
-        ) : itens.length === 0 ? (
-          <p className="p-6 text-sm text-texto/50">Nenhum produto cadastrado.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-black/[0.02] text-left text-texto/60">
-              <tr>
-                <th className="px-4 py-2 font-medium">Produto</th>
-                <th className="px-4 py-2 font-medium">Lote</th>
-                <th className="px-4 py-2 font-medium">Validade</th>
-                <th className="px-4 py-2 font-medium">Qtd</th>
-                <th className="px-4 py-2 font-medium">Venda</th>
-                <th className="px-4 py-2 font-medium">Margem</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {itens.map((i) => (
-                <tr key={i.id} className="border-t border-black/5">
-                  <td className="px-4 py-2 text-texto">
-                    {i.produto}
-                    {i.marca && <span className="text-texto/40"> · {i.marca}</span>}
-                  </td>
-                  <td className="px-4 py-2 text-texto/60">{i.lote ?? '—'}</td>
-                  <td className="px-4 py-2">
-                    {i.validade ? (
-                      <span className={validadeProxima(i) ? 'font-medium text-secundaria' : 'text-texto/60'}>
-                        {formatDateBR(i.validade)}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className={estoqueBaixo(i) ? 'font-semibold text-secundaria' : 'text-texto'}>
-                      {i.qtd_atual}
-                    </span>
-                    {estoqueBaixo(i) && <span className="ml-1 text-xs text-secundaria">(baixo)</span>}
-                  </td>
-                  <td className="px-4 py-2 text-texto/70">{brl(i.preco_venda)}</td>
-                  <td className="px-4 py-2 text-texto/70">{brl(i.margem_unit)}</td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap">
-                    <button onClick={() => entrada(i)} className="text-xs font-medium text-primaria hover:underline">
-                      + Entrada
-                    </button>
-                    <button onClick={() => setEditando(i)} className="ml-3 text-xs font-medium text-texto/60 hover:underline">
-                      Editar
-                    </button>
-                    <button onClick={() => excluir(i)} className="ml-3 text-xs font-medium text-secundaria hover:underline">
-                      Excluir
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <input
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+        placeholder="Buscar por produto ou marca…"
+        className="mt-4 w-full max-w-sm rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria"
+      />
+
+      {/* Filtro por letra inicial */}
+      <div className="mt-3 flex flex-wrap items-center gap-1">
+        <button
+          onClick={() => setLetra(null)}
+          className={`rounded-md px-2 py-1 text-xs font-semibold transition ${letra === null ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}
+        >
+          Todos
+        </button>
+        {ALFABETO.map((l) => {
+          const existe = iniciaisExistentes.has(l)
+          const ativo = letra === l
+          return (
+            <button
+              key={l}
+              disabled={!existe}
+              onClick={() => setLetra(ativo ? null : l)}
+              className={`h-7 w-7 rounded-md text-xs font-semibold transition ${
+                ativo
+                  ? 'bg-primaria text-white'
+                  : existe
+                    ? 'bg-black/5 text-texto/70 hover:bg-black/10'
+                    : 'cursor-default text-texto/20'
+              }`}
+            >
+              {l}
+            </button>
+          )
+        })}
+        {iniciaisExistentes.has('#') && (
+          <button
+            onClick={() => setLetra(letra === '#' ? null : '#')}
+            className={`h-7 w-7 rounded-md text-xs font-semibold transition ${letra === '#' ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}
+            title="Outros (número/símbolo)"
+          >
+            #
+          </button>
         )}
       </div>
+
+      {/* Controle de quantidade por página */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-texto/70">
+        <span>Mostrar</span>
+        {OPCOES_QTD.map((n) => (
+          <button
+            key={n}
+            onClick={() => { setPorPagina(n); setQtdCustom('') }}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${porPagina === n && qtdCustom === '' ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}
+          >
+            {n}
+          </button>
+        ))}
+        <input
+          type="number"
+          min={1}
+          value={qtdCustom}
+          onChange={(e) => setQtdCustom(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') aplicarCustom() }}
+          onBlur={aplicarCustom}
+          placeholder="outro"
+          className="w-20 rounded-md border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria"
+        />
+        <span className="text-xs text-texto/50">registros por página</span>
+      </div>
+
+      {/* Card com scroll horizontal CONFINADO (não arrasta a página inteira) */}
+      <div className="mt-4 overflow-hidden rounded-xl border border-black/5 bg-white">
+        {carregando ? (
+          <p className="p-6 text-sm text-texto/50">Carregando…</p>
+        ) : filtrados.length === 0 ? (
+          <p className="p-6 text-sm text-texto/50">Nenhum produto encontrado.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-black/[0.02] text-left text-texto/60">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Produto</th>
+                  <th className="px-4 py-2 font-medium">Lote</th>
+                  <th className="px-4 py-2 font-medium">Validade</th>
+                  <th className="px-4 py-2 font-medium">Qtd</th>
+                  <th className="px-4 py-2 font-medium">Venda</th>
+                  <th className="px-4 py-2 font-medium">Margem</th>
+                  <th className="px-4 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visiveis.map((i) => (
+                  <tr key={i.id} className="border-t border-black/5">
+                    <td className="px-4 py-2 text-texto">
+                      {i.produto}
+                      {i.marca && <span className="text-texto/40"> · {i.marca}</span>}
+                    </td>
+                    <td className="px-4 py-2 text-texto/60">{i.lote ?? '—'}</td>
+                    <td className="px-4 py-2">
+                      {i.validade ? (
+                        <span className={validadeProxima(i) ? 'font-medium text-secundaria' : 'text-texto/60'}>
+                          {formatDateBR(i.validade)}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={estoqueBaixo(i) ? 'font-semibold text-secundaria' : 'text-texto'}>
+                        {i.qtd_atual}
+                      </span>
+                      {estoqueBaixo(i) && <span className="ml-1 text-xs text-secundaria">(baixo)</span>}
+                    </td>
+                    <td className="px-4 py-2 text-texto/70">{brl(i.preco_venda)}</td>
+                    <td className="px-4 py-2 text-texto/70">{brl(i.margem_unit)}</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <button onClick={() => entrada(i)} className="text-xs font-medium text-primaria hover:underline">
+                        + Entrada
+                      </button>
+                      <button onClick={() => setEditando(i)} className="ml-3 text-xs font-medium text-texto/60 hover:underline">
+                        Editar
+                      </button>
+                      <button onClick={() => excluir(i)} className="ml-3 text-xs font-medium text-secundaria hover:underline">
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Rodapé: contagem + paginação */}
+      {!carregando && filtrados.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-texto/60">
+          <span>
+            {inicio + 1}–{Math.min(inicio + porPagina, filtrados.length)} de {filtrados.length}
+            {(busca || letra) && ` (${itens.length} no total)`}
+          </span>
+          {totalPaginas > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPagina((p) => Math.max(0, p - 1))}
+                disabled={paginaSegura === 0}
+                className="rounded-md bg-black/5 px-3 py-1 text-xs font-semibold text-texto/70 hover:bg-black/10 disabled:opacity-40"
+              >
+                ← Anterior
+              </button>
+              <span className="text-xs">Página {paginaSegura + 1} de {totalPaginas}</span>
+              <button
+                onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}
+                disabled={paginaSegura >= totalPaginas - 1}
+                className="rounded-md bg-black/5 px-3 py-1 text-xs font-semibold text-texto/70 hover:bg-black/10 disabled:opacity-40"
+              >
+                Próxima →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
