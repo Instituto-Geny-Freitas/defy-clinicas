@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { usePermissions } from '@/auth/PermissionsProvider'
 import { useClinic } from '@/theme/ThemeProvider'
@@ -38,6 +38,13 @@ export default function ClinicLayout() {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-2">
+        <Link
+          to="/assistente"
+          onClick={() => setMenuAberto(false)}
+          className="mb-1 block rounded-lg bg-primaria/10 px-3 py-2 text-sm font-medium text-primaria transition hover:bg-primaria/20"
+        >
+          🤖 Assistente
+        </Link>
         {navVisivel.map((item) => (
           <NavLink
             key={item.to}

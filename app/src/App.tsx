@@ -16,6 +16,7 @@ import Reports from '@/pages/clinic/Reports'
 import Administrativo from '@/pages/clinic/Administrativo'
 import Settings from '@/pages/clinic/Settings'
 import Templates from '@/pages/clinic/Templates'
+import Assistant from '@/pages/Assistant'
 import PatientHome from '@/pages/patient/PatientHome'
 import Anamnese from '@/pages/patient/Anamnese'
 import PatientDocuments from '@/pages/patient/PatientDocuments'
@@ -66,6 +67,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {isStaff ? (
+          <>
+          {/* Assistente em tela cheia (acesso simplificado, mesma credencial) */}
+          <Route path="/assistente" element={<Assistant />} />
           <Route path="/clinica" element={<ClinicLayout />}>
             <Route index element={<RouteGuard perm="menu.dashboard"><Dashboard /></RouteGuard>} />
             <Route path="agenda" element={<RouteGuard perm="menu.agenda"><Agenda /></RouteGuard>} />
@@ -78,6 +82,7 @@ export default function App() {
             <Route path="administrativo" element={<RouteGuard perm="menu.administrativo"><Administrativo /></RouteGuard>} />
             <Route path="configuracoes" element={<RouteGuard perm="admin"><Settings /></RouteGuard>} />
           </Route>
+          </>
         ) : (
           <Route path="/portal" element={<PatientLayout />}>
             <Route index element={<PatientHome />} />
