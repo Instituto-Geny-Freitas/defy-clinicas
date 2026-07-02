@@ -16,7 +16,22 @@ export async function askAssistant(messages: ChatMessage[]): Promise<string> {
   const { data, error } = await supabase.functions.invoke('assistant', {
     body: { messages, forms },
   })
-  if (error) throw error
+  if (error) {
+    // A mensagem útil da função (JSON { error }) vem no corpo da resposta HTTP,
+    // não na mensagem genérica "non-2xx status code". Tenta extraí-la.
+    const ctx = (error as { context?: Response }).context
+    if (ctx && typeof ctx.text === 'function') {
+      try {
+        const txt = await ctx.text()
+        const parsed = JSON.parse(txt) as { error?: string }
+        if (parsed?.error) throw new Error(parsed.error)
+        if (txt) throw new Error(txt.slice(0, 300))
+      } catch (e) {
+        if (e instanceof Error && e.message) throw e
+      }
+    }
+    throw error
+  }
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error)
   return (data as { reply: string }).reply
 }

@@ -459,6 +459,8 @@ Deno.serve(async (req) => {
     if (!reply) reply = 'Desculpe, não consegui concluir. Pode reformular?'
     return json({ reply })
   } catch (e) {
-    return json({ error: String(e) }, 500)
+    const msg = e instanceof Error ? `${e.message}` : String(e)
+    console.error('[assistant] erro:', e)
+    return json({ error: `Erro interno: ${msg}` }, 500)
   }
 })
