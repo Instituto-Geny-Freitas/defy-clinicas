@@ -165,6 +165,76 @@ const TOOLS = [
       parameters: { type: 'object', properties: {} },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'registrar_despesa',
+      description: 'Lança uma despesa. Confirme os dados com a profissional antes de chamar. Se "tipo" não casar com um tipo cadastrado, a despesa é lançada sem tipo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          descricao: { type: 'string', description: 'Descrição da despesa.' },
+          valor: { type: 'number', description: 'Valor em reais (ex.: 450.00).' },
+          data: { type: 'string', description: 'Data YYYY-MM-DD. Padrão: hoje.' },
+          tipo: { type: 'string', description: 'Nome do tipo de despesa (opcional; ex.: Aluguel).' },
+          pago: { type: 'boolean', description: 'Se já está paga. Padrão false.' },
+        },
+        required: ['descricao', 'valor'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_despesas_abertas',
+      description: 'Lista despesas ainda não pagas (em aberto), opcionalmente filtrando por texto na descrição. Use antes de marcar_despesa_paga.',
+      parameters: {
+        type: 'object',
+        properties: { busca: { type: 'string', description: 'Texto para filtrar a descrição (opcional).' } },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'marcar_despesa_paga',
+      description: 'Marca uma despesa em aberto como paga, pelo id. Obtenha o id com listar_despesas_abertas; se houver mais de uma candidata, pergunte qual.',
+      parameters: {
+        type: 'object',
+        properties: { despesa_id: { type: 'string', description: 'ID da despesa a marcar como paga.' } },
+        required: ['despesa_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_orcamentos_paciente',
+      description: 'Lista os orçamentos do paciente com saldo a receber (para escolher em qual registrar um recebimento).',
+      parameters: {
+        type: 'object',
+        properties: { patient_id: { type: 'string', description: 'ID do paciente (via buscar_paciente).' } },
+        required: ['patient_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'registrar_recebimento',
+      description: 'Registra um pagamento (recebimento) de um paciente, vinculado a um orçamento. Identifique o paciente (buscar_paciente) e o orçamento (listar_orcamentos_paciente) e CONFIRME valor e método antes de chamar.',
+      parameters: {
+        type: 'object',
+        properties: {
+          patient_id: { type: 'string', description: 'ID do paciente.' },
+          quote_id: { type: 'string', description: 'ID do orçamento (obtido em listar_orcamentos_paciente).' },
+          valor: { type: 'number', description: 'Valor recebido em reais.' },
+          metodo: { type: 'string', enum: ['pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'transferencia', 'outro'], description: 'Forma de pagamento.' },
+        },
+        required: ['patient_id', 'quote_id', 'valor', 'metodo'],
+      },
+    },
+  },
 ]
 
 // --- Implementação das ferramentas -------------------------------------------
@@ -379,6 +449,98 @@ async function runTool(name: string, args: Record<string, unknown>, prof: Prof, 
       return { criado: true, formulario: def.titulo, seq }
     }
 
+    case 'registrar_despesa': {
+      const descricao = String(args.descricao ?? '').trim()
+      const valor = Number(args.valor)
+      if (!descricao || !(valor > 0)) return { criado: false, erro: 'Informe descrição e valor válido.' }
+      const data = (args.data as string) || hoje
+      const pago = args.pago === true
+      let expense_type_id: string | null = null
+      const tipo = (args.tipo as string)?.trim()
+      if (tipo) {
+        const { data: t } = await admin
+          .from('expense_types').select('id').eq('clinic_id', prof.clinic_id).ilike('nome', tipo).limit(1).maybeSingle()
+        expense_type_id = t?.id ?? null
+      }
+      const { data: ins, error } = await admin
+        .from('expenses')
+        .insert({ clinic_id: prof.clinic_id, expense_type_id, descricao, valor, data, pago })
+        .select('id')
+        .single()
+      if (error) return { criado: false, erro: error.message }
+      return { criado: true, id: ins.id, descricao, valor, data, pago, tipo_vinculado: expense_type_id ? tipo : '(sem tipo)' }
+    }
+
+    case 'listar_despesas_abertas': {
+      let q = admin
+        .from('expenses')
+        .select('id, descricao, valor, data, expense_types(nome)')
+        .eq('clinic_id', prof.clinic_id)
+        .eq('pago', false)
+        .order('data', { ascending: false })
+        .limit(30)
+      const busca = (args.busca as string)?.trim()
+      if (busca) q = q.ilike('descricao', `%${busca}%`)
+      const { data, error } = await q
+      if (error) return { erro: error.message }
+      return {
+        total: data?.length ?? 0,
+        despesas: (data ?? []).map((e: Record<string, any>) => ({
+          id: e.id, descricao: e.descricao, valor: Number(e.valor), data: e.data, tipo: e.expense_types?.nome ?? null,
+        })),
+      }
+    }
+
+    case 'marcar_despesa_paga': {
+      const id = args.despesa_id as string
+      if (!id) return { atualizado: false, erro: 'Informe o id da despesa.' }
+      const { data, error } = await admin
+        .from('expenses')
+        .update({ pago: true })
+        .eq('id', id)
+        .eq('clinic_id', prof.clinic_id)
+        .select('id, descricao, valor')
+        .maybeSingle()
+      if (error) return { atualizado: false, erro: error.message }
+      if (!data) return { atualizado: false, erro: 'Despesa não encontrada.' }
+      return { atualizado: true, descricao: data.descricao, valor: Number(data.valor) }
+    }
+
+    case 'listar_orcamentos_paciente': {
+      const patientId = args.patient_id as string
+      if (!patientId) return { erro: 'Informe o patient_id.' }
+      const { data, error } = await admin
+        .from('v_quote_balances')
+        .select('quote_id, valor_total, total_pago, saldo_a_receber')
+        .eq('patient_id', patientId)
+        .gt('saldo_a_receber', 0)
+      if (error) return { erro: error.message }
+      return {
+        com_saldo: data?.length ?? 0,
+        orcamentos: (data ?? []).map((q: Record<string, any>) => ({
+          quote_id: q.quote_id, valor_total: Number(q.valor_total), total_pago: Number(q.total_pago), saldo_a_receber: Number(q.saldo_a_receber),
+        })),
+      }
+    }
+
+    case 'registrar_recebimento': {
+      const valor = Number(args.valor)
+      const metodo = args.metodo as string
+      const metodos = ['pix', 'cartao_credito', 'cartao_debito', 'dinheiro', 'transferencia', 'outro']
+      if (!(valor > 0)) return { registrado: false, erro: 'Valor inválido.' }
+      if (!metodos.includes(metodo)) return { registrado: false, erro: `Método inválido. Use: ${metodos.join(', ')}.` }
+      const { data, error } = await admin
+        .from('payments')
+        .insert({
+          clinic_id: prof.clinic_id, quote_id: args.quote_id, patient_id: args.patient_id,
+          valor, metodo, status: 'pago', pago_em: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+      if (error) return { registrado: false, erro: error.message }
+      return { registrado: true, id: data.id, valor, metodo }
+    }
+
     default:
       return { erro: `Ferramenta desconhecida: ${name}` }
   }
@@ -420,7 +582,8 @@ Deno.serve(async (req) => {
       `Ao interpretar horários informados pela profissional, use SEMPRE o fuso America/Sao_Paulo e gere datas em ISO 8601 com offset -03:00 (ex.: 2026-07-15T14:00:00-03:00).`,
       `Você só pode ajudar com assuntos do sistema (agenda, pacientes, financeiro, regularização de agendamentos, alertas e registros administrativos). Recuse educadamente pedidos fora desse escopo.`,
       `Regras de agendamento: 1) identifique o paciente com buscar_paciente; se houver mais de um com o mesmo nome, PERGUNTE qual antes de prosseguir; 2) confirme data e horário; 3) só então chame criar_agendamento (ela revalida o horário). Nunca invente IDs de paciente.`,
-      `Antes de executar ações que gravam dados (criar agendamento, preencher registro administrativo), confirme os detalhes com a profissional em uma frase.`,
+      `Antes de executar QUALQUER ação que grava dados (criar agendamento, preencher registro administrativo, registrar despesa, registrar recebimento, marcar despesa como paga), confirme os detalhes com a profissional em uma frase e só prossiga após um "sim".`,
+      `Para registrar recebimento: primeiro identifique o paciente (buscar_paciente) e liste os orçamentos com saldo (listar_orcamentos_paciente); se houver mais de um, pergunte em qual registrar. Para marcar despesa como paga: use listar_despesas_abertas e, se houver mais de uma, pergunte qual.`,
       `Ao mostrar listas, seja conciso: use tópicos curtos. Valores monetários em R$ com duas casas.`,
     ].join(' ')
 
