@@ -36,7 +36,7 @@ export default function Reports() {
       const isoMes = inicioMes.toISOString()
 
       const [pays, saldos, inv, procs, appts] = await Promise.all([
-        supabase.from('payments').select('valor, metodo, pago_em, status').eq('status', 'pago'),
+        supabase.from('payments').select('valor, metodo, pago_em, status').eq('status', 'pago').neq('metodo', 'credito'),
         supabase.from('v_quote_balances').select('saldo_a_receber'),
         listInventory(),
         supabase.from('procedures_log').select('id', { count: 'exact', head: true }).gte('data', isoMes),

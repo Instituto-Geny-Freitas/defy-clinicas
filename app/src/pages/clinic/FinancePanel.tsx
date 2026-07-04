@@ -7,6 +7,7 @@ import {
   createQuote,
   deletePayment,
   deleteQuote,
+  getPatientCredit,
   listPaymentsByPatient,
   listQuotes,
   markInstallmentReceived,
@@ -568,12 +569,23 @@ function PagamentoModal({ clinicId, patientId, quote, saldo, onClose, onSaved }:
   const [metodo, setMetodo] = useState<PaymentMethod>('pix')
   const [parcelas, setParcelas] = useState(1)
   const [salvando, setSalvando] = useState(false)
+  const [credito, setCredito] = useState(0)
+
+  useEffect(() => { getPatientCredit(patientId).then(setCredito).catch(() => {}) }, [patientId])
 
   const parcelado = metodo === 'cartao_credito' && parcelas > 1
   const valorParcela = parcelado ? valor / parcelas : valor
+  // Ao usar crédito, o valor não pode passar do saldo do orçamento nem do crédito disponível.
+  const maxCredito = Math.min(saldo, credito)
+
+  function trocarMetodo(m: PaymentMethod) {
+    setMetodo(m)
+    if (m === 'credito') { setParcelas(1); setValor(Number(Math.min(saldo, credito).toFixed(2))) }
+  }
 
   async function salvar() {
     if (valor <= 0) return
+    if (metodo === 'credito' && valor > maxCredito + 0.005) return
     setSalvando(true)
     try {
       if (parcelado) {
@@ -595,20 +607,27 @@ function PagamentoModal({ clinicId, patientId, quote, saldo, onClose, onSaved }:
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
         </div>
         <p className="mb-3 text-sm text-texto/60">Saldo do orçamento: <strong>{brl(saldo)}</strong></p>
+        {credito > 0.005 && (
+          <p className="mb-3 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-700">
+            Este paciente tem <strong>{brl(credito)}</strong> de crédito disponível. Escolha “Crédito do paciente” para abater.
+          </p>
+        )}
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-sm text-texto/70">Valor</label>
             <input type="number" step="0.01" className={field} value={valor} onChange={(e) => setValor(Number(e.target.value))} />
+            {metodo === 'credito' && <p className="mt-1 text-xs text-texto/50">Máximo com crédito: <strong>{brl(maxCredito)}</strong></p>}
           </div>
           <div>
             <label className="mb-1 block text-sm text-texto/70">Forma de pagamento</label>
-            <select className={field} value={metodo} onChange={(e) => setMetodo(e.target.value as PaymentMethod)}>
+            <select className={field} value={metodo} onChange={(e) => trocarMetodo(e.target.value as PaymentMethod)}>
               <option value="pix">PIX</option>
               <option value="cartao_credito">Cartão de crédito</option>
               <option value="cartao_debito">Cartão de débito</option>
               <option value="dinheiro">Dinheiro</option>
               <option value="transferencia">Transferência</option>
               <option value="outro">Outro</option>
+              {credito > 0.005 && <option value="credito">Crédito do paciente ({brl(credito)})</option>}
             </select>
           </div>
           {metodo === 'cartao_credito' && (
@@ -632,10 +651,15 @@ function PagamentoModal({ clinicId, patientId, quote, saldo, onClose, onSaved }:
               Cobrança PIX automática via gateway será gerada quando um gateway for configurado em Configurações → Integrações.
             </p>
           )}
+          {metodo === 'credito' && (
+            <p className="rounded-lg bg-emerald-50 p-2 text-xs text-emerald-700">
+              Abatimento de <strong>{brl(valor)}</strong> do crédito do paciente neste orçamento. Não entra como receita nova (é uso de saldo já pago).
+            </p>
+          )}
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
-          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          <button onClick={salvar} disabled={salvando || valor <= 0 || (metodo === 'credito' && valor > maxCredito + 0.005)} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
             {salvando ? 'Salvando…' : 'Confirmar pagamento'}
           </button>
         </div>

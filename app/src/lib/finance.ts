@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase'
 
 export type QuoteStatus = 'rascunho' | 'enviado' | 'aprovado' | 'recusado' | 'expirado'
-export type PaymentMethod = 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro' | 'transferencia' | 'outro'
+export type PaymentMethod = 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro' | 'transferencia' | 'outro' | 'credito'
 export type PaymentStatus = 'pendente' | 'pago' | 'estornado' | 'cancelado'
 
 export interface QuoteItem {
@@ -174,6 +174,40 @@ export async function updatePayment(id: string, patch: { valor?: number; metodo?
 export async function deletePayment(id: string): Promise<void> {
   const { error } = await supabase.from('payments').delete().eq('id', id)
   if (error) throw error
+}
+
+// ---- Crédito do paciente ----------------------------------------------------
+export interface PatientCredit {
+  patient_id: string
+  credito_gerado: number
+  credito_consumido: number
+  credito_disponivel: number
+  patients?: { nome: string } | null
+}
+
+/** Crédito disponível de UM paciente (0 se não houver). */
+export async function getPatientCredit(patientId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('v_patient_credits')
+    .select('credito_disponivel')
+    .eq('patient_id', patientId)
+    .maybeSingle()
+  if (error) throw error
+  const v = data ? Number(data.credito_disponivel) : 0
+  return v > 0 ? v : 0
+}
+
+/** Lista pacientes que possuem crédito disponível (para a aba de créditos). */
+export async function listPatientCredits(): Promise<PatientCredit[]> {
+  const { data, error } = await supabase
+    .from('v_patient_credits')
+    .select('patient_id, credito_gerado, credito_consumido, credito_disponivel, patients(nome)')
+    .gt('credito_disponivel', 0.005)
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    ...r,
+    patients: Array.isArray(r.patients) ? (r.patients[0] ?? null) : r.patients,
+  })) as PatientCredit[]
 }
 
 /** Total já pago (status 'pago') de um orçamento — caixa efetivamente realizado. */

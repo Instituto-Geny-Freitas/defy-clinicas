@@ -4,7 +4,8 @@ import { useClinic } from '@/theme/ThemeProvider'
 import {
   listAllQuotes, registerPayment, registerCardInstallments, updatePayment, deletePayment,
   listCardReceivables, markInstallmentReceived, chargebackPayment, brl,
-  type PaymentMethod, type Quote, type Receivable,
+  getPatientCredit, listPatientCredits,
+  type PaymentMethod, type Quote, type Receivable, type PatientCredit,
 } from '@/lib/finance'
 import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
@@ -211,10 +212,12 @@ function ReceitasView(props: {
   onChange: () => void
 }) {
   const { clinicId, pagamentos, totalReceitas, totalAReceber, quotes, saldos, onChange } = props
-  const [view, setView] = useState<'pagos' | 'receber' | 'cartao'>('pagos')
+  const [view, setView] = useState<'pagos' | 'receber' | 'cartao' | 'credito'>('pagos')
   const [cobranca, setCobranca] = useState(false)
   const [editandoPg, setEditandoPg] = useState<PaymentRow | null>(null)
   const [cartao, setCartao] = useState<Receivable[]>([])
+  const [creditos, setCreditos] = useState<PatientCredit[]>([])
+  const [filtroCreditoPaciente, setFiltroCreditoPaciente] = useState('')
 
   // Filtros — Realizado (Pagos)
   const [filtroPaciente, setFiltroPaciente] = useState('')
@@ -227,6 +230,14 @@ function ReceitasView(props: {
 
   function loadCartao() { listCardReceivables('2000-01-01', '2100-01-01').then(setCartao).catch(() => {}) }
   useEffect(loadCartao, [])
+  useEffect(() => { listPatientCredits().then(setCreditos).catch(() => {}) }, [pagamentos, saldos])
+
+  const creditosFiltrados = useMemo(() => {
+    if (!filtroCreditoPaciente) return creditos
+    const lower = filtroCreditoPaciente.toLowerCase()
+    return creditos.filter((c) => (c.patients?.nome ?? '').toLowerCase().includes(lower))
+  }, [creditos, filtroCreditoPaciente])
+  const totalCredito = creditos.reduce((s, c) => s + Number(c.credito_disponivel), 0)
 
   const pagamentosFiltrados = useMemo(() => pagamentos.filter((p) => {
     if (filtroPaciente && !(p.patients?.nome ?? '').toLowerCase().includes(filtroPaciente.toLowerCase())) return false
@@ -298,6 +309,9 @@ function ReceitasView(props: {
         <button onClick={() => setView('cartao')} className={`rounded-lg px-3 py-1.5 ${view === 'cartao' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>
           Cartão parcelado {totalCartao > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-700">{brl(totalCartao)}</span>}
         </button>
+        <button onClick={() => setView('credito')} className={`rounded-lg px-3 py-1.5 ${view === 'credito' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>
+          Crédito do paciente {totalCredito > 0 && <span className="ml-1 rounded-full bg-emerald-100 px-1.5 text-xs text-emerald-700">{brl(totalCredito)}</span>}
+        </button>
       </div>
 
       {view === 'pagos' && (
@@ -327,6 +341,11 @@ function ReceitasView(props: {
       {view === 'cartao' && (
         <div className="mb-3">
           <input className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Paciente…" value={filtroCartaoPaciente} onChange={(e) => setFiltroCartaoPaciente(e.target.value)} />
+        </div>
+      )}
+      {view === 'credito' && (
+        <div className="mb-3">
+          <input className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Paciente…" value={filtroCreditoPaciente} onChange={(e) => setFiltroCreditoPaciente(e.target.value)} />
         </div>
       )}
 
@@ -372,7 +391,7 @@ function ReceitasView(props: {
               {aReceber.length === 0 && <tr><td colSpan={4} className="px-4 py-3 text-texto/50">Nada a receber.</td></tr>}
             </tbody>
           </table>
-        ) : (
+        ) : view === 'cartao' ? (
           <div className="p-3">
             <p className="mb-3 text-xs text-texto/50">Parcelas de cartão de crédito a receber, por mês de vencimento. O paciente já está quitado; estes valores são o repasse do cartão à clínica.</p>
             {cartaoPorMes.length === 0 ? (
@@ -401,8 +420,31 @@ function ReceitasView(props: {
               )
             })}
           </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+              <th className="px-4 py-2 font-medium">Paciente</th>
+              <th className="px-4 py-2 font-medium text-right">Crédito gerado</th>
+              <th className="px-4 py-2 font-medium text-right">Usado</th>
+              <th className="px-4 py-2 font-medium text-right">Disponível</th>
+            </tr></thead>
+            <tbody>
+              {creditosFiltrados.map((c) => (
+                <tr key={c.patient_id} className="border-t border-black/5">
+                  <td className="px-4 py-2 text-texto">{c.patients?.nome ?? '—'}</td>
+                  <td className="px-4 py-2 text-right text-texto/60">{brl(Number(c.credito_gerado))}</td>
+                  <td className="px-4 py-2 text-right text-texto/60">{brl(Number(c.credito_consumido))}</td>
+                  <td className="px-4 py-2 text-right font-medium text-emerald-600">{brl(Number(c.credito_disponivel))}</td>
+                </tr>
+              ))}
+              {creditosFiltrados.length === 0 && <tr><td colSpan={4} className="px-4 py-3 text-texto/50">Nenhum paciente com crédito disponível.</td></tr>}
+            </tbody>
+          </table>
         )}
       </div>
+      {view === 'credito' && creditosFiltrados.length > 0 && (
+        <p className="mt-2 text-xs text-texto/50">O crédito é abatido escolhendo “Crédito do paciente” como forma de pagamento ao registrar uma cobrança recebida (aqui ou no financeiro do paciente).</p>
+      )}
 
       {cobranca && <CobrancaModal clinicId={clinicId} quotes={quotes} saldos={saldos} onClose={() => setCobranca(false)} onSaved={() => { setCobranca(false); onChange() }} />}
       {editandoPg && <PagamentoEditModal pagamento={editandoPg} onClose={() => setEditandoPg(null)} onSaved={() => { setEditandoPg(null); onChange() }} />}
@@ -477,10 +519,18 @@ function CobrancaModal(props: {
   const [parcelas, setParcelas] = useState(1)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [credito, setCredito] = useState(0)
 
   const orcsDoPaciente = quotes.filter((q) => q.patient_id === patientId)
   const saldoSel = quoteId && saldos[quoteId] ? Number(saldos[quoteId].saldo_a_receber) : null
   const parcelado = metodo === 'cartao_credito' && parcelas > 1
+  const maxCredito = Math.min(saldoSel ?? 0, credito)
+
+  // Carrega o crédito ao escolher o paciente; volta o método para pix se trocar de paciente sem crédito.
+  useEffect(() => {
+    if (!patientId) { setCredito(0); return }
+    getPatientCredit(patientId).then(setCredito).catch(() => setCredito(0))
+  }, [patientId])
 
   function escolherOrc(id: string) {
     setQuoteId(id)
@@ -488,11 +538,23 @@ function CobrancaModal(props: {
     if (s != null && s > 0) setValor(String(s.toFixed(2)))
   }
 
+  function trocarMetodo(m: PaymentMethod) {
+    setMetodo(m)
+    if (m === 'credito') {
+      setParcelas(1)
+      const teto = Math.min(saldoSel ?? 0, credito)
+      if (teto > 0) setValor(String(teto.toFixed(2)))
+    }
+  }
+
   async function salvar() {
     setErro('')
     const v = parseMoneyBR(valor)
     if (!quoteId || !patientId) { setErro('Selecione o paciente e o orçamento.'); return }
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
+    if (metodo === 'credito' && v > maxCredito + 0.005) {
+      setErro(`Crédito insuficiente. Máximo: ${brl(maxCredito)}.`); return
+    }
     setSalvando(true)
     try {
       if (parcelado) {
@@ -529,20 +591,27 @@ function CobrancaModal(props: {
             </select>
           </div>
           {saldoSel != null && <p className="text-xs text-texto/50">Saldo a receber: <strong>{brl(saldoSel)}</strong></p>}
+          {credito > 0.005 && (
+            <p className="rounded-lg bg-emerald-50 p-2 text-xs text-emerald-700">
+              Paciente tem <strong>{brl(credito)}</strong> de crédito. Escolha “Crédito do paciente” no método para abater.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-texto/60">Valor recebido</label>
               <input className={field} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
+              {metodo === 'credito' && <p className="mt-1 text-xs text-texto/50">Máx. com crédito: <strong>{brl(maxCredito)}</strong></p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-texto/60">Método</label>
-              <select className={field} value={metodo} onChange={(e) => setMetodo(e.target.value as PaymentMethod)}>
+              <select className={field} value={metodo} onChange={(e) => trocarMetodo(e.target.value as PaymentMethod)}>
                 <option value="pix">PIX</option>
                 <option value="cartao_credito">Cartão crédito</option>
                 <option value="cartao_debito">Cartão débito</option>
                 <option value="dinheiro">Dinheiro</option>
                 <option value="transferencia">Transferência</option>
                 <option value="outro">Outro</option>
+                {credito > 0.005 && <option value="credito">Crédito do paciente</option>}
               </select>
             </div>
           </div>

@@ -227,6 +227,7 @@ export async function listPaymentsPeriodo(de: string, ate: string): Promise<Paym
     .from('payments')
     .select('id, valor, metodo, status, pago_em, patients(nome)')
     .eq('status', 'pago')
+    .neq('metodo', 'credito') // crédito abatido não é entrada nova de caixa
     .gte('pago_em', de + 'T00:00:00')
     .lte('pago_em', ate + 'T23:59:59')
     .order('pago_em', { ascending: false })
