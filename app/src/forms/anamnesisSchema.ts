@@ -58,9 +58,11 @@ export const anamnesisSchema: FormSchema = {
             { value: 'medicamentos', label: 'Medicamentos' },
             { value: 'alimentos', label: 'Alimentos' },
             { value: 'cosmeticos_latex', label: 'Cosméticos / Látex' },
+            { value: 'desconhece', label: 'Desconhece' },
           ],
         },
         { key: 'alergias_detalhe', label: 'Especifique as alergias', type: 'text', full: true, showIf: { field: 'alergias', truthy: true } },
+        { key: 'alergias_outras', label: 'Outras alergias / observações (não listadas acima)', type: 'text', full: true },
       ],
     },
     {
@@ -75,6 +77,7 @@ export const anamnesisSchema: FormSchema = {
     {
       title: 'Estilo de Vida e Hábitos',
       fields: [
+        { key: 'profissao', label: 'Profissão', type: 'text', full: true },
         {
           key: 'estilo_trabalho',
           label: 'Estilo de trabalho (no dia a dia)',

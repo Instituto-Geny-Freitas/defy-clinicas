@@ -4,6 +4,11 @@ import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Payment, t
 import { listProcedures, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
 import { formatDateBR } from '@/lib/format'
 
+const METODO_LABEL: Record<string, string> = {
+  pix: 'PIX', cartao_credito: 'Cartão de crédito', cartao_debito: 'Cartão de débito',
+  dinheiro: 'Dinheiro', transferencia: 'Transferência', outro: 'Outro', credito: 'Crédito do paciente',
+}
+
 export default function PatientFinance() {
   const { profile } = useAuth()
   const patientId = profile?.patient?.id
@@ -35,21 +40,55 @@ export default function PatientFinance() {
             const pago = totalLiquidado(pagamentos, q.id)
             const saldo = q.valor_total - pago
             const produtos = produtosDoOrcamento(procedimentos, q.id)
+            const avista = pagamentos.filter((p) => p.quote_id === q.id && !p.parcelamento_grupo && p.status === 'pago').sort((a, b) => (a.pago_em ?? '').localeCompare(b.pago_em ?? ''))
             const parcelas = pagamentos.filter((p) => p.quote_id === q.id && p.parcelamento_grupo).sort((a, b) => a.parcela - b.parcela)
             const estornadas = parcelas.filter((p) => p.status === 'estornado')
             return (
               <div key={q.id} className="rounded-xl border border-black/5 bg-white p-4">
-                <div className="space-y-0.5 text-sm text-texto/80">
+                <div className="mb-2 flex items-center justify-between text-xs text-texto/50">
+                  <span>Orçamento {q.numero ?? ''}</span>
+                  <span>{formatDateBR(q.created_at)}</span>
+                </div>
+                <div className="space-y-1.5 text-sm text-texto/80">
                   {q.itens.map((it, i) => (
-                    <div key={i}>{it.qtd}× {it.descricao}</div>
+                    <div key={i} className="flex items-start justify-between gap-3">
+                      <span className="flex-1">
+                        {it.qtd}× {it.descricao}
+                        {Number(it.valor_unit) > 0 && it.qtd > 1 && (
+                          <span className="block text-xs text-texto/40">{brl(Number(it.valor_unit))} cada</span>
+                        )}
+                      </span>
+                      <span className="whitespace-nowrap font-medium text-texto">{brl(Number(it.total))}</span>
+                    </div>
                   ))}
                 </div>
-                <div className="mt-2 flex items-center justify-between border-t border-black/5 pt-2 text-sm">
-                  <span className="font-semibold text-texto">{brl(q.valor_total)}</span>
-                  <span className={saldo > 0 ? 'font-medium text-secundaria' : 'font-medium text-emerald-600'}>
-                    {saldo > 0 ? `Saldo ${brl(saldo)}` : 'Quitado'}
-                  </span>
+                <div className="mt-2 space-y-0.5 border-t border-black/5 pt-2 text-sm">
+                  {Number(q.desconto) > 0 && (
+                    <>
+                      <div className="flex items-center justify-between text-texto/60"><span>Subtotal</span><span>{brl(Number(q.valor_bruto))}</span></div>
+                      <div className="flex items-center justify-between text-texto/60"><span>Desconto</span><span>− {brl(Number(q.desconto))}</span></div>
+                    </>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-texto">Total {brl(q.valor_total)}</span>
+                    <span className={saldo > 0 ? 'font-medium text-secundaria' : 'font-medium text-emerald-600'}>
+                      {saldo > 0 ? `Saldo ${brl(saldo)}` : 'Quitado'}
+                    </span>
+                  </div>
                 </div>
+                {avista.length > 0 && (
+                  <div className="mt-2 border-t border-black/5 pt-2">
+                    <div className="mb-1 text-xs font-medium text-texto/60">Pagamentos</div>
+                    <div className="space-y-0.5 text-xs text-texto/70">
+                      {avista.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between">
+                          <span>{METODO_LABEL[p.metodo] ?? p.metodo}{p.pago_em ? ` · ${formatDateBR(p.pago_em)}` : ''}</span>
+                          <span className="font-medium">{brl(Number(p.valor))}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {parcelas.length > 0 && (
                   <div className="mt-2 border-t border-black/5 pt-2">
                     <div className="mb-1 text-xs font-medium text-texto/60">Pagamento no cartão ({parcelas[0].total_parcelas}×)</div>
