@@ -75,7 +75,7 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
               {p.produtos_usados?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {p.produtos_usados.map((u, i) => (
-                    <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">{u.produto} ×{u.qtd}</span>
+                    <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">{u.produto} ×{u.qtd}{Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}</span>
                   ))}
                 </div>
               )}
@@ -225,18 +225,26 @@ function RegistrarModal({
             {produtos.length === 0 && <p className="text-xs text-texto/40">Nenhum produto. (Opcional)</p>}
             <div className="space-y-2">
               {produtos.map((p, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <select className={field} value={p.inventory_id}
-                    onChange={(e) => setProduto(idx, estoque.find((i) => i.id === e.target.value) ?? null, p.qtd)}>
-                    <option value="">{p.produto || 'Selecione o produto…'}</option>
-                    {estoque.map((i) => <option key={i.id} value={i.id}>{i.produto} (estoque: {i.qtd_atual})</option>)}
-                  </select>
-                  <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
-                    value={p.qtd} onChange={(e) => setProduto(idx, estoque.find((i) => i.id === p.inventory_id) ?? null, Number(e.target.value))} />
-                  <button onClick={() => removeProduto(idx)} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+                <div key={idx}>
+                  <div className="flex gap-2">
+                    <select className={field} value={p.inventory_id}
+                      onChange={(e) => setProduto(idx, estoque.find((i) => i.id === e.target.value) ?? null, p.qtd)}>
+                      <option value="">{p.produto || 'Selecione o produto…'}</option>
+                      {estoque.map((i) => <option key={i.id} value={i.id}>{i.produto} (estoque: {i.qtd_atual}){Number(i.preco_venda) > 0 ? ` · ${brl(Number(i.preco_venda))}` : ''}</option>)}
+                    </select>
+                    <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
+                      value={p.qtd} onChange={(e) => setProduto(idx, estoque.find((i) => i.id === p.inventory_id) ?? null, Number(e.target.value))} />
+                    <button onClick={() => removeProduto(idx)} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+                  </div>
+                  {Number(p.preco_venda) > 0 && (
+                    <div className="mt-0.5 text-[11px] text-texto/50">Venda: {brl(Number(p.preco_venda))} × {p.qtd} = <strong className="text-texto/70">{brl(Number(p.preco_venda) * p.qtd)}</strong></div>
+                  )}
                 </div>
               ))}
             </div>
+            {produtos.some((p) => Number(p.preco_venda) > 0) && (
+              <p className="mt-1 text-right text-xs text-texto/60">Total dos produtos (venda): <strong>{brl(produtos.reduce((s, p) => s + Number(p.preco_venda || 0) * p.qtd, 0))}</strong></p>
+            )}
             {editar && produtos.length > 0 && <p className="mt-1 text-xs text-texto/40">Ao salvar, o estoque é reconciliado (devolve os antigos e baixa os novos).</p>}
           </div>
 
