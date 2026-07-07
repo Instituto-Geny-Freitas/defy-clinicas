@@ -10,7 +10,7 @@ export interface QuoteItem {
   valor_unit: number
   total: number
   /** Origem do item, quando importado — o valor é travado e ajustado no painel de origem. */
-  origem?: 'procedimento' | 'suplementacao'
+  origem?: 'procedimento' | 'suplementacao' | 'produto'
   ref_id?: string
 }
 

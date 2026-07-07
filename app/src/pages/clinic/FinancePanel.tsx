@@ -21,7 +21,7 @@ import {
   type Quote,
   type QuoteItem,
 } from '@/lib/finance'
-import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, type ProcedureRecord } from '@/lib/procedures'
+import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listUnpaidSupplementations } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
@@ -279,11 +279,11 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                 })()}
                 {produtos.length > 0 && (
                   <div className="mt-3 border-t border-black/5 pt-3">
-                    <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados</div>
+                    <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados (baixa de estoque)</div>
                     <div className="flex flex-wrap gap-1.5">
                       {produtos.map((u, i) => (
                         <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">
-                          {u.produto} ×{u.qtd}
+                          {u.produto} ×{u.qtd}{Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}
                         </span>
                       ))}
                     </div>
@@ -299,6 +299,15 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
 }
 
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+
+const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto' }
+
+/** Cria um item cobrável do orçamento a partir de um produto utilizado (usa o preço de venda do estoque). */
+function produtoParaItem(u: UsedProduct, refId: string): QuoteItem {
+  const qtd = Number(u.qtd) || 1
+  const pv = Number(u.preco_venda) || 0
+  return { descricao: `Produto: ${u.produto}`, qtd, valor_unit: pv, total: pv * qtd, origem: 'produto', ref_id: refId }
+}
 
 function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved }: {
   clinicId: string; patientId: string; professionalId?: string | null; onClose: () => void; onSaved: () => void
@@ -339,7 +348,14 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   async function importarProcedimentos() {
     const procs = await listUnbilledProcedures(patientId)
     if (procs.length === 0) { alert('Nenhum procedimento avulso (sem orçamento) com valor a cobrar.'); return }
-    const novos: QuoteItem[] = procs.map((p) => ({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado) || 0, total: Number(p.valor_cobrado) || 0, origem: 'procedimento', ref_id: p.id }))
+    const novos: QuoteItem[] = []
+    for (const p of procs) {
+      novos.push({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado) || 0, total: Number(p.valor_cobrado) || 0, origem: 'procedimento', ref_id: p.id })
+      // Produtos utilizados com preço de venda entram como itens cobráveis do orçamento.
+      for (const u of p.produtos_usados ?? []) {
+        if (Number(u.preco_venda) > 0) novos.push(produtoParaItem(u, p.id))
+      }
+    }
     setProcImportados((ids) => [...new Set([...ids, ...procs.map((p) => p.id)])])
     setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
   }
@@ -385,7 +401,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
                   <input type="number" step="0.01" className={`w-28 rounded-lg border border-black/10 px-2 py-2 text-sm ${travado ? 'cursor-not-allowed bg-black/[0.03] text-texto/70' : ''}`} placeholder="Valor un." value={it.valor_unit} readOnly={travado} onMouseDown={() => travado && setAvisoNovo('Estes valores só podem ser ajustados nos respectivos painéis (Procedimentos ou Suplementação).')} onChange={(e) => !travado && setItem(idx, { valor_unit: Number(e.target.value) })} />
                   <button onClick={() => removerItem(idx)} className="px-2 text-texto/40 hover:text-secundaria" title={travado ? 'Desvincular' : 'Remover'}>✕</button>
                 </div>
-                {travado && <div className="mt-0.5 text-[10px] text-amber-700">{it.origem === 'procedimento' ? 'Procedimento' : 'Suplementação'} importado · valor travado (✕ para desvincular)</div>}
+                {travado && <div className="mt-0.5 text-[10px] text-amber-700">{ORIGEM_LABEL[it.origem!] ?? 'Item'} importado · valor travado (✕ para desvincular)</div>}
               </div>
             )
           })}
@@ -427,6 +443,14 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
   const [desconto, setDesconto] = useState(Number(quote.desconto) || 0)
   const [salvando, setSalvando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
+  const [produtosUsados, setProdutosUsados] = useState<UsedProduct[]>([])
+
+  // Produtos utilizados nos procedimentos vinculados a este orçamento (para poder importar como itens).
+  useEffect(() => {
+    listProcedures(quote.patient_id)
+      .then((all) => setProdutosUsados(produtosDoOrcamento(all, quote.id)))
+      .catch(() => {})
+  }, [quote.id, quote.patient_id])
 
   const MSG_TRAVADO = 'Estes valores só podem ser ajustados nos respectivos painéis (Procedimentos ou Suplementação).'
   const bruto = calcItensTotal(itens)
@@ -435,13 +459,24 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
     setItens((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
   }
 
+  // Adiciona os produtos utilizados (com preço de venda) que ainda não estão no orçamento.
+  function importarProdutos() {
+    const jaTem = new Set(itens.filter((i) => i.origem === 'produto').map((i) => i.descricao))
+    const novos = produtosUsados
+      .filter((u) => Number(u.preco_venda) > 0 && !jaTem.has(`Produto: ${u.produto}`))
+      .map((u) => produtoParaItem(u, `prod:${u.produto}`))
+    if (novos.length === 0) { setAviso('Nenhum produto novo com valor de venda para importar.'); return }
+    setItens((a) => [...a, ...novos])
+    setAviso(`${novos.length} produto(s) adicionado(s) ao orçamento.`)
+  }
+
   async function desvincular(idx: number) {
     const it = itens[idx]
     if (it.origem === 'procedimento' && it.ref_id) {
       try { await unlinkProcedureFromQuote(it.ref_id) } catch { /* segue removendo o item */ }
     }
     setItens((a) => a.filter((_, i) => i !== idx))
-    setAviso(`${it.origem === 'procedimento' ? 'Procedimento' : 'Suplementação'} desvinculado deste orçamento.`)
+    setAviso(`${ORIGEM_LABEL[it.origem!] ?? 'Item'} desvinculado deste orçamento.`)
   }
 
   async function salvar() {
@@ -487,15 +522,22 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
                 </div>
                 {travado && (
                   <div className="mt-0.5 text-[10px] text-amber-700">
-                    {it.origem === 'procedimento' ? 'Procedimento vinculado' : 'Suplementação vinculada'} · valor travado (ajuste no painel de origem)
+                    {ORIGEM_LABEL[it.origem!] ?? 'Item'} vinculado · valor travado (ajuste no painel de origem)
                   </div>
                 )}
               </div>
             )
           })}
-          <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
-            + Adicionar item
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
+              + Adicionar item
+            </button>
+            {produtosUsados.some((u) => Number(u.preco_venda) > 0) && (
+              <button onClick={importarProdutos} className="text-xs font-medium text-primaria hover:underline">
+                + Importar produtos utilizados
+              </button>
+            )}
+          </div>
         </div>
 
         {aviso && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{aviso}</p>}
