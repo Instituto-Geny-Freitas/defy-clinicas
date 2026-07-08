@@ -3,6 +3,7 @@ import { localDateToday } from '@/lib/format'
 import { createProcedure, deleteProcedure, listProcedures, updateProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
+import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
@@ -15,12 +16,16 @@ interface Props {
 
 export default function ProceduresPanel({ patientId, clinicId, professionalId }: Props) {
   const [procs, setProcs] = useState<ProcedureRecord[]>([])
+  const [pagas, setPagas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<ProcedureRecord | null>(null)
 
   function recarregar() {
     listProcedures(patientId).then(setProcs).catch(() => {}).finally(() => setCarregando(false))
+    // Orçamentos quitados do paciente → marca os procedimentos vinculados como pagos.
+    supabase.from('v_quote_balances').select('quote_id, saldo_a_receber').eq('patient_id', patientId)
+      .then(({ data }) => setPagas(new Set((data ?? []).filter((b) => Number(b.saldo_a_receber) <= 0.005).map((b) => b.quote_id as string))))
   }
   useEffect(recarregar, [patientId])
 
@@ -54,7 +59,9 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum procedimento registrado.</p>
       ) : (
         <div className="space-y-2">
-          {procs.map((p) => (
+          {procs.map((p) => {
+            const pago = !!p.quote_id && pagas.has(p.quote_id)
+            return (
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="font-medium text-texto">{p.procedimento}</div>
@@ -71,16 +78,25 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">Avulso · {brl(Number(p.valor_cobrado))}</span>
                 )}
                 {p.quote_id && <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">Vinculado a orçamento</span>}
+                {pago && <span className="rounded-full bg-emerald-600 px-2 py-0.5 font-medium text-white">✓ Pago</span>}
               </div>
               {p.produtos_usados?.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {p.produtos_usados.map((u, i) => (
-                    <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">{u.produto} ×{u.qtd}{Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}</span>
-                  ))}
+                <div className="mt-2">
+                  <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados (baixa de estoque){pago && <span className="ml-1 text-emerald-600">· pagos</span>}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {p.produtos_usados.map((u, i) => (
+                      <span key={i} className={`rounded-full px-2 py-0.5 text-xs ${pago ? 'bg-emerald-50 text-emerald-700' : 'bg-black/5 text-texto/70'}`}>
+                        {u.produto} ×{u.qtd}
+                        {u.lote && <span className="opacity-70"> · lote {u.lote}</span>}
+                        {u.validade && <span className="opacity-70"> · val {formatDateBR(u.validade)}</span>}
+                        {Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>

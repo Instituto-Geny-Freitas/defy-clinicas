@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import { listMeasurements, type BodyMeasurement } from '@/lib/measurements'
 import { listLabOrders, listLabResults, uploadLabResult, type LabOrder, type LabResult } from '@/lib/labs'
+import { listProcedures, type ProcedureRecord } from '@/lib/procedures'
 import { formatDateBR } from '@/lib/format'
 import LineChart from '@/components/LineChart'
 
@@ -14,6 +15,7 @@ export default function PatientEvolution() {
   const [medidas, setMedidas] = useState<BodyMeasurement[]>([])
   const [orders, setOrders] = useState<LabOrder[]>([])
   const [results, setResults] = useState<LabResult[]>([])
+  const [procs, setProcs] = useState<ProcedureRecord[]>([])
   const [carregando, setCarregando] = useState(true)
   const [enviando, setEnviando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -24,6 +26,7 @@ export default function PatientEvolution() {
       .then(([f, m, o, r]) => { setFotos(f.filter((x) => x.visivel_paciente)); setMedidas(m); setOrders(o); setResults(r) })
       .catch(() => {})
       .finally(() => setCarregando(false))
+    listProcedures(patientId).then(setProcs).catch(() => {})
   }
   useEffect(recarregar, [patientId])
 
@@ -80,6 +83,40 @@ export default function PatientEvolution() {
               <div key={r.id} className="flex items-center justify-between rounded-lg border border-black/5 bg-white p-3 text-sm">
                 <span className="text-texto/70">Resultado · {new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
                 {r.signedUrl && <a href={r.signedUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-primaria hover:underline">Abrir</a>}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Procedimentos realizados */}
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-texto/70">Procedimentos</h2>
+        {procs.length === 0 ? (
+          <p className="text-sm text-texto/40">Nenhum procedimento registrado.</p>
+        ) : (
+          <div className="space-y-2">
+            {procs.map((p) => (
+              <div key={p.id} className="rounded-xl border border-black/5 bg-white p-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-texto">{p.procedimento}</span>
+                  <span className="text-xs text-texto/50">{formatDateBR(p.data)}</span>
+                </div>
+                {p.regiao && <div className="text-xs text-texto/60">Região: {p.regiao}</div>}
+                {p.produtos_usados?.length > 0 && (
+                  <div className="mt-1.5">
+                    <div className="mb-1 text-[11px] font-medium text-texto/50">Produtos utilizados</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {p.produtos_usados.map((u, i) => (
+                        <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] text-texto/70">
+                          {u.produto} ×{u.qtd}
+                          {u.lote && <span className="opacity-70"> · lote {u.lote}</span>}
+                          {u.validade && <span className="opacity-70"> · val {formatDateBR(u.validade)}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
