@@ -1,27 +1,61 @@
 import { useEffect, useState } from 'react'
 import { createSupplementation, deleteSupplementation, listSupplementations, setSupplementationPaid, updateSupplementation, type Supplementation } from '@/lib/supplementations'
 import { listActiveIngredients, listRoutes, type ActiveIngredient, type DomainItem } from '@/lib/domains'
-import { brl } from '@/lib/finance'
+import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, type Payment } from '@/lib/finance'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
+/** Situação da suplementação frente aos orçamentos: em orçamento quitado, em orçamento aberto, ou avulsa. */
+type Vinculo = 'quitado' | 'aberto' | 'nenhum'
+
 export default function SupplementationsPanel({ patientId, clinicId, professionalId }: Props) {
   const [itens, setItens] = useState<Supplementation[]>([])
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [pagamentos, setPagamentos] = useState<Payment[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<Supplementation | null>(null)
 
   function recarregar() {
-    listSupplementations(patientId).then(setItens).catch(() => {}).finally(() => setCarregando(false))
+    Promise.all([listSupplementations(patientId), listQuotes(patientId), listPaymentsByPatient(patientId)])
+      .then(([s, q, p]) => { setItens(s); setQuotes(q); setPagamentos(p) })
+      .catch(() => {})
+      .finally(() => setCarregando(false))
   }
   useEffect(recarregar, [patientId])
 
-  async function togglePago(s: Supplementation) {
-    await setSupplementationPaid(s.id, !s.pago)
+  /** Verifica se a suplementação está em algum orçamento e se ele está quitado. */
+  function vinculoDe(id: string): Vinculo {
+    let aberto = false
+    for (const q of quotes) {
+      const temItem = (q.itens ?? []).some((it) => it.origem === 'suplementacao' && it.ref_id === id)
+      if (!temItem) continue
+      const quitado = (Number(q.valor_total) - totalLiquidado(pagamentos, q.id)) <= 0.005
+      if (quitado) return 'quitado'
+      aberto = true
+    }
+    return aberto ? 'aberto' : 'nenhum'
+  }
+
+  async function marcarPago(s: Supplementation, pago: boolean) {
+    await setSupplementationPaid(s.id, pago)
     recarregar()
+  }
+
+  /** Marca como pago validando o vínculo com orçamento pago (evita marcar indevidamente). */
+  async function acionarPago(s: Supplementation) {
+    const v = vinculoDe(s.id)
+    if (v === 'aberto') {
+      alert('Esta suplementação está em um orçamento ainda NÃO quitado. Para marcá-la como paga, receba o pagamento do orçamento (aba Financeiro). A marcação manual foi bloqueada para preservar a integridade financeira.')
+      return
+    }
+    if (v === 'nenhum') {
+      if (!confirm('Esta suplementação NÃO está vinculada a nenhum orçamento pago. Deseja marcá-la como paga manualmente mesmo assim?')) return
+    }
+    await marcarPago(s, true)
   }
   async function excluir(s: Supplementation) {
     if (!confirm(`Excluir a suplementação "${s.medicacao}"?`)) return
@@ -55,9 +89,26 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
                   <td className="px-4 py-2 text-texto/70">{Number(s.valor_venda) > 0 ? brl(Number(s.valor_venda)) : '—'}</td>
                   <td className="px-4 py-2 text-texto/60">{formatDateBR(s.data)}</td>
                   <td className="px-4 py-2">
-                    <button onClick={() => togglePago(s)} className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.pago ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {s.pago ? 'Pago' : 'Não pago'}
-                    </button>
+                    {(() => {
+                      const v = vinculoDe(s.id)
+                      if (s.pago) {
+                        return (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">Pago</span>
+                            {v === 'quitado' && <span className="text-[10px] text-texto/40">via orçamento</span>}
+                            {v === 'nenhum' && <button onClick={() => { if (confirm('Marcar esta suplementação avulsa como NÃO paga?')) marcarPago(s, false) }} className="text-[10px] text-texto/40 hover:underline">reverter</button>}
+                          </span>
+                        )
+                      }
+                      if (v === 'aberto') {
+                        return <span title="Vinculada a um orçamento ainda não quitado — receba o pagamento na aba Financeiro" className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">Aguardando orçamento</span>
+                      }
+                      return (
+                        <button onClick={() => acionarPago(s)} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-emerald-100 hover:text-emerald-700" title={v === 'quitado' ? 'Vinculada a orçamento quitado — pode marcar como paga' : 'Sem orçamento vinculado — exige confirmação'}>
+                          Marcar como pago
+                        </button>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
                     <button onClick={() => setEditando(s)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
