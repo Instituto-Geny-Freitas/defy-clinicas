@@ -3,7 +3,10 @@ import { supabase } from '@/lib/supabase'
 export interface UsedProduct {
   inventory_id: string
   produto: string
+  lot_id?: string | null
+  marca?: string | null
   lote?: string | null
+  validade?: string | null
   qtd: number
   preco_venda?: number
 }
@@ -116,7 +119,7 @@ async function aplicarSaidas(clinicId: string, procedureId: string, patientId: s
   const movimentos = produtos
     .filter((p) => p.inventory_id && p.qtd > 0)
     .map((p) => ({
-      clinic_id: clinicId, inventory_id: p.inventory_id, tipo: 'saida_uso', quantidade: p.qtd,
+      clinic_id: clinicId, inventory_id: p.inventory_id, lot_id: p.lot_id ?? null, tipo: 'saida_uso', quantidade: p.qtd,
       procedure_id: procedureId, patient_id: patientId, professional_id: professionalId,
     }))
   if (movimentos.length > 0) {
@@ -130,7 +133,7 @@ async function estornarSaidas(clinicId: string, proc: ProcedureRecord) {
   const movimentos = (proc.produtos_usados ?? [])
     .filter((p) => p.inventory_id && p.qtd > 0)
     .map((p) => ({
-      clinic_id: clinicId, inventory_id: p.inventory_id, tipo: 'entrada', quantidade: p.qtd,
+      clinic_id: clinicId, inventory_id: p.inventory_id, lot_id: p.lot_id ?? null, tipo: 'entrada', quantidade: p.qtd,
       procedure_id: proc.id, patient_id: proc.patient_id, professional_id: proc.professional_id,
       motivo: 'Estorno (edição/exclusão de procedimento)',
     }))

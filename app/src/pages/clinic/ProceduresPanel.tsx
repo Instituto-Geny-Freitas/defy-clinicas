@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { localDateToday } from '@/lib/format'
 import { createProcedure, deleteProcedure, listProcedures, updateProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
-import { listInventory, type InventoryItem } from '@/lib/inventory'
+import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
@@ -99,6 +99,7 @@ function RegistrarModal({
 }) {
   const editar = !!proc
   const [estoque, setEstoque] = useState<InventoryItem[]>([])
+  const [lotes, setLotes] = useState<InventoryLot[]>([])
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [tipos, setTipos] = useState<ProcedureType[]>([])
@@ -116,6 +117,7 @@ function RegistrarModal({
 
   useEffect(() => {
     listInventory().then(setEstoque).catch(() => {})
+    listInventoryLots().then(setLotes).catch(() => {})
     listProcedureTypes().then(setTipos).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
@@ -124,10 +126,18 @@ function RegistrarModal({
   const orcamentosDoPlano = planoId ? orcamentos.filter((q) => q.treatment_plan_id === planoId) : orcamentos
   const avulso = !quoteId
 
+  const nomeProduto = (invId: string) => estoque.find((i) => i.id === invId)?.produto ?? ''
+  const lotesComSaldo = lotes.filter((l) => Number(l.qtd_atual) > 0)
+  const rotuloLote = (l: InventoryLot) =>
+    `${nomeProduto(l.inventory_id)} · ${l.lote || 's/ lote'}${l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · ${l.qtd_atual} un${Number(l.preco_venda) > 0 ? ` · ${brl(Number(l.preco_venda))}` : ''}`
+  const saldoLote = (lotId?: string | null) => (lotId ? Number(lotes.find((l) => l.id === lotId)?.qtd_atual ?? 0) : 0)
+
   function addProduto() { setProdutos((p) => [...p, { inventory_id: '', produto: '', qtd: 1 }]) }
-  function setProduto(idx: number, item: InventoryItem | null, qtd: number) {
+  function setProdutoLote(idx: number, lot: InventoryLot | null, qtd: number) {
     setProdutos((arr) => arr.map((p, i) => i === idx
-      ? { inventory_id: item?.id ?? '', produto: item?.produto ?? '', lote: item?.lote ?? null, qtd, preco_venda: item?.preco_venda }
+      ? (lot
+        ? { inventory_id: lot.inventory_id, produto: nomeProduto(lot.inventory_id), lot_id: lot.id, marca: lot.marca, lote: lot.lote, validade: lot.validade, qtd, preco_venda: lot.preco_venda }
+        : { inventory_id: '', produto: '', qtd })
       : p))
   }
   function removeProduto(idx: number) { setProdutos((arr) => arr.filter((_, i) => i !== idx)) }
@@ -135,9 +145,14 @@ function RegistrarModal({
   async function salvar() {
     setErro(null)
     if (!procedimento.trim()) { setErro('Informe o procedimento.'); return }
+    const prods = produtos.filter((p) => p.inventory_id)
+    // Bloqueia registrar baixa acima do saldo do lote (procedimento novo).
+    if (!editar) {
+      const semSaldo = prods.find((p) => p.lot_id && p.qtd > saldoLote(p.lot_id))
+      if (semSaldo) { setErro(`"${semSaldo.produto}" tem quantidade (${semSaldo.qtd}) acima do saldo do lote (${saldoLote(semSaldo.lot_id)}).`); return }
+    }
     setSalvando(true)
     try {
-      const prods = produtos.filter((p) => p.inventory_id)
       const valor = avulso ? parseMoneyBR(valorCobrado) : 0
       if (proc) {
         await updateProcedure({
@@ -223,24 +238,34 @@ function RegistrarModal({
               <button onClick={addProduto} className="text-xs font-medium text-primaria hover:underline">+ Adicionar</button>
             </div>
             {produtos.length === 0 && <p className="text-xs text-texto/40">Nenhum produto. (Opcional)</p>}
+            {lotesComSaldo.length === 0 && (
+              <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">Nenhum lote com saldo em estoque. Registre uma entrada (Financeiro → Nova Despesa, Estoque → +Entrada ou Editar Produto — admin) antes de usar produtos.</p>
+            )}
             <div className="space-y-2">
-              {produtos.map((p, idx) => (
-                <div key={idx}>
-                  <div className="flex gap-2">
-                    <select className={field} value={p.inventory_id}
-                      onChange={(e) => setProduto(idx, estoque.find((i) => i.id === e.target.value) ?? null, p.qtd)}>
-                      <option value="">{p.produto || 'Selecione o produto…'}</option>
-                      {estoque.map((i) => <option key={i.id} value={i.id}>{i.produto} (estoque: {i.qtd_atual}){Number(i.preco_venda) > 0 ? ` · ${brl(Number(i.preco_venda))}` : ''}</option>)}
-                    </select>
-                    <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
-                      value={p.qtd} onChange={(e) => setProduto(idx, estoque.find((i) => i.id === p.inventory_id) ?? null, Number(e.target.value))} />
-                    <button onClick={() => removeProduto(idx)} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+              {produtos.map((p, idx) => {
+                // Lotes disponíveis: com saldo > 0 e o lote já escolhido nesta linha (para edição).
+                const opcoes = lotesComSaldo.filter((l) => l.id === p.lot_id || Number(l.qtd_atual) > 0)
+                const semSaldo = !!p.lot_id && !editar && p.qtd > saldoLote(p.lot_id)
+                return (
+                  <div key={idx}>
+                    <div className="flex gap-2">
+                      <select className={field} value={p.lot_id ?? ''}
+                        onChange={(e) => setProdutoLote(idx, lotes.find((l) => l.id === e.target.value) ?? null, p.qtd)}>
+                        <option value="">{p.lot_id ? '' : (p.produto ? `${p.produto} (lote antigo)` : 'Selecione o lote…')}</option>
+                        {opcoes.map((l) => <option key={l.id} value={l.id}>{rotuloLote(l)}</option>)}
+                      </select>
+                      <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
+                        value={p.qtd} onChange={(e) => setProdutos((arr) => arr.map((x, i) => i === idx ? { ...x, qtd: Number(e.target.value) } : x))} />
+                      <button onClick={() => removeProduto(idx)} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px]">
+                      {(p.lote || p.validade) && <span className="text-texto/50">Lote {p.lote || 's/ nº'}{p.validade ? ` · val ${formatDateBR(p.validade)}` : ''}</span>}
+                      {Number(p.preco_venda) > 0 && <span className="text-texto/50">Venda: {brl(Number(p.preco_venda))} × {p.qtd} = <strong className="text-texto/70">{brl(Number(p.preco_venda) * p.qtd)}</strong></span>}
+                      {semSaldo && <span className="font-medium text-secundaria">Quantidade acima do saldo do lote ({saldoLote(p.lot_id)}).</span>}
+                    </div>
                   </div>
-                  {Number(p.preco_venda) > 0 && (
-                    <div className="mt-0.5 text-[11px] text-texto/50">Venda: {brl(Number(p.preco_venda))} × {p.qtd} = <strong className="text-texto/70">{brl(Number(p.preco_venda) * p.qtd)}</strong></div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
             {produtos.some((p) => Number(p.preco_venda) > 0) && (
               <p className="mt-1 text-right text-xs text-texto/60">Total dos produtos (venda): <strong>{brl(produtos.reduce((s, p) => s + Number(p.preco_venda || 0) * p.qtd, 0))}</strong></p>
