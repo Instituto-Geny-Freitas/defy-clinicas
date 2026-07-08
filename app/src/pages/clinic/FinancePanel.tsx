@@ -23,7 +23,7 @@ import {
 } from '@/lib/finance'
 import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
-import { listUnpaidSupplementations } from '@/lib/supplementations'
+import { listUnpaidSupplementations, listSupplementations, setSupplementationPaid } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
 import { buildOrcamentoPdf } from '@/lib/orcamentoPdf'
 import { useClinic } from '@/theme/ThemeProvider'
@@ -83,17 +83,43 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
   }
 
   function recarregar() {
-    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId), listSharedDocuments(patientId)])
-      .then(([q, p, proc, sd]) => {
+    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId), listSharedDocuments(patientId), listSupplementations(patientId)])
+      .then(([q, p, proc, sd, supl]) => {
         setQuotes(q)
         setPagamentos(p)
         setProcedimentos(proc)
         setCompartilhados(sd)
+        reconciliarSuplementos(q, p, supl)
       })
       .catch(() => {})
       .finally(() => setCarregando(false))
   }
   useEffect(recarregar, [patientId])
+
+  /**
+   * Sincroniza o status "pago" das suplementações com a quitação do orçamento em
+   * que foram importadas: se o orçamento está quitado, a suplementação vira paga
+   * (e some do "importar não pagas"); se reabre (chargeback/exclusão), volta a
+   * não paga. Só grava quando o status muda. Suplementações fora de orçamentos
+   * não são tocadas (preserva o toggle manual do painel de Suplementação).
+   */
+  async function reconciliarSuplementos(qs: Quote[], pgs: Payment[], supl: { id: string; pago: boolean }[]) {
+    const atual = new Map(supl.map((s) => [s.id, s.pago]))
+    const desejado = new Map<string, boolean>()
+    for (const q of qs) {
+      const quitado = (Number(q.valor_total) - totalLiquidado(pgs, q.id)) <= 0.005
+      for (const it of q.itens ?? []) {
+        if (it.origem === 'suplementacao' && it.ref_id) {
+          desejado.set(it.ref_id, (desejado.get(it.ref_id) ?? false) || quitado)
+        }
+      }
+    }
+    const updates: Promise<void>[] = []
+    for (const [id, querPago] of desejado) {
+      if (atual.has(id) && atual.get(id) !== querPago) updates.push(setSupplementationPaid(id, querPago))
+    }
+    if (updates.length) await Promise.allSettled(updates)
+  }
 
   /** Documento de orçamento já enviado ao paciente, se houver. */
   function orcamentoEnviado(quoteId: string): SharedDocument | undefined {
