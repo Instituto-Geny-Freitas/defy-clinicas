@@ -36,6 +36,21 @@ export async function deletePatient(id: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Verifica se o e-mail já pertence a outro paciente ativo (case-insensitive).
+ * Usado para impedir dois pacientes com o mesmo e-mail (que quebraria o login,
+ * pois o usuário de autenticação é único por e-mail).
+ */
+export async function emailEmUso(email: string, exceptId?: string): Promise<boolean> {
+  const alvo = email.trim()
+  if (!alvo) return false
+  let q = supabase.from('patients').select('id').eq('ativo', true).ilike('email', alvo)
+  if (exceptId) q = q.neq('id', exceptId)
+  const { data, error } = await q.limit(1)
+  if (error) return false
+  return (data?.length ?? 0) > 0
+}
+
 export async function getPatient(id: string): Promise<Patient | null> {
   const { data, error } = await supabase.from('patients').select('*').eq('id', id).maybeSingle()
   if (error) throw error

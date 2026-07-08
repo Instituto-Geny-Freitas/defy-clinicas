@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import {
   calcAge,
   createPatient,
+  emailEmUso,
   gerarSenhaProvisoria,
   provisionPatientAccess,
   updatePatient,
@@ -87,6 +88,11 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
     if (!editando) {
       if (!form.cpf?.trim() && !form.email?.trim()) { setErro('Informe CPF ou e-mail (necessário para o login).'); return }
       if (senhaAcesso.length < 6) { setErro('A senha de acesso deve ter ao menos 6 caracteres.'); return }
+    }
+    // Impede dois pacientes com o mesmo e-mail (quebraria o login por auth único).
+    if (form.email?.trim()) {
+      const emUso = await emailEmUso(form.email, patient?.id)
+      if (emUso) { setErro('Este e-mail já está cadastrado em outro paciente. Cada paciente precisa de um e-mail único (o login é individual).'); return }
     }
     setSalvando(true)
     setErro(null)

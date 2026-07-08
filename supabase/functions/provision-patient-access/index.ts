@@ -53,6 +53,20 @@ Deno.serve(async (req) => {
     const loginEmail = emailCadastrado || cpfLogin
     if (!loginEmail) return json({ error: 'paciente sem e-mail nem CPF para login' }, 400)
 
+    // Guarda de integridade: não provisionar um e-mail já usado por OUTRO paciente ativo
+    // (o usuário de autenticação é único por e-mail; dois pacientes no mesmo e-mail
+    //  fazem um cair no cadastro do outro ao logar).
+    if (emailCadastrado) {
+      const { data: outro } = await admin
+        .from('patients')
+        .select('id')
+        .neq('id', patient_id)
+        .eq('ativo', true)
+        .ilike('email', emailCadastrado)
+        .maybeSingle()
+      if (outro) return json({ error: 'Este e-mail já está vinculado a outro paciente ativo. Corrija o e-mail antes de provisionar o acesso.' }, 409)
+    }
+
     // 3a) Já tem login → REDEFINE a senha (e atualiza o e-mail de login se mudou).
     if (pat.auth_user_id) {
       const patch: { password: string; email?: string; email_confirm?: boolean } = { password }
