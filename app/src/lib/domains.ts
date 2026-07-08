@@ -68,6 +68,86 @@ export function calcVendaComMargem(aquisicao: number, margemPct: number): number
   return Math.round(aquisicao * (1 + (margemPct || 0) / 100) * 100) / 100
 }
 
+// ---- Lotes de Ativo (estoque por lote) -------------------------------------
+export interface AtivoLote {
+  id: string
+  ativo_id: string
+  fornecedor: string | null
+  lote: string | null
+  validade: string | null
+  qtd_atual: number
+  custo_aquisicao: number
+  margem_pct: number
+  preco_venda: number
+  ativo: boolean
+}
+
+const normStr = (v?: string | null) => (v ?? '').trim().toLowerCase()
+
+/** Lotes ativos de todos os ativos (para exibir controle por lote e saldo). */
+export async function listAtivoLotes(): Promise<AtivoLote[]> {
+  const { data, error } = await supabase
+    .from('ativo_lotes')
+    .select('id, ativo_id, fornecedor, lote, validade, qtd_atual, custo_aquisicao, margem_pct, preco_venda, ativo')
+    .eq('ativo', true)
+    .order('validade', { ascending: true, nullsFirst: false })
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * Entrada de estoque de ATIVO por lote: soma no mesmo lote (fornecedor+lote+validade)
+ * ou cria um novo. O gatilho atualiza o saldo do lote.
+ */
+export async function addAtivoEntryLot(args: {
+  clinicId: string
+  ativoId: string
+  fornecedor?: string | null
+  lote?: string | null
+  validade?: string | null
+  quantidade: number
+  custoAquisicao?: number
+  margemPct?: number
+  precoVenda?: number
+}): Promise<void> {
+  const forn = args.fornecedor ?? null, lote = args.lote ?? null, validade = args.validade ?? null
+  const { data: lots } = await supabase
+    .from('ativo_lotes')
+    .select('id, fornecedor, lote, validade')
+    .eq('ativo_id', args.ativoId)
+    .eq('ativo', true)
+  const match = (lots ?? []).find(
+    (l) => normStr(l.fornecedor) === normStr(forn) && normStr(l.lote) === normStr(lote) && (l.validade ?? '') === (validade ?? ''),
+  )
+
+  let lotId: string
+  if (match) {
+    lotId = match.id
+    const patch: Record<string, unknown> = {}
+    if (args.custoAquisicao != null) patch.custo_aquisicao = args.custoAquisicao
+    if (args.margemPct != null) patch.margem_pct = args.margemPct
+    if (args.precoVenda != null) patch.preco_venda = args.precoVenda
+    if (Object.keys(patch).length) await supabase.from('ativo_lotes').update(patch).eq('id', lotId)
+  } else {
+    const { data: novo, error } = await supabase
+      .from('ativo_lotes')
+      .insert({
+        clinic_id: args.clinicId, ativo_id: args.ativoId, fornecedor: forn, lote, validade,
+        qtd_atual: 0, custo_aquisicao: args.custoAquisicao ?? 0, margem_pct: args.margemPct ?? 0, preco_venda: args.precoVenda ?? 0,
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    lotId = novo.id
+  }
+
+  const { error: mErr } = await supabase.from('ativo_movements').insert({
+    clinic_id: args.clinicId, ativo_lote_id: lotId, tipo: 'entrada', quantidade: args.quantidade,
+    custo_aquisicao: args.custoAquisicao ?? null, preco_venda: args.precoVenda ?? null,
+  })
+  if (mErr) throw mErr
+}
+
 // ---- Vias de administração --------------------------------------------------
 export interface DomainItem {
   id: string
