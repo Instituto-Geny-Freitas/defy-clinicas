@@ -143,6 +143,25 @@ export async function deleteServico(id: string): Promise<void> {
   if (error) throw error
 }
 
+// ---- Domínios: Unidades de medida (ativos/estoque) -------------------------
+export async function listUnidades(): Promise<DomItem[]> {
+  const { data, error } = await supabase.from('unidades').select('id, nome, ativo, ordem').eq('ativo', true).order('ordem').order('nome')
+  if (error) throw error
+  return data ?? []
+}
+export async function createUnidade(clinicId: string, nome: string): Promise<void> {
+  const { error } = await supabase.from('unidades').insert({ clinic_id: clinicId, nome })
+  if (error) throw error
+}
+export async function updateUnidade(id: string, nome: string): Promise<void> {
+  const { error } = await supabase.from('unidades').update({ nome }).eq('id', id)
+  if (error) throw error
+}
+export async function deleteUnidade(id: string): Promise<void> {
+  const { error } = await supabase.from('unidades').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ---- Domínios: Vacinas ------------------------------------------------------
 export async function listVacinas(): Promise<DomItem[]> {
   const { data, error } = await supabase.from('vacina_tipos').select('id, nome, ativo, ordem').eq('ativo', true).order('ordem').order('nome')

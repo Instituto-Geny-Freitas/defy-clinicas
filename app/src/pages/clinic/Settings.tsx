@@ -64,7 +64,7 @@ import { FEATURES, NIVEIS_EDITAVEIS, NIVEL_LABEL as PERM_NIVEL_LABEL, defaultsMa
 import { usePermissions } from '@/auth/PermissionsProvider'
 import {
   createServico, createVacina, deleteServico, deleteVacina, listServicos, listVacinas,
-  updateServico, updateVacina, type DomItem,
+  updateServico, updateVacina, createUnidade, deleteUnidade, listUnidades, updateUnidade, type DomItem,
 } from '@/lib/admin'
 import {
   DEFAULT_FORMS, getForms, getClinicCodigo, resetFormDef, saveClinicCodigo, saveFormDef,
@@ -78,7 +78,7 @@ import { formatDateBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -107,6 +107,7 @@ export default function Settings() {
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
           { k: 'ativos', l: 'Ativos' },
+          { k: 'unidades', l: 'Unidades' },
           { k: 'vias', l: 'Vias' },
           { k: 'fornecedores', l: 'Fornecedores' },
           { k: 'formulas', l: 'Fórmulas' },
@@ -144,6 +145,7 @@ export default function Settings() {
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'despesas' && <DespesasSection clinicId={clinicId} />}
       {sec === 'exames' && <ExamesSection clinicId={clinicId} />}
+      {sec === 'unidades' && <UnidadesSection clinicId={clinicId} />}
       {sec === 'servicos' && <ServicosSection clinicId={clinicId} />}
       {sec === 'vacinas' && <VacinasSection clinicId={clinicId} />}
       {sec === 'formularios' && <FormulariosSection clinicId={clinicId} />}
@@ -686,6 +688,22 @@ function ServicosSection({ clinicId }: { clinicId: string }) {
       onAdd={async (n) => { await createServico(clinicId, n); recarregar() }}
       onRename={async (id, n) => { await updateServico(id, n); recarregar() }}
       onDelete={async (id) => { if (confirm('Excluir este serviço?')) { await deleteServico(id); recarregar() } }}
+    />
+  )
+}
+
+function UnidadesSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<DomItem[]>([])
+  function recarregar() { listUnidades().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  return (
+    <DomainCrud
+      titulo="Unidades de medida" placeholder="Ex.: Ampola, Caixa, ml, gr"
+      ajuda="Usadas no cadastro de Ativos e Produtos de Estoque (por lote). Ex.: ampola, caixa, frasco, ml, gr."
+      itens={itens}
+      onAdd={async (n) => { await createUnidade(clinicId, n); recarregar() }}
+      onRename={async (id, n) => { await updateUnidade(id, n); recarregar() }}
+      onDelete={async (id) => { if (confirm('Excluir esta unidade?')) { await deleteUnidade(id); recarregar() } }}
     />
   )
 }
