@@ -23,6 +23,9 @@ export interface ActiveIngredient {
   preco_aquisicao: number
   margem_pct: number
   preco_venda: number
+  unidade: string | null
+  estoque_minimo: number
+  anexo_url: string | null
   ativo: boolean
 }
 
@@ -38,6 +41,9 @@ export interface AtivoInput {
   preco_aquisicao?: number
   margem_pct?: number
   preco_venda?: number
+  unidade?: string | null
+  estoque_minimo?: number
+  anexo_url?: string | null
 }
 
 export async function listActiveIngredients(categoria?: AtivoCategoria): Promise<ActiveIngredient[]> {
@@ -58,8 +64,9 @@ export async function updateActiveIngredient(id: string, input: AtivoInput): Pro
   if (error) throw error
 }
 
+/** Soft delete — preserva lotes/movimentações e histórico (relação 1->N). */
 export async function deleteActiveIngredient(id: string): Promise<void> {
-  const { error } = await supabase.from('active_ingredients').delete().eq('id', id)
+  const { error } = await supabase.from('active_ingredients').update({ ativo: false }).eq('id', id)
   if (error) throw error
 }
 
@@ -146,6 +153,15 @@ export async function addAtivoEntryLot(args: {
     custo_aquisicao: args.custoAquisicao ?? null, preco_venda: args.precoVenda ?? null,
   })
   if (mErr) throw mErr
+}
+
+/** Ajuste de saldo de um lote de ativo (delta pode ser negativo). Registra movimentação 'ajuste'. */
+export async function adjustAtivoLote(clinicId: string, ativoLoteId: string, delta: number, motivo?: string): Promise<void> {
+  if (!delta) return
+  const { error } = await supabase.from('ativo_movements').insert({
+    clinic_id: clinicId, ativo_lote_id: ativoLoteId, tipo: 'ajuste', quantidade: delta, motivo: motivo ?? 'Ajuste de saldo inicial',
+  })
+  if (error) throw error
 }
 
 // ---- Vias de administração --------------------------------------------------
