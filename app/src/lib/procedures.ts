@@ -25,14 +25,16 @@ export interface ProcedureRecord {
   created_at: string
 }
 
-/** Agrupa (somando quantidades) os produtos usados nos procedimentos de um orçamento. */
+/** Agrupa (somando quantidades) os produtos usados nos procedimentos de um orçamento.
+ *  A chave inclui lote e validade para preservar a rastreabilidade por lote. */
 export function produtosDoOrcamento(procedimentos: ProcedureRecord[], quoteId: string): UsedProduct[] {
   const mapa = new Map<string, UsedProduct>()
   for (const proc of procedimentos.filter((p) => p.quote_id === quoteId)) {
     for (const u of proc.produtos_usados ?? []) {
-      const ex = mapa.get(u.produto)
+      const chave = `${u.produto}|${u.lote ?? ''}|${u.validade ?? ''}`
+      const ex = mapa.get(chave)
       if (ex) ex.qtd += u.qtd
-      else mapa.set(u.produto, { ...u })
+      else mapa.set(chave, { ...u })
     }
   }
   return [...mapa.values()]

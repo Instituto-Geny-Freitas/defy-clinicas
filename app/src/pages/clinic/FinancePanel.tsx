@@ -309,7 +309,10 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                     <div className="flex flex-wrap gap-1.5">
                       {produtos.map((u, i) => (
                         <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">
-                          {u.produto} ×{u.qtd}{Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}
+                          {u.produto} ×{u.qtd}
+                          {u.lote && <span className="opacity-70"> · lote {u.lote}</span>}
+                          {u.validade && <span className="opacity-70"> · val {formatDateBR(u.validade)}</span>}
+                          {Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}
                         </span>
                       ))}
                     </div>
@@ -332,7 +335,8 @@ const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', sup
 function produtoParaItem(u: UsedProduct, refId: string): QuoteItem {
   const qtd = Number(u.qtd) || 1
   const pv = Number(u.preco_venda) || 0
-  return { descricao: `Produto: ${u.produto}`, qtd, valor_unit: pv, total: pv * qtd, origem: 'produto', ref_id: refId }
+  const det = [u.lote ? `lote ${u.lote}` : '', u.validade ? `val ${formatDateBR(u.validade)}` : ''].filter(Boolean).join(' · ')
+  return { descricao: `Produto: ${u.produto}${det ? ` (${det})` : ''}`, qtd, valor_unit: pv, total: pv * qtd, origem: 'produto', ref_id: refId }
 }
 
 function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved }: {

@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { listAppointments, type Appointment } from '@/lib/appointments'
 import { estoqueBaixo, listInventory, validadeProxima, type InventoryItem } from '@/lib/inventory'
+import { listActiveIngredients, listAtivoLotes } from '@/lib/domains'
 import { brl } from '@/lib/finance'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
+
+interface AtivoAlerta { id: string; nome: string; total: number; minimo: number; baixo: boolean; venc: boolean }
 
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
@@ -14,6 +17,7 @@ export default function Dashboard() {
   const [aReceber, setAReceber] = useState<number | null>(null)
   const [hoje, setHoje] = useState<Appointment[]>([])
   const [alertasEstoque, setAlertasEstoque] = useState<InventoryItem[]>([])
+  const [alertasAtivos, setAlertasAtivos] = useState<AtivoAlerta[]>([])
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -21,12 +25,14 @@ export default function Dashboard() {
       const inicioHoje = new Date(); inicioHoje.setHours(0, 0, 0, 0)
       const fimHoje = new Date(); fimHoje.setHours(23, 59, 59, 999)
 
-      const [pac, docs, appts, inv, saldos] = await Promise.all([
+      const [pac, docs, appts, inv, saldos, ativos, ativoLotes] = await Promise.all([
         supabase.from('patients').select('id', { count: 'exact', head: true }),
         supabase.from('document_instances').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
         listAppointments(inicioHoje.toISOString()),
         listInventory(),
         supabase.from('v_quote_balances').select('saldo_a_receber'),
+        listActiveIngredients(),
+        listAtivoLotes(),
       ])
 
       setPacientes(pac.count ?? 0)
@@ -34,6 +40,20 @@ export default function Dashboard() {
       setHoje(appts.filter((a) => new Date(a.inicio) <= fimHoje))
       setAlertasEstoque(inv.filter((i) => estoqueBaixo(i) || validadeProxima(i)))
       setAReceber((saldos.data ?? []).reduce((s, r) => s + Number(r.saldo_a_receber), 0))
+
+      // Alertas de ativos: soma dos lotes vs. estoque mínimo + validade próxima.
+      const porAtivo = new Map<string, { total: number; venc: boolean }>()
+      for (const l of ativoLotes) {
+        const cur = porAtivo.get(l.ativo_id) ?? { total: 0, venc: false }
+        cur.total += Number(l.qtd_atual)
+        if (Number(l.qtd_atual) > 0 && l.validade && (new Date(l.validade).getTime() - Date.now()) / 86400000 <= 30) cur.venc = true
+        porAtivo.set(l.ativo_id, cur)
+      }
+      setAlertasAtivos(ativos.map((a) => {
+        const info = porAtivo.get(a.id) ?? { total: 0, venc: false }
+        const minimo = Number(a.estoque_minimo)
+        return { id: a.id, nome: a.nome, total: info.total, minimo, baixo: minimo > 0 && info.total <= minimo, venc: info.venc }
+      }).filter((x) => x.baixo || x.venc))
     }
     load().catch(() => {}).finally(() => setCarregando(false))
   }, [])
@@ -102,6 +122,31 @@ export default function Dashboard() {
           )}
           <Link to="/clinica/estoque" className="mt-3 inline-block text-sm font-medium text-primaria hover:underline">
             Ver estoque →
+          </Link>
+        </section>
+
+        {/* Alertas de ativos */}
+        <section className="rounded-xl border border-black/5 bg-white p-5">
+          <h2 className="mb-3 font-semibold text-texto">Alertas de ativos</h2>
+          {carregando ? (
+            <p className="text-sm text-texto/50">Carregando…</p>
+          ) : alertasAtivos.length === 0 ? (
+            <p className="text-sm text-texto/50">Ativos sob controle.</p>
+          ) : (
+            <ul className="space-y-2">
+              {alertasAtivos.map((a) => (
+                <li key={a.id} className="flex items-center justify-between text-sm">
+                  <span className="truncate text-texto">{a.nome}</span>
+                  <span className="flex gap-2">
+                    {a.baixo && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700">baixo ({a.total}/{a.minimo})</span>}
+                    {a.venc && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">validade</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link to="/clinica/configuracoes" className="mt-3 inline-block text-sm font-medium text-primaria hover:underline">
+            Ver ativos →
           </Link>
         </section>
       </div>

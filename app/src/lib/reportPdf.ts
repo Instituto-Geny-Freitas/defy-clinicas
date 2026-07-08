@@ -65,7 +65,7 @@ export function buildPatientReportPdf(args: {
     head('Procedimentos')
     autoTable(doc, { ...tableOpts(y + 6), head: [['Data', 'Procedimento', 'Região', 'Produtos utilizados']],
       body: args.data.procedimentos.map((p) => [d(p.data), p.procedimento, p.regiao ?? '—',
-        (p.produtos_usados ?? []).map((u) => `${u.produto} x${u.qtd}`).join(', ') || '—']) })
+        (p.produtos_usados ?? []).map((u) => `${u.produto} x${u.qtd}${u.lote ? ` (lote ${u.lote}${u.validade ? `, val ${d(u.validade)}` : ''})` : ''}`).join(', ') || '—']) })
     afterTable()
   }
   if (args.data.manipulacoes?.length) {
