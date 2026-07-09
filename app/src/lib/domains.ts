@@ -155,6 +155,20 @@ export async function addAtivoEntryLot(args: {
   if (mErr) throw mErr
 }
 
+/** Edita os dados cadastrais de um lote de ativo (não altera a quantidade). */
+export async function updateAtivoLote(id: string, patch: {
+  fornecedor?: string | null
+  lote?: string | null
+  validade?: string | null
+  custo_aquisicao?: number
+  margem_pct?: number
+  preco_venda?: number
+  ativo?: boolean
+}): Promise<void> {
+  const { error } = await supabase.from('ativo_lotes').update(patch).eq('id', id)
+  if (error) throw error
+}
+
 /** Ajuste de saldo de um lote de ativo (delta pode ser negativo). Registra movimentação 'ajuste'. */
 export async function adjustAtivoLote(clinicId: string, ativoLoteId: string, delta: number, motivo?: string): Promise<void> {
   if (!delta) return

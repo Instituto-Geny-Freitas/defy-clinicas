@@ -708,7 +708,8 @@ function DespesasView(props: {
                 </td>
                 <td className="px-4 py-2 text-right font-medium text-texto">{brl(Number(d.valor))}</td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
-                  <button onClick={() => alternarPago(d)} className="text-xs text-primaria hover:underline">{d.pago ? 'Não pago' : 'Pago'}</button>
+                  <span className={`mr-2 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${d.pago ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{d.pago ? 'Pago' : 'Não pago'}</span>
+                  <button onClick={() => alternarPago(d)} className="text-xs text-primaria hover:underline">{d.pago ? 'Marcar não pago' : 'Marcar pago'}</button>
                   <button onClick={() => setEditando(d)} className="ml-3 text-xs text-texto/60 hover:underline">Editar</button>
                   <button onClick={() => remover(d)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
                 </td>

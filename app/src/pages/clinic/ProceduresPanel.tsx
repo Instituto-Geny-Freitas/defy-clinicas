@@ -128,6 +128,7 @@ function RegistrarModal({
   const [obs, setObs] = useState(proc?.observacoes ?? '')
   const [valorCobrado, setValorCobrado] = useState(proc && Number(proc.valor_cobrado) > 0 ? String(Number(proc.valor_cobrado).toFixed(2)).replace('.', ',') : '')
   const [produtos, setProdutos] = useState<UsedProduct[]>(proc?.produtos_usados ?? [])
+  const [filtroLote, setFiltroLote] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -146,7 +147,14 @@ function RegistrarModal({
   const lotesComSaldo = lotes.filter((l) => Number(l.qtd_atual) > 0)
   const rotuloLote = (l: InventoryLot) =>
     `${nomeProduto(l.inventory_id)} · ${l.lote || 's/ lote'}${l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · ${l.qtd_atual} un${Number(l.preco_venda) > 0 ? ` · ${brl(Number(l.preco_venda))}` : ''}`
+  // Filtro textual por nome do produto, lote ou validade (facilita achar em listas grandes).
+  const matchFiltro = (l: InventoryLot) => {
+    const t = filtroLote.trim().toLowerCase()
+    if (!t) return true
+    return `${nomeProduto(l.inventory_id)} ${l.lote ?? ''} ${l.validade ? formatDateBR(l.validade) : ''}`.toLowerCase().includes(t)
+  }
   const saldoLote = (lotId?: string | null) => (lotId ? Number(lotes.find((l) => l.id === lotId)?.qtd_atual ?? 0) : 0)
+  const totalProdutos = produtos.reduce((s, p) => s + Number(p.preco_venda || 0) * p.qtd, 0)
 
   function addProduto() { setProdutos((p) => [...p, { inventory_id: '', produto: '', qtd: 1 }]) }
   function setProdutoLote(idx: number, lot: InventoryLot | null, qtd: number) {
@@ -242,6 +250,12 @@ function RegistrarModal({
                   <input className={field} inputMode="decimal" value={valorCobrado} onChange={(e) => setValorCobrado(e.target.value)} placeholder="0,00" />
                 </div>
                 <p className="mt-1 text-xs text-texto/60">Sem orçamento: informe o valor (use vírgula para centavos). Ele poderá ser importado depois em “Novo orçamento”. {parseMoneyBR(valorCobrado) > 0 && <strong>{brl(parseMoneyBR(valorCobrado))}</strong>}</p>
+                {totalProdutos > 0 && (
+                  <p className="mt-1 text-xs text-texto/60">
+                    Total dos produtos utilizados: <strong>{brl(totalProdutos)}</strong>
+                    <button type="button" onClick={() => setValorCobrado(String(totalProdutos.toFixed(2)).replace('.', ','))} className="ml-2 font-medium text-primaria hover:underline">usar como valor a cobrar</button>
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -254,13 +268,16 @@ function RegistrarModal({
               <button onClick={addProduto} className="text-xs font-medium text-primaria hover:underline">+ Adicionar</button>
             </div>
             {produtos.length === 0 && <p className="text-xs text-texto/40">Nenhum produto. (Opcional)</p>}
+            {produtos.length > 0 && lotesComSaldo.length > 0 && (
+              <input className={`${field} mb-2`} placeholder="🔍 Filtrar por produto, lote ou validade…" value={filtroLote} onChange={(e) => setFiltroLote(e.target.value)} />
+            )}
             {lotesComSaldo.length === 0 && (
               <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">Nenhum lote com saldo em estoque. Registre uma entrada (Financeiro → Nova Despesa, Estoque → +Entrada ou Editar Produto — admin) antes de usar produtos.</p>
             )}
             <div className="space-y-2">
               {produtos.map((p, idx) => {
-                // Lotes disponíveis: com saldo > 0 e o lote já escolhido nesta linha (para edição).
-                const opcoes = lotesComSaldo.filter((l) => l.id === p.lot_id || Number(l.qtd_atual) > 0)
+                // Lotes disponíveis: com saldo > 0 (e o já escolhido), aplicando o filtro textual.
+                const opcoes = lotesComSaldo.filter((l) => l.id === p.lot_id || (Number(l.qtd_atual) > 0 && matchFiltro(l)))
                 const semSaldo = !!p.lot_id && !editar && p.qtd > saldoLote(p.lot_id)
                 return (
                   <div key={idx}>

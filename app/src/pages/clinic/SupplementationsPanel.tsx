@@ -207,12 +207,15 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
     <Shell titulo={editar ? 'Editar suplementação' : 'Nova suplementação'} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-sm text-texto/70">Medicação (ativo) {editar ? '— trocar preenche os campos' : '*'}</label>
+          <label className="mb-1 block text-sm text-texto/70">Medicação (ativo) *</label>
           <select className={field} value={ativoId} onChange={(e) => escolherAtivo(e.target.value)}>
-            <option value="">{editar ? 'Selecionar do domínio…' : 'Selecione o ativo…'}</option>
+            <option value="">Selecione o ativo…</option>
             {ativos.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}
           </select>
-          <input className={`${field} mt-2`} value={medicacao} onChange={(e) => setMedicacao(e.target.value)} placeholder="Medicação" />
+          {/* Campo de texto só quando não há ativo escolhido (edição de registro antigo ou nome manual). */}
+          {!ativoId && (
+            <input className={`${field} mt-2`} value={medicacao} onChange={(e) => setMedicacao(e.target.value)} placeholder="Ou digite a medicação (manual)" />
+          )}
         </div>
         {ativoId && (
           <div className="grid grid-cols-2 gap-3">

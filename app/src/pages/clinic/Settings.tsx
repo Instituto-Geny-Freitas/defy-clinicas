@@ -45,6 +45,7 @@ import {
   listRoutes,
   listSuppliers,
   updateActiveIngredient,
+  updateAtivoLote,
   type ActiveIngredient,
   type AtivoCategoria,
   type AtivoInput,
@@ -240,6 +241,7 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
   const [salvando, setSalvando] = useState(false)
   const [anexando, setAnexando] = useState(false)
   const [entrada, setEntrada] = useState(false)
+  const [editandoLote, setEditandoLote] = useState<AtivoLote | null>(null)
 
   function recarregarLotes() { if (ativo) listAtivoLotes().then((all) => setLotes(all.filter((l) => l.ativo_id === ativo.id))).catch(() => {}) }
   useEffect(() => {
@@ -350,9 +352,10 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
                 {lotes.map((l) => {
                   const venc = l.validade ? (new Date(l.validade).getTime() - Date.now()) / 86400000 <= 30 : false
                   return (
-                    <div key={l.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-1.5 text-xs">
-                      <span className="text-texto/70">{l.lote || 's/ lote'}{l.fornecedor ? ` · ${l.fornecedor}` : ''}{l.validade && <span className={venc ? 'text-secundaria' : 'text-texto/40'}> · val {formatDateBR(l.validade)}</span>}</span>
+                    <div key={l.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-1.5 text-xs">
+                      <span className="flex-1 text-texto/70">{l.lote || 's/ lote'}{l.fornecedor ? ` · ${l.fornecedor}` : ''}{l.validade && <span className={venc ? 'text-secundaria' : 'text-texto/40'}> · val {formatDateBR(l.validade)}</span>} · venda {brl(Number(l.preco_venda))}</span>
                       <span className="font-medium text-texto">{l.qtd_atual} {f.unidade ?? 'un'}</span>
+                      <button type="button" onClick={() => setEditandoLote(l)} className="text-primaria hover:underline">Editar</button>
                     </div>
                   )
                 })}
@@ -369,6 +372,54 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
       {entrada && ativo && (
         <AtivoEntradaModal clinicId={clinicId} ativo={ativo} lotes={lotes} onClose={() => setEntrada(false)} onSaved={() => { setEntrada(false); recarregarLotes() }} />
       )}
+      {editandoLote && (
+        <AtivoLoteEditModal lote={editandoLote} onClose={() => setEditandoLote(null)} onSaved={() => { setEditandoLote(null); recarregarLotes() }} />
+      )}
+    </div>
+  )
+}
+
+/** Edição dos dados cadastrais de um lote de ativo (lote/validade/fornecedor/preços). A quantidade é ajustada por entrada/saldo inicial. */
+function AtivoLoteEditModal({ lote, onClose, onSaved }: { lote: AtivoLote; onClose: () => void; onSaved: () => void }) {
+  const [forn, setForn] = useState(lote.fornecedor ?? '')
+  const [num, setNum] = useState(lote.lote ?? '')
+  const [validade, setValidade] = useState(lote.validade ?? '')
+  const [custo, setCusto] = useState(String(lote.custo_aquisicao ?? 0).replace('.', ','))
+  const [margem, setMargem] = useState(String(lote.margem_pct ?? 0).replace('.', ','))
+  const [salvando, setSalvando] = useState(false)
+  const custoN = Number(custo.replace(',', '.')) || 0
+  const margemN = Number(margem.replace(',', '.')) || 0
+  const venda = calcVendaComMargem(custoN, margemN)
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      await updateAtivoLote(lote.id, { fornecedor: forn || null, lote: num || null, validade: validade || null, custo_aquisicao: custoN, margem_pct: margemN, preco_venda: venda })
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[56] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Editar lote</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <p className="mb-3 text-xs text-texto/50">Saldo atual: <strong>{lote.qtd_atual}</strong> (ajuste via +Entrada ou Saldo inicial).</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2"><label className="mb-1 block text-sm text-texto/70">Fornecedor</label><input className={field} value={forn} onChange={(e) => setForn(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={num} onChange={(e) => setNum(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Preço aquisição (R$)</label><input inputMode="decimal" className={field} value={custo} onChange={(e) => setCusto(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input inputMode="decimal" className={field} value={margem} onChange={(e) => setMargem(e.target.value)} /></div>
+          <div className="col-span-2 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2 text-sm">Venda: <strong>{brl(venda)}</strong></div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar lote'}</button>
+        </div>
+      </div>
     </div>
   )
 }
