@@ -302,17 +302,6 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
-            <select className={field} value={f.fornecedor ?? ''} onChange={(e) => set('fornecedor', e.target.value)}>
-              <option value="">—</option>
-              {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
-            </select>
-          </div>
-          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={f.lote ?? ''} onChange={(e) => set('lote', e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={f.validade ?? ''} onChange={(e) => set('validade', e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Preço de aquisição (R$)</label><input type="number" step="0.01" className={field} value={f.preco_aquisicao ?? 0} onChange={(e) => set('preco_aquisicao', Number(e.target.value))} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input type="number" step="0.01" className={field} value={f.margem_pct ?? 0} onChange={(e) => set('margem_pct', Number(e.target.value))} /></div>
-          <div>
             <label className="mb-1 block text-sm text-texto/70">Unidade</label>
             <select className={field} value={f.unidade ?? ''} onChange={(e) => set('unidade', e.target.value)}>
               <option value="">—</option>
@@ -325,9 +314,8 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
             <input type="number" step="0.01" className={field} value={f.estoque_minimo ?? 0} onChange={(e) => set('estoque_minimo', Number(e.target.value))} />
             <p className="mt-0.5 text-[11px] text-texto/40">Alerta quando a soma de todos os lotes cair até aqui.</p>
           </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm text-texto/70">Venda com margem (calculado)</label>
-            <div className="rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2 text-sm font-medium text-texto">{brl(venda)}</div>
+          <div className="sm:col-span-2 rounded-lg bg-primaria/5 p-2 text-[11px] text-texto/60">
+            Fornecedor, lote, validade e preços agora ficam em cada <strong>lote</strong> (abaixo). Um mesmo ativo pode ter lotes de fornecedores/validades diferentes.
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm text-texto/70">Anexo (nota / ficha técnica)</label>
@@ -370,17 +358,17 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
         </div>
       </div>
       {entrada && ativo && (
-        <AtivoEntradaModal clinicId={clinicId} ativo={ativo} lotes={lotes} onClose={() => setEntrada(false)} onSaved={() => { setEntrada(false); recarregarLotes() }} />
+        <AtivoEntradaModal clinicId={clinicId} ativo={ativo} lotes={lotes} forns={forns} onClose={() => setEntrada(false)} onSaved={() => { setEntrada(false); recarregarLotes() }} />
       )}
       {editandoLote && (
-        <AtivoLoteEditModal lote={editandoLote} onClose={() => setEditandoLote(null)} onSaved={() => { setEditandoLote(null); recarregarLotes() }} />
+        <AtivoLoteEditModal lote={editandoLote} forns={forns} onClose={() => setEditandoLote(null)} onSaved={() => { setEditandoLote(null); recarregarLotes() }} />
       )}
     </div>
   )
 }
 
 /** Edição dos dados cadastrais de um lote de ativo (lote/validade/fornecedor/preços). A quantidade é ajustada por entrada/saldo inicial. */
-function AtivoLoteEditModal({ lote, onClose, onSaved }: { lote: AtivoLote; onClose: () => void; onSaved: () => void }) {
+function AtivoLoteEditModal({ lote, forns, onClose, onSaved }: { lote: AtivoLote; forns: Supplier[]; onClose: () => void; onSaved: () => void }) {
   const [forn, setForn] = useState(lote.fornecedor ?? '')
   const [num, setNum] = useState(lote.lote ?? '')
   const [validade, setValidade] = useState(lote.validade ?? '')
@@ -408,7 +396,14 @@ function AtivoLoteEditModal({ lote, onClose, onSaved }: { lote: AtivoLote; onClo
         </div>
         <p className="mb-3 text-xs text-texto/50">Saldo atual: <strong>{lote.qtd_atual}</strong> (ajuste via +Entrada ou Saldo inicial).</p>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2"><label className="mb-1 block text-sm text-texto/70">Fornecedor</label><input className={field} value={forn} onChange={(e) => setForn(e.target.value)} /></div>
+          <div className="col-span-2">
+            <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
+            <select className={field} value={forn} onChange={(e) => setForn(e.target.value)}>
+              <option value="">—</option>
+              {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+              {forn && !forns.some((s) => s.nome === forn) && <option value={forn}>{forn}</option>}
+            </select>
+          </div>
           <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={num} onChange={(e) => setNum(e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Preço aquisição (R$)</label><input inputMode="decimal" className={field} value={custo} onChange={(e) => setCusto(e.target.value)} /></div>
@@ -425,21 +420,25 @@ function AtivoLoteEditModal({ lote, onClose, onSaved }: { lote: AtivoLote; onClo
 }
 
 /** Entrada de estoque de ativo por lote (com calculadora), aberta a partir do Editar Ativo. */
-function AtivoEntradaModal({ clinicId, ativo, lotes, onClose, onSaved }: { clinicId: string; ativo: ActiveIngredient; lotes: AtivoLote[]; onClose: () => void; onSaved: () => void }) {
+function AtivoEntradaModal({ clinicId, ativo, lotes, forns, onClose, onSaved }: { clinicId: string; ativo: ActiveIngredient; lotes: AtivoLote[]; forns: Supplier[]; onClose: () => void; onSaved: () => void }) {
   const [lotSel, setLotSel] = useState('')
-  const [forn, setForn] = useState(ativo.fornecedor ?? '')
+  const [forn, setForn] = useState('')
   const [lote, setLote] = useState('')
   const [validade, setValidade] = useState('')
   const [qtd, setQtd] = useState('')
-  const [custo, setCusto] = useState(ativo.preco_aquisicao ? String(ativo.preco_aquisicao).replace('.', ',') : '')
-  const [margem, setMargem] = useState(ativo.margem_pct ? String(ativo.margem_pct).replace('.', ',') : '')
+  const [custo, setCusto] = useState('')
+  const [margem, setMargem] = useState('')
   const [calc, setCalc] = useState(false)
   const [salvando, setSalvando] = useState(false)
 
   function escolher(id: string) {
     setLotSel(id)
     const l = lotes.find((x) => x.id === id)
-    if (l) { setForn(l.fornecedor ?? ''); setLote(l.lote ?? ''); setValidade(l.validade ?? '') } else { setLote(''); setValidade('') }
+    if (l) {
+      setForn(l.fornecedor ?? ''); setLote(l.lote ?? ''); setValidade(l.validade ?? '')
+      setCusto(l.custo_aquisicao ? String(l.custo_aquisicao).replace('.', ',') : '')
+      setMargem(l.margem_pct ? String(l.margem_pct).replace('.', ',') : '')
+    } else { setForn(''); setLote(''); setValidade('') }
   }
 
   async function salvar() {
@@ -470,7 +469,14 @@ function AtivoEntradaModal({ clinicId, ativo, lotes, onClose, onSaved }: { clini
             </select>
           )}
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="mb-1 block text-sm text-texto/70">Fornecedor</label><input className={field} value={forn} onChange={(e) => setForn(e.target.value)} disabled={!!lotSel} /></div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
+              <select className={field} value={forn} onChange={(e) => setForn(e.target.value)} disabled={!!lotSel}>
+                <option value="">—</option>
+                {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+                {forn && !forns.some((s) => s.nome === forn) && <option value={forn}>{forn}</option>}
+              </select>
+            </div>
             <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={lote} onChange={(e) => setLote(e.target.value)} disabled={!!lotSel} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} disabled={!!lotSel} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Quantidade *</label><input inputMode="decimal" className={field} value={qtd} onChange={(e) => setQtd(e.target.value)} /></div>

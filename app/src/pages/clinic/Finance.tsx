@@ -11,7 +11,7 @@ import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { listInventory, addStockEntryLot, type InventoryItem } from '@/lib/inventory'
-import { listActiveIngredients, addAtivoEntryLot, calcVendaComMargem, type ActiveIngredient } from '@/lib/domains'
+import { listActiveIngredients, addAtivoEntryLot, calcVendaComMargem, listSuppliers, type ActiveIngredient, type Supplier } from '@/lib/domains'
 import Calculadora from '@/components/Calculadora'
 import {
   createExpense,
@@ -761,6 +761,7 @@ function DespesaModal(props: {
   const [vinculo, setVinculo] = useState<'nenhum' | 'estoque' | 'ativo'>('nenhum')
   const [produtos, setProdutos] = useState<InventoryItem[]>([])
   const [ativos, setAtivos] = useState<ActiveIngredient[]>([])
+  const [fornsAtivo, setFornsAtivo] = useState<Supplier[]>([])
   const [itemId, setItemId] = useState('')
   const [lMarcaForn, setLMarcaForn] = useState('')
   const [lLote, setLLote] = useState('')
@@ -775,6 +776,7 @@ function DespesaModal(props: {
     if (editar) return
     listInventory().then(setProdutos).catch(() => {})
     listActiveIngredients().then(setAtivos).catch(() => {})
+    listSuppliers().then(setFornsAtivo).catch(() => {})
   }, [editar])
 
   // Tipos disponíveis conforme a classificação escolhida.
@@ -904,7 +906,14 @@ function DespesaModal(props: {
                     ))}
                   </select>
                   <div className="grid grid-cols-2 gap-2">
-                    <input className={field} value={lMarcaForn} onChange={(e) => setLMarcaForn(e.target.value)} placeholder={vinculo === 'estoque' ? 'Marca' : 'Fornecedor'} />
+                    {vinculo === 'ativo' ? (
+                      <select className={field} value={lMarcaForn} onChange={(e) => setLMarcaForn(e.target.value)}>
+                        <option value="">Fornecedor…</option>
+                        {fornsAtivo.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+                      </select>
+                    ) : (
+                      <input className={field} value={lMarcaForn} onChange={(e) => setLMarcaForn(e.target.value)} placeholder="Marca" />
+                    )}
                     <input className={field} value={lLote} onChange={(e) => setLLote(e.target.value)} placeholder="Lote" />
                     <input type="date" className={field} value={lValidade} onChange={(e) => setLValidade(e.target.value)} />
                     <input inputMode="decimal" className={field} value={lQtd} onChange={(e) => setLQtd(e.target.value)} placeholder="Qtd (unidades)" />
