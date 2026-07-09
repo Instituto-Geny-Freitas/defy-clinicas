@@ -177,6 +177,34 @@ export async function addStockEntry(
   if (error) throw error
 }
 
+/** Edita os dados cadastrais de um lote (não altera a quantidade). */
+export async function updateInventoryLot(id: string, patch: {
+  marca?: string | null
+  lote?: string | null
+  validade?: string | null
+  custo_unit?: number
+  preco_venda?: number
+  ativo?: boolean
+}): Promise<void> {
+  const { error } = await supabase.from('inventory_lots').update(patch).eq('id', id)
+  if (error) throw error
+}
+
+/** Ajusta o saldo de um lote (delta pode ser negativo). O gatilho atualiza lote e total do produto. */
+export async function adjustInventoryLot(clinicId: string, inventoryId: string, lotId: string, delta: number, motivo?: string): Promise<void> {
+  if (!delta) return
+  const { error } = await supabase.from('stock_movements').insert({
+    clinic_id: clinicId, inventory_id: inventoryId, lot_id: lotId, tipo: 'ajuste', quantidade: delta, motivo: motivo ?? 'Ajuste de saldo (lote)',
+  })
+  if (error) throw error
+}
+
+/** Exclui um lote: zera o saldo (reduz o total do produto) e desativa o lote (preserva histórico). */
+export async function deleteInventoryLot(clinicId: string, inventoryId: string, lotId: string, qtdAtual: number): Promise<void> {
+  if (Number(qtdAtual) !== 0) await adjustInventoryLot(clinicId, inventoryId, lotId, -Number(qtdAtual), 'Exclusão de lote')
+  await updateInventoryLot(lotId, { ativo: false })
+}
+
 /** TRUE se o item está no/abaixo do mínimo. */
 export function estoqueBaixo(i: InventoryItem): boolean {
   return i.qtd_atual <= i.qtd_minima
