@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createSupplementation, deleteSupplementation, listSupplementations, setSupplementationPaid, updateSupplementation, type Supplementation } from '@/lib/supplementations'
-import { listActiveIngredients, listRoutes, type ActiveIngredient, type DomainItem } from '@/lib/domains'
+import { listActiveIngredients, listAtivoLotes, listRoutes, type ActiveIngredient, type AtivoLote, type DomainItem } from '@/lib/domains'
 import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, type Payment } from '@/lib/finance'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { Shell, Footer } from './TreatmentPlansPanel'
@@ -127,7 +127,11 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
 function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: { clinicId: string; patientId: string; professionalId?: string | null; supl: Supplementation | null; onClose: () => void; onSaved: () => void }) {
   const editar = !!supl
   const [ativos, setAtivos] = useState<ActiveIngredient[]>([])
+  const [ativoLotes, setAtivoLotes] = useState<AtivoLote[]>([])
   const [vias, setVias] = useState<DomainItem[]>([])
+  const [ativoId, setAtivoId] = useState('')
+  const [ativoLoteId, setAtivoLoteId] = useState(supl?.ativo_lote_id ?? '')
+  const [quantidade, setQuantidade] = useState(supl ? String(supl.quantidade) : '1')
   const [medicacao, setMedicacao] = useState(supl?.medicacao ?? '')
   const [via, setVia] = useState(supl?.via_adm ?? '')
   const [validade, setValidade] = useState(supl?.validade ?? '')
@@ -136,28 +140,48 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
   const [valorVenda, setValorVenda] = useState(supl && Number(supl.valor_venda) > 0 ? String(Number(supl.valor_venda).toFixed(2)).replace('.', ',') : '')
   const [obs, setObs] = useState(supl?.observacoes ?? '')
   const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
 
   useEffect(() => {
     listActiveIngredients().then(setAtivos).catch(() => {})
+    listAtivoLotes().then(setAtivoLotes).catch(() => {})
     listRoutes().then(setVias).catch(() => {})
   }, [])
 
-  // Ao escolher um ativo, preenche os campos automaticamente.
+  const lotesDoAtivo = ativoLotes.filter((l) => l.ativo_id === ativoId && Number(l.qtd_atual) > 0)
+  const saldoLote = (id: string) => Number(ativoLotes.find((l) => l.id === id)?.qtd_atual ?? 0)
+
+  // Ao escolher um ativo: preenche nome/via e reseta o lote.
   function escolherAtivo(id: string) {
+    setAtivoId(id)
+    setAtivoLoteId('')
     const a = ativos.find((x) => x.id === id)
     if (!a) return
     setMedicacao(a.nome)
     setVia(a.via ?? '')
-    setValidade(a.validade ?? '')
-    setLote(a.lote ?? '')
-    setFornecedor(a.fornecedor ?? '')
-    setValorVenda(Number(a.preco_venda) > 0 ? String(Number(a.preco_venda).toFixed(2)).replace('.', ',') : '')
   }
 
-  const podeSalvar = medicacao.trim().length > 0
+  // Ao escolher um lote: snapshot de fornecedor/lote/validade/preço.
+  function escolherLote(id: string) {
+    setAtivoLoteId(id)
+    const l = ativoLotes.find((x) => x.id === id)
+    if (!l) return
+    setLote(l.lote ?? '')
+    setValidade(l.validade ?? '')
+    setFornecedor(l.fornecedor ?? '')
+    setValorVenda(Number(l.preco_venda) > 0 ? String(Number(l.preco_venda).toFixed(2)).replace('.', ',') : '')
+  }
+
+  const qtdNum = Number(quantidade.replace(',', '.')) || 0
+  const podeSalvar = medicacao.trim().length > 0 && qtdNum > 0
 
   async function salvar() {
     if (!podeSalvar) return
+    setErro('')
+    // Bloqueia baixa acima do saldo do lote (só na criação, para não bloquear edições).
+    if (!editar && ativoLoteId && qtdNum > saldoLote(ativoLoteId)) {
+      setErro(`Quantidade (${qtdNum}) acima do saldo do lote (${saldoLote(ativoLoteId)}).`); return
+    }
     setSalvando(true)
     try {
       const valor = parseMoneyBR(valorVenda)
@@ -165,12 +189,14 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
         await updateSupplementation(supl.id, {
           medicacao, via_adm: via || null, validade: validade || null, lote: lote || null,
           fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
+          ativo_lote_id: ativoLoteId || null, quantidade: qtdNum,
         })
       } else {
         await createSupplementation({
           clinicId, patientId, professionalId, medicacao,
           via_adm: via || null, validade: validade || null, lote: lote || null,
           fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
+          ativoLoteId: ativoLoteId || null, quantidade: qtdNum,
         })
       }
       onSaved()
@@ -181,13 +207,35 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
     <Shell titulo={editar ? 'Editar suplementação' : 'Nova suplementação'} onClose={onClose}>
       <div className="space-y-3">
         <div>
-          <label className="mb-1 block text-sm text-texto/70">Medicação (ativo) {editar ? '— trocar preenche os campos' : '*'}</label>
-          <select className={field} value="" onChange={(e) => escolherAtivo(e.target.value)}>
-            <option value="">{editar ? 'Selecionar do domínio…' : 'Selecione o ativo…'}</option>
+          <label className="mb-1 block text-sm text-texto/70">Medicação (ativo) *</label>
+          <select className={field} value={ativoId} onChange={(e) => escolherAtivo(e.target.value)}>
+            <option value="">Selecione o ativo…</option>
             {ativos.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}
           </select>
-          <input className={`${field} mt-2`} value={medicacao} onChange={(e) => setMedicacao(e.target.value)} placeholder="Medicação" />
+          {/* Campo de texto só quando não há ativo escolhido (edição de registro antigo ou nome manual). */}
+          {!ativoId && (
+            <input className={`${field} mt-2`} value={medicacao} onChange={(e) => setMedicacao(e.target.value)} placeholder="Ou digite a medicação (manual)" />
+          )}
         </div>
+        {ativoId && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Lote (com saldo)</label>
+              <select className={field} value={ativoLoteId} onChange={(e) => escolherLote(e.target.value)}>
+                <option value="">Selecione o lote…</option>
+                {lotesDoAtivo.map((l) => (
+                  <option key={l.id} value={l.id}>{l.lote || 's/ lote'}{l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · {l.qtd_atual} un</option>
+                ))}
+              </select>
+              {lotesDoAtivo.length === 0 && <p className="mt-1 text-[11px] text-amber-700">Sem saldo. Registre entrada (Nova Despesa, Editar Ativo → +Entrada — admin).</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Quantidade (unidades)</label>
+              <input inputMode="decimal" className={field} value={quantidade} onChange={(e) => setQuantidade(e.target.value)} />
+              {ativoLoteId && <p className="mt-1 text-[11px] text-texto/50">Saldo do lote: {saldoLote(ativoLoteId)}</p>}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm text-texto/70">Via Adm / local</label>
@@ -197,9 +245,9 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
               {via && !vias.some((v) => v.nome === via) && <option value={via}>{via}</option>}
             </select>
           </div>
-          <div><label className="mb-1 block text-sm text-texto/70">Fornecedor</label><input className={field} value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={lote} onChange={(e) => setLote(e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Fornecedor</label><input className={field} value={fornecedor} onChange={(e) => setFornecedor(e.target.value)} disabled={!!ativoLoteId} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={lote} onChange={(e) => setLote(e.target.value)} disabled={!!ativoLoteId} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} disabled={!!ativoLoteId} /></div>
           <div>
             <label className="mb-1 block text-sm text-texto/70">Valor de Venda</label>
             <div className="flex items-center gap-2">
@@ -210,6 +258,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           </div>
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
+        {erro && <p className="text-sm text-secundaria">{erro}</p>}
         <Footer onClose={onClose} onSave={salvar} disabled={salvando || !podeSalvar} label={salvando ? 'Salvando…' : 'Salvar'} />
       </div>
     </Shell>

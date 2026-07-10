@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { localDateToday } from '@/lib/format'
 import { createProcedure, deleteProcedure, listProcedures, updateProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
-import { listInventory, type InventoryItem } from '@/lib/inventory'
+import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
+import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
@@ -15,12 +16,16 @@ interface Props {
 
 export default function ProceduresPanel({ patientId, clinicId, professionalId }: Props) {
   const [procs, setProcs] = useState<ProcedureRecord[]>([])
+  const [pagas, setPagas] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<ProcedureRecord | null>(null)
 
   function recarregar() {
     listProcedures(patientId).then(setProcs).catch(() => {}).finally(() => setCarregando(false))
+    // Orçamentos quitados do paciente → marca os procedimentos vinculados como pagos.
+    supabase.from('v_quote_balances').select('quote_id, saldo_a_receber').eq('patient_id', patientId)
+      .then(({ data }) => setPagas(new Set((data ?? []).filter((b) => Number(b.saldo_a_receber) <= 0.005).map((b) => b.quote_id as string))))
   }
   useEffect(recarregar, [patientId])
 
@@ -54,7 +59,9 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum procedimento registrado.</p>
       ) : (
         <div className="space-y-2">
-          {procs.map((p) => (
+          {procs.map((p) => {
+            const pago = !!p.quote_id && pagas.has(p.quote_id)
+            return (
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="font-medium text-texto">{p.procedimento}</div>
@@ -71,16 +78,25 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">Avulso · {brl(Number(p.valor_cobrado))}</span>
                 )}
                 {p.quote_id && <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">Vinculado a orçamento</span>}
+                {pago && <span className="rounded-full bg-emerald-600 px-2 py-0.5 font-medium text-white">✓ Pago</span>}
               </div>
               {p.produtos_usados?.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {p.produtos_usados.map((u, i) => (
-                    <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">{u.produto} ×{u.qtd}{Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}</span>
-                  ))}
+                <div className="mt-2">
+                  <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados (baixa de estoque){pago && <span className="ml-1 text-emerald-600">· pagos</span>}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {p.produtos_usados.map((u, i) => (
+                      <span key={i} className={`rounded-full px-2 py-0.5 text-xs ${pago ? 'bg-emerald-50 text-emerald-700' : 'bg-black/5 text-texto/70'}`}>
+                        {u.produto} ×{u.qtd}
+                        {u.lote && <span className="opacity-70"> · lote {u.lote}</span>}
+                        {u.validade && <span className="opacity-70"> · val {formatDateBR(u.validade)}</span>}
+                        {Number(u.preco_venda) > 0 && ` · ${brl(Number(u.preco_venda) * u.qtd)}`}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>
@@ -99,6 +115,7 @@ function RegistrarModal({
 }) {
   const editar = !!proc
   const [estoque, setEstoque] = useState<InventoryItem[]>([])
+  const [lotes, setLotes] = useState<InventoryLot[]>([])
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [tipos, setTipos] = useState<ProcedureType[]>([])
@@ -111,11 +128,13 @@ function RegistrarModal({
   const [obs, setObs] = useState(proc?.observacoes ?? '')
   const [valorCobrado, setValorCobrado] = useState(proc && Number(proc.valor_cobrado) > 0 ? String(Number(proc.valor_cobrado).toFixed(2)).replace('.', ',') : '')
   const [produtos, setProdutos] = useState<UsedProduct[]>(proc?.produtos_usados ?? [])
+  const [filtroLote, setFiltroLote] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     listInventory().then(setEstoque).catch(() => {})
+    listInventoryLots().then(setLotes).catch(() => {})
     listProcedureTypes().then(setTipos).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
@@ -124,10 +143,25 @@ function RegistrarModal({
   const orcamentosDoPlano = planoId ? orcamentos.filter((q) => q.treatment_plan_id === planoId) : orcamentos
   const avulso = !quoteId
 
+  const nomeProduto = (invId: string) => estoque.find((i) => i.id === invId)?.produto ?? ''
+  const lotesComSaldo = lotes.filter((l) => Number(l.qtd_atual) > 0)
+  const rotuloLote = (l: InventoryLot) =>
+    `${nomeProduto(l.inventory_id)} · ${l.lote || 's/ lote'}${l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · ${l.qtd_atual} un${Number(l.preco_venda) > 0 ? ` · ${brl(Number(l.preco_venda))}` : ''}`
+  // Filtro textual por nome do produto, lote ou validade (facilita achar em listas grandes).
+  const matchFiltro = (l: InventoryLot) => {
+    const t = filtroLote.trim().toLowerCase()
+    if (!t) return true
+    return `${nomeProduto(l.inventory_id)} ${l.lote ?? ''} ${l.validade ? formatDateBR(l.validade) : ''}`.toLowerCase().includes(t)
+  }
+  const saldoLote = (lotId?: string | null) => (lotId ? Number(lotes.find((l) => l.id === lotId)?.qtd_atual ?? 0) : 0)
+  const totalProdutos = produtos.reduce((s, p) => s + Number(p.preco_venda || 0) * p.qtd, 0)
+
   function addProduto() { setProdutos((p) => [...p, { inventory_id: '', produto: '', qtd: 1 }]) }
-  function setProduto(idx: number, item: InventoryItem | null, qtd: number) {
+  function setProdutoLote(idx: number, lot: InventoryLot | null, qtd: number) {
     setProdutos((arr) => arr.map((p, i) => i === idx
-      ? { inventory_id: item?.id ?? '', produto: item?.produto ?? '', lote: item?.lote ?? null, qtd, preco_venda: item?.preco_venda }
+      ? (lot
+        ? { inventory_id: lot.inventory_id, produto: nomeProduto(lot.inventory_id), lot_id: lot.id, marca: lot.marca, lote: lot.lote, validade: lot.validade, qtd, preco_venda: lot.preco_venda }
+        : { inventory_id: '', produto: '', qtd })
       : p))
   }
   function removeProduto(idx: number) { setProdutos((arr) => arr.filter((_, i) => i !== idx)) }
@@ -135,9 +169,14 @@ function RegistrarModal({
   async function salvar() {
     setErro(null)
     if (!procedimento.trim()) { setErro('Informe o procedimento.'); return }
+    const prods = produtos.filter((p) => p.inventory_id)
+    // Bloqueia registrar baixa acima do saldo do lote (procedimento novo).
+    if (!editar) {
+      const semSaldo = prods.find((p) => p.lot_id && p.qtd > saldoLote(p.lot_id))
+      if (semSaldo) { setErro(`"${semSaldo.produto}" tem quantidade (${semSaldo.qtd}) acima do saldo do lote (${saldoLote(semSaldo.lot_id)}).`); return }
+    }
     setSalvando(true)
     try {
-      const prods = produtos.filter((p) => p.inventory_id)
       const valor = avulso ? parseMoneyBR(valorCobrado) : 0
       if (proc) {
         await updateProcedure({
@@ -211,6 +250,12 @@ function RegistrarModal({
                   <input className={field} inputMode="decimal" value={valorCobrado} onChange={(e) => setValorCobrado(e.target.value)} placeholder="0,00" />
                 </div>
                 <p className="mt-1 text-xs text-texto/60">Sem orçamento: informe o valor (use vírgula para centavos). Ele poderá ser importado depois em “Novo orçamento”. {parseMoneyBR(valorCobrado) > 0 && <strong>{brl(parseMoneyBR(valorCobrado))}</strong>}</p>
+                {totalProdutos > 0 && (
+                  <p className="mt-1 text-xs text-texto/60">
+                    Total dos produtos utilizados: <strong>{brl(totalProdutos)}</strong>
+                    <button type="button" onClick={() => setValorCobrado(String(totalProdutos.toFixed(2)).replace('.', ','))} className="ml-2 font-medium text-primaria hover:underline">usar como valor a cobrar</button>
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -223,24 +268,37 @@ function RegistrarModal({
               <button onClick={addProduto} className="text-xs font-medium text-primaria hover:underline">+ Adicionar</button>
             </div>
             {produtos.length === 0 && <p className="text-xs text-texto/40">Nenhum produto. (Opcional)</p>}
+            {produtos.length > 0 && lotesComSaldo.length > 0 && (
+              <input className={`${field} mb-2`} placeholder="🔍 Filtrar por produto, lote ou validade…" value={filtroLote} onChange={(e) => setFiltroLote(e.target.value)} />
+            )}
+            {lotesComSaldo.length === 0 && (
+              <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">Nenhum lote com saldo em estoque. Registre uma entrada (Financeiro → Nova Despesa, Estoque → +Entrada ou Editar Produto — admin) antes de usar produtos.</p>
+            )}
             <div className="space-y-2">
-              {produtos.map((p, idx) => (
-                <div key={idx}>
-                  <div className="flex gap-2">
-                    <select className={field} value={p.inventory_id}
-                      onChange={(e) => setProduto(idx, estoque.find((i) => i.id === e.target.value) ?? null, p.qtd)}>
-                      <option value="">{p.produto || 'Selecione o produto…'}</option>
-                      {estoque.map((i) => <option key={i.id} value={i.id}>{i.produto} (estoque: {i.qtd_atual}){Number(i.preco_venda) > 0 ? ` · ${brl(Number(i.preco_venda))}` : ''}</option>)}
-                    </select>
-                    <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
-                      value={p.qtd} onChange={(e) => setProduto(idx, estoque.find((i) => i.id === p.inventory_id) ?? null, Number(e.target.value))} />
-                    <button onClick={() => removeProduto(idx)} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+              {produtos.map((p, idx) => {
+                // Lotes disponíveis: com saldo > 0 (e o já escolhido), aplicando o filtro textual.
+                const opcoes = lotesComSaldo.filter((l) => l.id === p.lot_id || (Number(l.qtd_atual) > 0 && matchFiltro(l)))
+                const semSaldo = !!p.lot_id && !editar && p.qtd > saldoLote(p.lot_id)
+                return (
+                  <div key={idx}>
+                    <div className="flex gap-2">
+                      <select className={field} value={p.lot_id ?? ''}
+                        onChange={(e) => setProdutoLote(idx, lotes.find((l) => l.id === e.target.value) ?? null, p.qtd)}>
+                        <option value="">{p.lot_id ? '' : (p.produto ? `${p.produto} (lote antigo)` : 'Selecione o lote…')}</option>
+                        {opcoes.map((l) => <option key={l.id} value={l.id}>{rotuloLote(l)}</option>)}
+                      </select>
+                      <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
+                        value={p.qtd} onChange={(e) => setProdutos((arr) => arr.map((x, i) => i === idx ? { ...x, qtd: Number(e.target.value) } : x))} />
+                      <button onClick={() => removeProduto(idx)} className="px-2 text-texto/40 hover:text-secundaria">✕</button>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px]">
+                      {(p.lote || p.validade) && <span className="text-texto/50">Lote {p.lote || 's/ nº'}{p.validade ? ` · val ${formatDateBR(p.validade)}` : ''}</span>}
+                      {Number(p.preco_venda) > 0 && <span className="text-texto/50">Venda: {brl(Number(p.preco_venda))} × {p.qtd} = <strong className="text-texto/70">{brl(Number(p.preco_venda) * p.qtd)}</strong></span>}
+                      {semSaldo && <span className="font-medium text-secundaria">Quantidade acima do saldo do lote ({saldoLote(p.lot_id)}).</span>}
+                    </div>
                   </div>
-                  {Number(p.preco_venda) > 0 && (
-                    <div className="mt-0.5 text-[11px] text-texto/50">Venda: {brl(Number(p.preco_venda))} × {p.qtd} = <strong className="text-texto/70">{brl(Number(p.preco_venda) * p.qtd)}</strong></div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
             {produtos.some((p) => Number(p.preco_venda) > 0) && (
               <p className="mt-1 text-right text-xs text-texto/60">Total dos produtos (venda): <strong>{brl(produtos.reduce((s, p) => s + Number(p.preco_venda || 0) * p.qtd, 0))}</strong></p>

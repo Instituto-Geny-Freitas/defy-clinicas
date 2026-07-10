@@ -3,7 +3,10 @@ import { supabase } from '@/lib/supabase'
 export interface UsedProduct {
   inventory_id: string
   produto: string
+  lot_id?: string | null
+  marca?: string | null
   lote?: string | null
+  validade?: string | null
   qtd: number
   preco_venda?: number
 }
@@ -22,14 +25,16 @@ export interface ProcedureRecord {
   created_at: string
 }
 
-/** Agrupa (somando quantidades) os produtos usados nos procedimentos de um orçamento. */
+/** Agrupa (somando quantidades) os produtos usados nos procedimentos de um orçamento.
+ *  A chave inclui lote e validade para preservar a rastreabilidade por lote. */
 export function produtosDoOrcamento(procedimentos: ProcedureRecord[], quoteId: string): UsedProduct[] {
   const mapa = new Map<string, UsedProduct>()
   for (const proc of procedimentos.filter((p) => p.quote_id === quoteId)) {
     for (const u of proc.produtos_usados ?? []) {
-      const ex = mapa.get(u.produto)
+      const chave = `${u.produto}|${u.lote ?? ''}|${u.validade ?? ''}`
+      const ex = mapa.get(chave)
       if (ex) ex.qtd += u.qtd
-      else mapa.set(u.produto, { ...u })
+      else mapa.set(chave, { ...u })
     }
   }
   return [...mapa.values()]
@@ -45,17 +50,23 @@ export async function listProcedures(patientId: string): Promise<ProcedureRecord
   return data ?? []
 }
 
-/** Procedimentos avulsos: sem orçamento, com valor a cobrar e ainda não pagos. */
+/**
+ * Procedimentos avulsos (sem orçamento) importáveis: com valor a cobrar OU com
+ * produtos de venda utilizados (para que os produtos entrem no orçamento mesmo
+ * quando o procedimento não tem valor avulso próprio).
+ */
 export async function listUnbilledProcedures(patientId: string): Promise<ProcedureRecord[]> {
   const { data, error } = await supabase
     .from('procedures_log')
     .select('*')
     .eq('patient_id', patientId)
     .is('quote_id', null)
-    .gt('valor_cobrado', 0)
     .order('data', { ascending: false })
   if (error) throw error
-  return data ?? []
+  return (data ?? []).filter((p) =>
+    Number(p.valor_cobrado) > 0 ||
+    (p.produtos_usados ?? []).some((u: UsedProduct) => Number(u.preco_venda) > 0),
+  )
 }
 
 /** Vincula procedimentos avulsos a um orçamento (após importá-los no orçamento). */
@@ -116,7 +127,7 @@ async function aplicarSaidas(clinicId: string, procedureId: string, patientId: s
   const movimentos = produtos
     .filter((p) => p.inventory_id && p.qtd > 0)
     .map((p) => ({
-      clinic_id: clinicId, inventory_id: p.inventory_id, tipo: 'saida_uso', quantidade: p.qtd,
+      clinic_id: clinicId, inventory_id: p.inventory_id, lot_id: p.lot_id ?? null, tipo: 'saida_uso', quantidade: p.qtd,
       procedure_id: procedureId, patient_id: patientId, professional_id: professionalId,
     }))
   if (movimentos.length > 0) {
@@ -130,7 +141,7 @@ async function estornarSaidas(clinicId: string, proc: ProcedureRecord) {
   const movimentos = (proc.produtos_usados ?? [])
     .filter((p) => p.inventory_id && p.qtd > 0)
     .map((p) => ({
-      clinic_id: clinicId, inventory_id: p.inventory_id, tipo: 'entrada', quantidade: p.qtd,
+      clinic_id: clinicId, inventory_id: p.inventory_id, lot_id: p.lot_id ?? null, tipo: 'entrada', quantidade: p.qtd,
       procedure_id: proc.id, patient_id: proc.patient_id, professional_id: proc.professional_id,
       motivo: 'Estorno (edição/exclusão de procedimento)',
     }))

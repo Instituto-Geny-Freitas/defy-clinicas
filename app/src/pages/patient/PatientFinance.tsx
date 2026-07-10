@@ -111,7 +111,11 @@ export default function PatientFinance() {
                     <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados</div>
                     <div className="flex flex-wrap gap-1.5">
                       {produtos.map((u, i) => (
-                        <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">{u.produto} ×{u.qtd}</span>
+                        <span key={i} className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/70">
+                          {u.produto} ×{u.qtd}
+                          {u.lote && <span className="opacity-70"> · lote {u.lote}</span>}
+                          {u.validade && <span className="opacity-70"> · val {formatDateBR(u.validade)}</span>}
+                        </span>
                       ))}
                     </div>
                   </div>

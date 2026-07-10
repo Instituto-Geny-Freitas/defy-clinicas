@@ -28,6 +28,8 @@ import {
 import { gerarSenhaProvisoria } from '@/lib/patients'
 import {
   ATIVO_CATEGORIAS,
+  addAtivoEntryLot,
+  adjustAtivoLote,
   calcVendaComMargem,
   createActiveIngredient,
   createProcedureType,
@@ -38,17 +40,21 @@ import {
   deleteRoute,
   deleteSupplier,
   listActiveIngredients,
+  listAtivoLotes,
   listProcedureTypes,
   listRoutes,
   listSuppliers,
   updateActiveIngredient,
+  updateAtivoLote,
   type ActiveIngredient,
   type AtivoCategoria,
   type AtivoInput,
+  type AtivoLote,
   type DomainItem,
   type ProcedureType,
   type Supplier,
 } from '@/lib/domains'
+import Calculadora from '@/components/Calculadora'
 import { brl } from '@/lib/finance'
 import {
   createFormulation,
@@ -64,7 +70,8 @@ import { FEATURES, NIVEIS_EDITAVEIS, NIVEL_LABEL as PERM_NIVEL_LABEL, defaultsMa
 import { usePermissions } from '@/auth/PermissionsProvider'
 import {
   createServico, createVacina, deleteServico, deleteVacina, listServicos, listVacinas,
-  updateServico, updateVacina, type DomItem,
+  updateServico, updateVacina, createUnidade, deleteUnidade, listUnidades, updateUnidade,
+  uploadAdminFile, signedAdminUrl, type DomItem,
 } from '@/lib/admin'
 import {
   DEFAULT_FORMS, getForms, getClinicCodigo, resetFormDef, saveClinicCodigo, saveFormDef,
@@ -78,7 +85,7 @@ import { formatDateBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -107,6 +114,7 @@ export default function Settings() {
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
           { k: 'ativos', l: 'Ativos' },
+          { k: 'unidades', l: 'Unidades' },
           { k: 'vias', l: 'Vias' },
           { k: 'fornecedores', l: 'Fornecedores' },
           { k: 'formulas', l: 'Fórmulas' },
@@ -144,6 +152,7 @@ export default function Settings() {
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
       {sec === 'despesas' && <DespesasSection clinicId={clinicId} />}
       {sec === 'exames' && <ExamesSection clinicId={clinicId} />}
+      {sec === 'unidades' && <UnidadesSection clinicId={clinicId} />}
       {sec === 'servicos' && <ServicosSection clinicId={clinicId} />}
       {sec === 'vacinas' && <VacinasSection clinicId={clinicId} />}
       {sec === 'formularios' && <FormulariosSection clinicId={clinicId} />}
@@ -158,6 +167,7 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
   const [filtro, setFiltro] = useState<AtivoCategoria | ''>('')
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState<ActiveIngredient | 'novo' | null>(null)
+  const [saldoInicial, setSaldoInicial] = useState(false)
 
   function recarregar() { listActiveIngredients().then(setItens).catch(() => {}) }
   useEffect(recarregar, [])
@@ -174,11 +184,15 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
         </select>
         <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm" placeholder="Buscar ativo…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <span className="text-xs text-texto/40">{visiveis.length}</span>
+        <button onClick={() => setSaldoInicial(true)} className="rounded-lg border border-primaria px-3 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5">Saldo inicial</button>
         <button onClick={() => setEditando('novo')} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo</button>
       </div>
 
       {editando && (
         <AtivoModal clinicId={clinicId} ativo={editando === 'novo' ? null : editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
+      )}
+      {saldoInicial && (
+        <SaldoInicialAtivosModal clinicId={clinicId} onClose={() => setSaldoInicial(false)} onSaved={() => setSaldoInicial(false)} />
       )}
 
       <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
@@ -218,14 +232,39 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
     apresentacao: ativo?.apresentacao ?? '', via: ativo?.via ?? '', fornecedor: ativo?.fornecedor ?? '',
     lote: ativo?.lote ?? '', validade: ativo?.validade ?? '',
     preco_aquisicao: ativo?.preco_aquisicao ?? 0, margem_pct: ativo?.margem_pct ?? 0,
+    unidade: ativo?.unidade ?? '', estoque_minimo: ativo?.estoque_minimo ?? 0, anexo_url: ativo?.anexo_url ?? null,
   })
   const [vias, setVias] = useState<DomainItem[]>([])
   const [forns, setForns] = useState<Supplier[]>([])
+  const [unidades, setUnidades] = useState<DomItem[]>([])
+  const [lotes, setLotes] = useState<AtivoLote[]>([])
   const [salvando, setSalvando] = useState(false)
-  useEffect(() => { listRoutes().then(setVias).catch(() => {}); listSuppliers().then(setForns).catch(() => {}) }, [])
+  const [anexando, setAnexando] = useState(false)
+  const [entrada, setEntrada] = useState(false)
+  const [editandoLote, setEditandoLote] = useState<AtivoLote | null>(null)
+
+  function recarregarLotes() { if (ativo) listAtivoLotes().then((all) => setLotes(all.filter((l) => l.ativo_id === ativo.id))).catch(() => {}) }
+  useEffect(() => {
+    listRoutes().then(setVias).catch(() => {})
+    listSuppliers().then(setForns).catch(() => {})
+    listUnidades().then(setUnidades).catch(() => {})
+    recarregarLotes()
+  }, [])
 
   const venda = calcVendaComMargem(f.preco_aquisicao ?? 0, f.margem_pct ?? 0)
   const set = <K extends keyof AtivoInput>(k: K, v: AtivoInput[K]) => setF((s) => ({ ...s, [k]: v }))
+  const saldoTotal = lotes.reduce((s, l) => s + Number(l.qtd_atual), 0)
+
+  async function anexar(file: File) {
+    setAnexando(true)
+    try { const path = await uploadAdminFile('ativos', file); set('anexo_url', path) }
+    catch { /* ignore */ } finally { setAnexando(false) }
+  }
+  async function abrirAnexo() {
+    if (!f.anexo_url) return
+    const url = await signedAdminUrl(f.anexo_url)
+    if (url) window.open(url, '_blank')
+  }
 
   async function salvar() {
     if (!f.nome?.trim()) return
@@ -263,24 +302,292 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
-            <select className={field} value={f.fornecedor ?? ''} onChange={(e) => set('fornecedor', e.target.value)}>
+            <label className="mb-1 block text-sm text-texto/70">Unidade</label>
+            <select className={field} value={f.unidade ?? ''} onChange={(e) => set('unidade', e.target.value)}>
               <option value="">—</option>
-              {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+              {unidades.map((u) => <option key={u.id} value={u.nome}>{u.nome}</option>)}
+              {f.unidade && !unidades.some((u) => u.nome === f.unidade) && <option value={f.unidade}>{f.unidade}</option>}
             </select>
           </div>
-          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={f.lote ?? ''} onChange={(e) => set('lote', e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={f.validade ?? ''} onChange={(e) => set('validade', e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Preço de aquisição (R$)</label><input type="number" step="0.01" className={field} value={f.preco_aquisicao ?? 0} onChange={(e) => set('preco_aquisicao', Number(e.target.value))} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input type="number" step="0.01" className={field} value={f.margem_pct ?? 0} onChange={(e) => set('margem_pct', Number(e.target.value))} /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Estoque mínimo</label>
+            <input type="number" step="0.01" className={field} value={f.estoque_minimo ?? 0} onChange={(e) => set('estoque_minimo', Number(e.target.value))} />
+            <p className="mt-0.5 text-[11px] text-texto/40">Alerta quando a soma de todos os lotes cair até aqui.</p>
+          </div>
+          <div className="sm:col-span-2 rounded-lg bg-primaria/5 p-2 text-[11px] text-texto/60">
+            Fornecedor, lote, validade e preços agora ficam em cada <strong>lote</strong> (abaixo). Um mesmo ativo pode ter lotes de fornecedores/validades diferentes.
+          </div>
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm text-texto/70">Venda com margem (calculado)</label>
-            <div className="rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2 text-sm font-medium text-texto">{brl(venda)}</div>
+            <label className="mb-1 block text-sm text-texto/70">Anexo (nota / ficha técnica)</label>
+            <div className="flex items-center gap-2">
+              <input type="file" className="text-sm" onChange={(e) => { const file = e.target.files?.[0]; if (file) anexar(file) }} />
+              {anexando && <span className="text-xs text-texto/50">Enviando…</span>}
+              {f.anexo_url && <button type="button" onClick={abrirAnexo} className="rounded-lg bg-primaria px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">Abrir Anexo</button>}
+            </div>
           </div>
         </div>
+
+        {editando && (
+          <div className="mt-4 rounded-xl border border-black/5 bg-black/[0.02] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-texto">Lotes em estoque · saldo total: {saldoTotal} {f.unidade ?? ''}</span>
+              <button type="button" onClick={() => setEntrada(true)} className="rounded-lg bg-primaria px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">+ Entrada</button>
+            </div>
+            {lotes.length === 0 ? (
+              <p className="text-xs text-texto/50">Nenhum lote com saldo. Use “+ Entrada” ou registre uma despesa vinculada a este ativo.</p>
+            ) : (
+              <div className="space-y-1">
+                {lotes.map((l) => {
+                  const venc = l.validade ? (new Date(l.validade).getTime() - Date.now()) / 86400000 <= 30 : false
+                  return (
+                    <div key={l.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-1.5 text-xs">
+                      <span className="flex-1 text-texto/70">{l.lote || 's/ lote'}{l.fornecedor ? ` · ${l.fornecedor}` : ''}{l.validade && <span className={venc ? 'text-secundaria' : 'text-texto/40'}> · val {formatDateBR(l.validade)}</span>} · venda {brl(Number(l.preco_venda))}</span>
+                      <span className="font-medium text-texto">{l.qtd_atual} {f.unidade ?? 'un'}</span>
+                      <button type="button" onClick={() => setEditandoLote(l)} className="text-primaria hover:underline">Editar</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+        </div>
+      </div>
+      {entrada && ativo && (
+        <AtivoEntradaModal clinicId={clinicId} ativo={ativo} lotes={lotes} forns={forns} onClose={() => setEntrada(false)} onSaved={() => { setEntrada(false); recarregarLotes() }} />
+      )}
+      {editandoLote && (
+        <AtivoLoteEditModal clinicId={clinicId} lote={editandoLote} forns={forns} onClose={() => setEditandoLote(null)} onSaved={() => { setEditandoLote(null); recarregarLotes() }} />
+      )}
+    </div>
+  )
+}
+
+/** Edição dos dados cadastrais de um lote de ativo (lote/validade/fornecedor/preços). A quantidade é ajustada por entrada/saldo inicial. */
+function AtivoLoteEditModal({ clinicId, lote, forns, onClose, onSaved }: { clinicId: string; lote: AtivoLote; forns: Supplier[]; onClose: () => void; onSaved: () => void }) {
+  const [forn, setForn] = useState(lote.fornecedor ?? '')
+  const [num, setNum] = useState(lote.lote ?? '')
+  const [validade, setValidade] = useState(lote.validade ?? '')
+  const [saldo, setSaldo] = useState(String(lote.qtd_atual ?? 0).replace('.', ','))
+  const [custo, setCusto] = useState(String(lote.custo_aquisicao ?? 0).replace('.', ','))
+  const [margem, setMargem] = useState(String(lote.margem_pct ?? 0).replace('.', ','))
+  const [salvando, setSalvando] = useState(false)
+  const custoN = Number(custo.replace(',', '.')) || 0
+  const margemN = Number(margem.replace(',', '.')) || 0
+  const venda = calcVendaComMargem(custoN, margemN)
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      await updateAtivoLote(lote.id, { fornecedor: forn || null, lote: num || null, validade: validade || null, custo_aquisicao: custoN, margem_pct: margemN, preco_venda: venda })
+      // Ajuste de saldo (a diferença vira movimentação de ajuste, preservando auditoria).
+      const novoSaldo = Number(saldo.replace(',', '.')) || 0
+      const delta = Math.round((novoSaldo - Number(lote.qtd_atual)) * 100) / 100
+      if (delta !== 0) await adjustAtivoLote(clinicId, lote.id, delta, 'Ajuste de saldo (edição de lote)')
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  async function excluir() {
+    const msg = Number(lote.qtd_atual) > 0
+      ? `Este lote tem saldo de ${lote.qtd_atual}. Excluir mesmo assim? O saldo restante será descartado.`
+      : 'Excluir este lote?'
+    if (!confirm(msg)) return
+    setSalvando(true)
+    try { await updateAtivoLote(lote.id, { ativo: false }); onSaved() } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[56] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Editar lote</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
+            <select className={field} value={forn} onChange={(e) => setForn(e.target.value)}>
+              <option value="">—</option>
+              {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+              {forn && !forns.some((s) => s.nome === forn) && <option value={forn}>{forn}</option>}
+            </select>
+          </div>
+          <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={num} onChange={(e) => setNum(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Saldo (quantidade)</label>
+            <input inputMode="decimal" className={field} value={saldo} onChange={(e) => setSaldo(e.target.value)} />
+            <p className="mt-0.5 text-[11px] text-texto/40">A diferença é registrada como ajuste.</p>
+          </div>
+          <div><label className="mb-1 block text-sm text-texto/70">Preço aquisição (R$)</label><input inputMode="decimal" className={field} value={custo} onChange={(e) => setCusto(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input inputMode="decimal" className={field} value={margem} onChange={(e) => setMargem(e.target.value)} /></div>
+          <div className="col-span-2 rounded-lg border border-black/10 bg-black/[0.03] px-3 py-2 text-sm">Venda: <strong>{brl(venda)}</strong></div>
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <button onClick={excluir} disabled={salvando} className="rounded-lg px-3 py-2 text-sm font-medium text-secundaria hover:bg-secundaria/5 disabled:opacity-50">Excluir lote</button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar lote'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Entrada de estoque de ativo por lote (com calculadora), aberta a partir do Editar Ativo. */
+function AtivoEntradaModal({ clinicId, ativo, lotes, forns, onClose, onSaved }: { clinicId: string; ativo: ActiveIngredient; lotes: AtivoLote[]; forns: Supplier[]; onClose: () => void; onSaved: () => void }) {
+  const [lotSel, setLotSel] = useState('')
+  const [forn, setForn] = useState('')
+  const [lote, setLote] = useState('')
+  const [validade, setValidade] = useState('')
+  const [qtd, setQtd] = useState('')
+  const [custo, setCusto] = useState('')
+  const [margem, setMargem] = useState('')
+  const [calc, setCalc] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+
+  function escolher(id: string) {
+    setLotSel(id)
+    const l = lotes.find((x) => x.id === id)
+    if (l) {
+      setForn(l.fornecedor ?? ''); setLote(l.lote ?? ''); setValidade(l.validade ?? '')
+      setCusto(l.custo_aquisicao ? String(l.custo_aquisicao).replace('.', ',') : '')
+      setMargem(l.margem_pct ? String(l.margem_pct).replace('.', ',') : '')
+    } else { setForn(''); setLote(''); setValidade('') }
+  }
+
+  async function salvar() {
+    const q = Number(qtd.replace(',', '.'))
+    if (!(q > 0)) return
+    setSalvando(true)
+    try {
+      const c = custo ? Number(custo.replace(',', '.')) : undefined
+      const m = margem ? Number(margem.replace(',', '.')) : undefined
+      await addAtivoEntryLot({ clinicId, ativoId: ativo.id, fornecedor: forn || null, lote: lote || null, validade: validade || null, quantidade: q, custoAquisicao: c, margemPct: m, precoVenda: c != null && m != null ? calcVendaComMargem(c, m) : undefined })
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Entrada · {ativo.nome}</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <p className="mb-3 text-xs text-texto/50">Mesmo fornecedor+lote+validade soma na quantidade; diferente cria novo lote.</p>
+        <div className="space-y-3">
+          {lotes.length > 0 && (
+            <select className={field} value={lotSel} onChange={(e) => escolher(e.target.value)}>
+              <option value="">➕ Novo lote…</option>
+              {lotes.map((l) => <option key={l.id} value={l.id}>{l.lote || 's/ lote'}{l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · {l.qtd_atual} un</option>)}
+            </select>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Fornecedor</label>
+              <select className={field} value={forn} onChange={(e) => setForn(e.target.value)} disabled={!!lotSel}>
+                <option value="">—</option>
+                {forns.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+                {forn && !forns.some((s) => s.nome === forn) && <option value={forn}>{forn}</option>}
+              </select>
+            </div>
+            <div><label className="mb-1 block text-sm text-texto/70">Lote</label><input className={field} value={lote} onChange={(e) => setLote(e.target.value)} disabled={!!lotSel} /></div>
+            <div><label className="mb-1 block text-sm text-texto/70">Validade</label><input type="date" className={field} value={validade} onChange={(e) => setValidade(e.target.value)} disabled={!!lotSel} /></div>
+            <div><label className="mb-1 block text-sm text-texto/70">Quantidade *</label><input inputMode="decimal" className={field} value={qtd} onChange={(e) => setQtd(e.target.value)} /></div>
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Preço aquisição (R$)</label>
+              <div className="flex gap-1">
+                <input inputMode="decimal" className={field} value={custo} onChange={(e) => setCusto(e.target.value)} placeholder="0,00" />
+                <button type="button" onClick={() => setCalc(true)} title="Calcular por unidade" className="shrink-0 rounded-lg border border-black/10 px-2 hover:bg-black/5">🧮</button>
+              </div>
+            </div>
+            <div><label className="mb-1 block text-sm text-texto/70">Margem (%)</label><input inputMode="decimal" className={field} value={margem} onChange={(e) => setMargem(e.target.value)} /></div>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando || !(Number(qtd.replace(',', '.')) > 0)} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Registrar entrada'}</button>
+        </div>
+        {calc && (
+          <Calculadora valorInicial={Number(custo.replace(',', '.')) || undefined}
+            onUsar={(v) => setCusto(String(v.toFixed(2)).replace('.', ','))} onClose={() => setCalc(false)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Saldo inicial dos ativos (admin): lança de uma vez as quantidades atuais de
+ * cada lote. Como os ativos migraram em zero, aqui o admin informa o saldo real
+ * — a diferença vira uma movimentação de ajuste (preserva auditoria).
+ */
+function SaldoInicialAtivosModal({ clinicId, onClose, onSaved }: { clinicId: string; onClose: () => void; onSaved: () => void }) {
+  const [ativos, setAtivos] = useState<ActiveIngredient[]>([])
+  const [lotes, setLotes] = useState<AtivoLote[]>([])
+  const [busca, setBusca] = useState('')
+  const [valores, setValores] = useState<Record<string, string>>({})
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    listActiveIngredients().then(setAtivos).catch(() => {})
+    listAtivoLotes().then(setLotes).catch(() => {})
+  }, [])
+
+  const nomePorAtivo = new Map(ativos.map((a) => [a.id, a.nome]))
+  const visiveis = lotes.filter((l) => (nomePorAtivo.get(l.ativo_id) ?? '').toLowerCase().includes(busca.toLowerCase()))
+
+  async function salvar() {
+    setErro('')
+    setSalvando(true)
+    try {
+      for (const l of lotes) {
+        const raw = valores[l.id]
+        if (raw == null || raw === '') continue
+        const alvo = Number(raw.replace(',', '.'))
+        if (isNaN(alvo)) continue
+        const delta = Math.round((alvo - Number(l.qtd_atual)) * 100) / 100
+        if (delta !== 0) await adjustAtivoLote(clinicId, l.id, delta, 'Saldo inicial (admin)')
+      }
+      onSaved()
+    } catch (e) { setErro((e as Error).message ?? 'Erro ao salvar.'); setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Saldo inicial dos ativos</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <p className="mb-3 text-xs text-texto/60">Informe a quantidade atual em estoque de cada lote. Deixe em branco para não alterar. A diferença é registrada como ajuste.</p>
+        <input className={`${field} mb-3`} placeholder="Buscar ativo…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <div className="space-y-1">
+          {visiveis.length === 0 ? (
+            <p className="py-4 text-center text-sm text-texto/50">Nenhum lote de ativo. Cadastre entradas primeiro.</p>
+          ) : visiveis.map((l) => (
+            <div key={l.id} className="flex items-center gap-2 rounded-lg border border-black/5 px-3 py-1.5 text-sm">
+              <span className="flex-1 text-texto/80">
+                {nomePorAtivo.get(l.ativo_id) ?? '—'}
+                <span className="block text-[11px] text-texto/40">{l.lote || 's/ lote'}{l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · atual: {l.qtd_atual}</span>
+              </span>
+              <input inputMode="decimal" className="w-24 rounded-lg border border-black/10 px-2 py-1 text-sm outline-none focus:border-primaria"
+                placeholder={String(l.qtd_atual)} value={valores[l.id] ?? ''} onChange={(e) => setValores((s) => ({ ...s, [l.id]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
+        {erro && <p className="mt-2 text-sm text-secundaria">{erro}</p>}
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar saldos'}</button>
         </div>
       </div>
     </div>
@@ -686,6 +993,22 @@ function ServicosSection({ clinicId }: { clinicId: string }) {
       onAdd={async (n) => { await createServico(clinicId, n); recarregar() }}
       onRename={async (id, n) => { await updateServico(id, n); recarregar() }}
       onDelete={async (id) => { if (confirm('Excluir este serviço?')) { await deleteServico(id); recarregar() } }}
+    />
+  )
+}
+
+function UnidadesSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<DomItem[]>([])
+  function recarregar() { listUnidades().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+  return (
+    <DomainCrud
+      titulo="Unidades de medida" placeholder="Ex.: Ampola, Caixa, ml, gr"
+      ajuda="Usadas no cadastro de Ativos e Produtos de Estoque (por lote). Ex.: ampola, caixa, frasco, ml, gr."
+      itens={itens}
+      onAdd={async (n) => { await createUnidade(clinicId, n); recarregar() }}
+      onRename={async (id, n) => { await updateUnidade(id, n); recarregar() }}
+      onDelete={async (id) => { if (confirm('Excluir esta unidade?')) { await deleteUnidade(id); recarregar() } }}
     />
   )
 }

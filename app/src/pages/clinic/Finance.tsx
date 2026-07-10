@@ -10,6 +10,9 @@ import {
 import { buildRelatorioFinanceiroPdf } from '@/lib/relatorioFinanceiroPdf'
 import { supabase } from '@/lib/supabase'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
+import { listInventory, addStockEntryLot, type InventoryItem } from '@/lib/inventory'
+import { listActiveIngredients, addAtivoEntryLot, calcVendaComMargem, listSuppliers, type ActiveIngredient, type Supplier } from '@/lib/domains'
+import Calculadora from '@/components/Calculadora'
 import {
   createExpense,
   createMovement,
@@ -705,7 +708,8 @@ function DespesasView(props: {
                 </td>
                 <td className="px-4 py-2 text-right font-medium text-texto">{brl(Number(d.valor))}</td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
-                  <button onClick={() => alternarPago(d)} className="text-xs text-primaria hover:underline">{d.pago ? 'Não pago' : 'Pago'}</button>
+                  <span className={`mr-2 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${d.pago ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{d.pago ? 'Pago' : 'Não pago'}</span>
+                  <button onClick={() => alternarPago(d)} className="text-xs text-primaria hover:underline">{d.pago ? 'Marcar não pago' : 'Marcar pago'}</button>
                   <button onClick={() => setEditando(d)} className="ml-3 text-xs text-texto/60 hover:underline">Editar</button>
                   <button onClick={() => remover(d)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
                 </td>
@@ -752,6 +756,28 @@ function DespesaModal(props: {
   const [escopo, setEscopo] = useState<'esta' | 'futuras' | 'todas'>('esta')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+
+  // Vínculo com estoque/ativo (só na criação): dá entrada em um lote ao registrar a despesa.
+  const [vinculo, setVinculo] = useState<'nenhum' | 'estoque' | 'ativo'>('nenhum')
+  const [produtos, setProdutos] = useState<InventoryItem[]>([])
+  const [ativos, setAtivos] = useState<ActiveIngredient[]>([])
+  const [fornsAtivo, setFornsAtivo] = useState<Supplier[]>([])
+  const [itemId, setItemId] = useState('')
+  const [lMarcaForn, setLMarcaForn] = useState('')
+  const [lLote, setLLote] = useState('')
+  const [lValidade, setLValidade] = useState('')
+  const [lQtd, setLQtd] = useState('')
+  const [lCusto, setLCusto] = useState('')
+  const [lMargem, setLMargem] = useState('')
+  const [lPreco, setLPreco] = useState('')
+  const [calc, setCalc] = useState(false)
+
+  useEffect(() => {
+    if (editar) return
+    listInventory().then(setProdutos).catch(() => {})
+    listActiveIngredients().then(setAtivos).catch(() => {})
+    listSuppliers().then(setFornsAtivo).catch(() => {})
+  }, [editar])
 
   // Tipos disponíveis conforme a classificação escolhida.
   const tiposFiltrados = tipos.filter((t) => t.tipo === classificacao)
@@ -802,6 +828,18 @@ function DespesaModal(props: {
           periodo,
           repeticoes: Number(repeticoes) || 1,
         })
+        // Vínculo: dá entrada no lote de estoque/ativo correspondente.
+        const q = Number(lQtd.replace(',', '.'))
+        if (vinculo !== 'nenhum' && itemId && q > 0) {
+          const custo = lCusto ? Number(lCusto.replace(',', '.')) : undefined
+          const preco = lPreco ? Number(lPreco.replace(',', '.')) : undefined
+          if (vinculo === 'estoque') {
+            await addStockEntryLot({ clinicId, inventoryId: itemId, marca: lMarcaForn || null, lote: lLote || null, validade: lValidade || null, quantidade: q, custoUnit: custo, precoVenda: preco })
+          } else {
+            const margem = lMargem ? Number(lMargem.replace(',', '.')) : undefined
+            await addAtivoEntryLot({ clinicId, ativoId: itemId, fornecedor: lMarcaForn || null, lote: lLote || null, validade: lValidade || null, quantidade: q, custoAquisicao: custo, margemPct: margem, precoVenda: preco })
+          }
+        }
       }
       onSaved()
     } catch (e) { setErro((e as Error).message ?? 'Erro ao salvar.') } finally { setSalvando(false) }
@@ -847,6 +885,56 @@ function DespesaModal(props: {
               <p className="mt-1 text-xs text-amber-600">Nenhum tipo classificado como “{classificacao === 'produto' ? 'Produto' : 'Gasto fixo'}”. Cadastre/classifique em Configurações → Tipos de Despesa.</p>
             )}
           </div>
+
+          {!editar && (
+            <div className="rounded-xl border border-primaria/20 bg-primaria/5 p-3">
+              <label className="mb-1 block text-xs font-medium text-texto/60">Dar entrada em estoque/ativo? (opcional)</label>
+              <div className="flex gap-2">
+                {([['nenhum', 'Não'], ['estoque', 'Produto de estoque'], ['ativo', 'Ativo']] as const).map(([v2, l]) => (
+                  <button key={v2} type="button" onClick={() => { setVinculo(v2); setItemId('') }}
+                    className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium ${vinculo === v2 ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {vinculo !== 'nenhum' && (
+                <div className="mt-3 space-y-2">
+                  <select className={field} value={itemId} onChange={(e) => setItemId(e.target.value)}>
+                    <option value="">{vinculo === 'estoque' ? 'Selecione o produto…' : 'Selecione o ativo…'}</option>
+                    {(vinculo === 'estoque' ? produtos.map((p) => ({ id: p.id, nome: p.produto })) : ativos.map((a) => ({ id: a.id, nome: a.nome }))).map((o) => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))}
+                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    {vinculo === 'ativo' ? (
+                      <select className={field} value={lMarcaForn} onChange={(e) => setLMarcaForn(e.target.value)}>
+                        <option value="">Fornecedor…</option>
+                        {fornsAtivo.map((s) => <option key={s.id} value={s.nome}>{s.nome}</option>)}
+                      </select>
+                    ) : (
+                      <input className={field} value={lMarcaForn} onChange={(e) => setLMarcaForn(e.target.value)} placeholder="Marca" />
+                    )}
+                    <input className={field} value={lLote} onChange={(e) => setLLote(e.target.value)} placeholder="Lote" />
+                    <input type="date" className={field} value={lValidade} onChange={(e) => setLValidade(e.target.value)} />
+                    <input inputMode="decimal" className={field} value={lQtd} onChange={(e) => setLQtd(e.target.value)} placeholder="Qtd (unidades)" />
+                    <div className="flex gap-1">
+                      <input inputMode="decimal" className={field} value={lCusto}
+                        onChange={(e) => { setLCusto(e.target.value); if (vinculo === 'ativo' && lMargem) setLPreco(String(calcVendaComMargem(Number(e.target.value.replace(',', '.')) || 0, Number(lMargem.replace(',', '.')) || 0)).replace('.', ',')) }}
+                        placeholder={vinculo === 'estoque' ? 'Custo unit.' : 'Preço aquisição'} />
+                      <button type="button" onClick={() => setCalc(true)} title="Calcular por unidade" className="shrink-0 rounded-lg border border-black/10 px-2 hover:bg-black/5">🧮</button>
+                    </div>
+                    {vinculo === 'ativo' && (
+                      <input inputMode="decimal" className={field} value={lMargem}
+                        onChange={(e) => { setLMargem(e.target.value); if (lCusto) setLPreco(String(calcVendaComMargem(Number(lCusto.replace(',', '.')) || 0, Number(e.target.value.replace(',', '.')) || 0)).replace('.', ',')) }}
+                        placeholder="Margem %" />
+                    )}
+                    <input inputMode="decimal" className={field} value={lPreco} onChange={(e) => setLPreco(e.target.value)} placeholder="Preço venda" />
+                  </div>
+                  <p className="text-[11px] text-texto/50">Mesmo lote+validade soma na quantidade; diferente cria um novo lote. Use a 🧮 se o valor pago for de uma caixa/pacote (divide pelas unidades).</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-texto/60">Descrição</label>
@@ -937,6 +1025,17 @@ function DespesaModal(props: {
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Salvar'}</button>
         </div>
       </div>
+      {calc && (
+        <Calculadora
+          valorInicial={Number(lCusto.replace(',', '.')) || parseMoneyBR(valor) || undefined}
+          onUsar={(vu) => {
+            const s = String(vu.toFixed(2)).replace('.', ',')
+            setLCusto(s)
+            if (vinculo === 'ativo' && lMargem) setLPreco(String(calcVendaComMargem(vu, Number(lMargem.replace(',', '.')) || 0)).replace('.', ','))
+          }}
+          onClose={() => setCalc(false)}
+        />
+      )}
     </div>
   )
 }
