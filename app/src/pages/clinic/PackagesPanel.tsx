@@ -58,6 +58,9 @@ export default function PackagesPanel({ patientId, clinicId, professionalId }: P
             const restantes = Math.max(0, p.sessoes_compradas - feitas)
             const pct = p.sessoes_compradas > 0 ? Math.min(100, Math.round((feitas / p.sessoes_compradas) * 100)) : 0
             const concluido = restantes === 0
+            const valorTotal = Number(p.valor_total)
+            const valorUtilizado = p.sessoes_compradas > 0 ? Math.round((valorTotal * feitas / p.sessoes_compradas) * 100) / 100 : 0
+            const valorRestante = Math.max(0, valorTotal - valorUtilizado)
             return (
               <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -81,6 +84,13 @@ export default function PackagesPanel({ patientId, clinicId, professionalId }: P
                   <div className="h-2 overflow-hidden rounded-full bg-black/5">
                     <div className={`h-full rounded-full ${concluido ? 'bg-emerald-500' : 'bg-primaria'}`} style={{ width: `${pct}%` }} />
                   </div>
+                  {valorTotal > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-texto/60">
+                      <span>Total: <strong className="text-texto">{brl(valorTotal)}</strong></span>
+                      <span>Utilizado: <strong className="text-texto/80">{brl(valorUtilizado)}</strong> ({feitas}×)</span>
+                      <span>Restante: <strong className={concluido ? 'text-emerald-600' : 'text-primaria'}>{brl(valorRestante)}</strong></span>
+                    </div>
+                  )}
                 </div>
 
                 {p.observacoes && <div className="mt-2 text-sm text-texto/70">{p.observacoes}</div>}
