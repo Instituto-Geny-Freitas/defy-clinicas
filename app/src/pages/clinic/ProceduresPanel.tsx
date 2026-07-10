@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { localDateToday } from '@/lib/format'
 import { createProcedure, deleteProcedure, listProcedures, updateProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot } from '@/lib/inventory'
-import { listQuotes, brl, type Quote } from '@/lib/finance'
+import { listQuotes, brl, syncProcedureProductsToQuote, type Quote } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
@@ -183,12 +183,17 @@ function RegistrarModal({
           clinicId, anterior: proc, procedimento, data,
           regiao, observacoes: obs, valorCobrado: valor, produtos: prods,
         })
+        // Sincroniza os produtos com o orçamento vinculado (e limpa o anterior, se mudou).
+        const anteriorQuote = proc.quote_id
+        if (anteriorQuote && anteriorQuote !== (quoteId || null)) await syncProcedureProductsToQuote(anteriorQuote, proc.id, []).catch(() => {})
+        if (quoteId) await syncProcedureProductsToQuote(quoteId, proc.id, prods).catch(() => {})
       } else {
-        await createProcedure({
+        const criado = await createProcedure({
           clinicId, patientId, professionalId, quoteId: quoteId || null, procedimento,
           data, regiao, observacoes: obs,
           valorCobrado: valor, produtos: prods,
         })
+        if (quoteId) await syncProcedureProductsToQuote(quoteId, criado.id, prods).catch(() => {})
       }
       onSaved()
     } catch { setSalvando(false) }
