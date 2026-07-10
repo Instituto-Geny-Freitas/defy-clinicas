@@ -82,11 +82,12 @@ import {
   DIAS_SEMANA, createAvailability, createBlock, deleteAvailability, deleteBlock,
   listAvailability, listBlocks, type AvailabilityWindow, type BlockRange,
 } from '@/lib/availability'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
+import { getReferralConfig, saveReferralConfig } from '@/lib/referral'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -127,6 +128,7 @@ export default function Settings() {
           { k: 'formularios', l: 'Formulários (Admin)' },
           { k: 'lgpd', l: 'LGPD' },
           { k: 'imagem', l: 'Termo de Imagem' },
+          { k: 'indicacao', l: 'Indicação' },
         ].map((t) => (
           <button
             key={t.k}
@@ -160,6 +162,7 @@ export default function Settings() {
       {sec === 'formularios' && <FormulariosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
       {sec === 'imagem' && <ImagemSection />}
+      {sec === 'indicacao' && <IndicacaoSection clinicId={clinicId} />}
     </div>
   )
 }
@@ -1307,6 +1310,64 @@ function ImagemSection() {
         <div className="mt-3">
           <label className="mb-1 block text-sm text-texto/70">Texto do termo de imagem</label>
           <textarea rows={5} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+function IndicacaoSection({ clinicId }: { clinicId: string }) {
+  const [ativo, setAtivo] = useState(false)
+  const [valor, setValor] = useState('')
+  const [mensagem, setMensagem] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    getReferralConfig().then((c) => {
+      setAtivo(c.ativo)
+      setValor(c.valor ? String(c.valor).replace('.', ',') : '')
+      setMensagem(c.mensagem || 'Estou te indicando! Informe meu código de indicação no seu cadastro. 💚')
+    }).catch(() => {})
+  }, [])
+
+  async function salvar() {
+    setSalvando(true); setMsg(null)
+    try {
+      await saveReferralConfig(clinicId, { ativo, valor: parseMoneyBR(valor), mensagem: mensagem.trim() })
+      setMsg('Programa de indicação salvo.')
+    } catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Programa de indicação</h3>
+        <p className="mb-4 text-xs text-texto/50">
+          Cada paciente ganha um código de indicação para compartilhar. Ao cadastrar um novo paciente, a equipe
+          registra “indicado por”. Quando o indicado faz o primeiro pagamento, a equipe concede a recompensa em
+          crédito ao indicador (em Financeiro → Indicações). O crédito é abatido em pagamentos futuros.
+        </p>
+        <label className="flex items-center gap-2 text-sm text-texto/80">
+          <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
+          <span>Ativar programa de indicação</span>
+        </label>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-1">
+            <label className="mb-1 block text-sm text-texto/70">Recompensa (R$)</label>
+            <input className={field} value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" inputMode="decimal" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-sm text-texto/70">Mensagem de compartilhamento</label>
+          <textarea rows={3} className={field} value={mensagem} onChange={(e) => setMensagem(e.target.value)} />
+          <p className="mt-1 text-xs text-texto/40">O código do paciente é anexado automaticamente ao compartilhar.</p>
         </div>
       </div>
       <div className="flex items-center gap-3">

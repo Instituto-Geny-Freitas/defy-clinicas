@@ -4,10 +4,12 @@ import {
   createPatient,
   emailEmUso,
   gerarSenhaProvisoria,
+  listPatients,
   provisionPatientAccess,
   updatePatient,
   type PatientInput,
 } from '@/lib/patients'
+import { getReferralConfig } from '@/lib/referral'
 import { getClinic } from '@/lib/settings'
 import { recordConsent } from '@/lib/lgpd'
 import { linkAppointmentsToPatient, linkByNomeAvulso, linkGroupToPatient, listWalkInAppointments, type Appointment } from '@/lib/appointments'
@@ -44,6 +46,9 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
   // Regularização de agendamentos prévios sem cadastro
   const [walkins, setWalkins] = useState<Appointment[]>([])
   const [aptsSel, setAptsSel] = useState<Set<string>>(new Set())
+  // Programa de indicação: quem indicou este novo paciente
+  const [refAtivo, setRefAtivo] = useState(false)
+  const [indicadores, setIndicadores] = useState<{ id: string; nome: string; codigo_indicacao: string | null }[]>([])
   // resultado do provisionamento (mostra login + senha para entregar ao paciente)
   const [resultado, setResultado] = useState<{ id: string; login: string; senha: string; aviso?: string } | null>(null)
 
@@ -59,6 +64,12 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
       })
       .catch(() => {})
     if (!patient) listWalkInAppointments().then(setWalkins).catch(() => {})
+    if (!patient) {
+      getReferralConfig().then((c) => {
+        setRefAtivo(c.ativo)
+        if (c.ativo) listPatients().then((ps) => setIndicadores(ps.map((p) => ({ id: p.id, nome: p.nome, codigo_indicacao: p.codigo_indicacao })))).catch(() => {})
+      }).catch(() => {})
+    }
   }, [editando, patient])
 
   function set<K extends keyof PatientInput>(k: K, v: PatientInput[K]) {
@@ -181,6 +192,32 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
           <label className="mb-1 block text-sm text-texto/70">E-mail</label>
           <input className={field} value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} />
         </div>
+
+        {/* Programa de indicação: quem indicou este paciente */}
+        {!editando && refAtivo && (
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm text-texto/70">Indicado por (opcional)</label>
+            <input
+              className={field}
+              placeholder="Nome ou código de quem indicou"
+              list="lista-indicadores"
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                if (!v) { set('indicado_por_patient_id', null); return }
+                const up = v.toUpperCase()
+                const byCode = indicadores.find((p) => p.codigo_indicacao && up.includes(p.codigo_indicacao))
+                const byName = indicadores.find((p) => p.nome.toLowerCase() === v.toLowerCase())
+                set('indicado_por_patient_id', (byCode ?? byName)?.id ?? null)
+              }}
+            />
+            <datalist id="lista-indicadores">
+              {indicadores.map((p) => <option key={p.id} value={`${p.nome} · ${p.codigo_indicacao ?? ''}`} />)}
+            </datalist>
+            {form.indicado_por_patient_id && (
+              <p className="mt-1 text-xs text-emerald-600">✓ {indicadores.find((p) => p.id === form.indicado_por_patient_id)?.nome}</p>
+            )}
+          </div>
+        )}
 
         {/* Regularização de agendamento prévio sem cadastro */}
         {!editando && walkins.length > 0 && (

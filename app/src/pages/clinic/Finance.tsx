@@ -34,8 +34,9 @@ import {
   type PaymentRow,
   type Periodo,
 } from '@/lib/cashflow'
+import { listReferrals, grantReferralReward, getReferralConfig, type ReferralRow, type ReferralConfig } from '@/lib/referral'
 
-type Tab = 'consolidado' | 'receitas' | 'despesas' | 'caixa' | 'relatorio'
+type Tab = 'consolidado' | 'receitas' | 'despesas' | 'caixa' | 'relatorio' | 'indicacoes'
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -133,6 +134,7 @@ export default function Finance() {
           ['receitas', 'Receitas'],
           ['despesas', 'Despesas'],
           ['caixa', 'Caixa & Aportes'],
+          ['indicacoes', 'Indicações'],
           ['relatorio', 'Relatório'],
         ] as [Tab, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)}
@@ -154,6 +156,8 @@ export default function Finance() {
           totalPagas={totalDespesasPagas} totalNaoPagas={totalDespesasNaoPagas} de={de} onChange={recarregar} />
       ) : tab === 'relatorio' ? (
         <RelatorioView anoAtual={ano} mesAtual={mes} />
+      ) : tab === 'indicacoes' ? (
+        <IndicacoesView clinicId={clinicId} createdBy={profile?.professional?.id} onChange={recarregar} />
       ) : (
         <CaixaView clinicId={clinicId} movimentos={movimentos} totais={{ totalCaixa, totalAplic, totalAportes }} onChange={recarregar} />
       )}
@@ -161,10 +165,10 @@ export default function Finance() {
   )
 }
 
-function Card({ label, valor, cor }: { label: string; valor: number; cor?: string }) {
+function Card({ label, valor, cor, fmt = true }: { label: string; valor: number; cor?: string; fmt?: boolean }) {
   return (
     <div className="rounded-xl border border-black/5 bg-white p-4">
-      <div className={`text-xl font-semibold ${cor ?? 'text-texto'}`}>{brl(valor)}</div>
+      <div className={`text-xl font-semibold ${cor ?? 'text-texto'}`}>{fmt ? brl(valor) : valor}</div>
       <div className="text-xs text-texto/60">{label}</div>
     </div>
   )
@@ -200,6 +204,87 @@ function ConsolidadoView(p: {
           <Card label="Posição total" valor={p.posicaoCaixa} cor="text-primaria" />
         </div>
       </div>
+    </div>
+  )
+}
+
+// ---- Indicações -------------------------------------------------------------
+function IndicacoesView({ clinicId, createdBy, onChange }: { clinicId: string; createdBy?: string; onChange: () => void }) {
+  const [rows, setRows] = useState<ReferralRow[]>([])
+  const [cfg, setCfg] = useState<ReferralConfig | null>(null)
+  const [carregando, setCarregando] = useState(true)
+  const [processando, setProcessando] = useState<string | null>(null)
+
+  function load() {
+    setCarregando(true)
+    Promise.all([listReferrals(), getReferralConfig()])
+      .then(([r, c]) => { setRows(r); setCfg(c) })
+      .catch(() => {})
+      .finally(() => setCarregando(false))
+  }
+  useEffect(load, [])
+
+  async function recompensar(r: ReferralRow) {
+    const valor = cfg?.valor ?? 0
+    if (valor <= 0) { alert('Defina o valor da recompensa em Configurações → Indicação.'); return }
+    if (!confirm(`Conceder ${brl(valor)} de crédito para ${r.indicadorNome} pela indicação de ${r.indicadoNome}?`)) return
+    setProcessando(r.indicadoId)
+    try {
+      await grantReferralReward({ clinicId, referrerId: r.indicadorId, referredId: r.indicadoId, referredNome: r.indicadoNome, valor, createdBy })
+      load(); onChange()
+    } catch { alert('Não foi possível conceder a recompensa.') } finally { setProcessando(null) }
+  }
+
+  if (carregando) return <p className="p-6 text-sm text-texto/50">Carregando…</p>
+  if (!cfg?.ativo) return <p className="rounded-xl border border-black/5 bg-white p-5 text-sm text-texto/60">O programa de indicação está desativado. Ative em Configurações → Indicação.</p>
+
+  const elegiveis = rows.filter((r) => r.convertido && !r.recompensado).length
+
+  return (
+    <div>
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <Card label="Indicações" valor={rows.length} cor="text-texto" fmt={false} />
+        <Card label="Elegíveis a recompensa" valor={elegiveis} cor="text-amber-600" fmt={false} />
+        <Card label="Recompensa por indicação" valor={cfg.valor} cor="text-primaria" />
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+            <th className="px-4 py-2 font-medium">Indicado</th>
+            <th className="px-4 py-2 font-medium">Indicado por</th>
+            <th className="px-4 py-2 font-medium">Cadastro</th>
+            <th className="px-4 py-2 font-medium">Situação</th>
+            <th className="px-4 py-2 font-medium text-right">Ações</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.indicadoId} className="border-t border-black/5">
+                <td className="px-4 py-2 text-texto">{r.indicadoNome}</td>
+                <td className="px-4 py-2 text-texto/70">{r.indicadorNome}</td>
+                <td className="px-4 py-2 text-texto/60">{formatDateBR(r.criadoEm)}</td>
+                <td className="px-4 py-2">
+                  {r.recompensado
+                    ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Recompensado{r.valorRecompensa ? ` (${brl(r.valorRecompensa)})` : ''}</span>
+                    : r.convertido
+                      ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Converteu — a recompensar</span>
+                      : <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/60">Aguardando 1º pagamento</span>}
+                </td>
+                <td className="px-4 py-2 text-right whitespace-nowrap">
+                  {r.convertido && !r.recompensado && (
+                    <button onClick={() => recompensar(r)} disabled={processando === r.indicadoId}
+                      className="rounded-lg bg-primaria px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                      {processando === r.indicadoId ? '…' : 'Conceder recompensa'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">Nenhuma indicação registrada ainda.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-texto/50">A recompensa vira crédito do indicador (aba Receitas → “Crédito do paciente”), abatível em pagamentos futuros.</p>
     </div>
   )
 }

@@ -48,6 +48,8 @@ export interface Patient {
   consentimento_imagem_versao: string | null
   senha_provisoria: boolean
   limite_relatorios: number
+  codigo_indicacao: string | null
+  indicado_por_patient_id: string | null
 }
 
 export interface ClinicTheme {

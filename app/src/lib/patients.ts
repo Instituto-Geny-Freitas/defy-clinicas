@@ -14,6 +14,7 @@ export interface PatientInput {
   estilo_trabalho?: string | null
   alergias?: string | null
   observacoes?: string | null
+  indicado_por_patient_id?: string | null
 }
 
 /** Lista enxuta de profissionais ativos (para o paciente escolher no agendamento). */
