@@ -378,16 +378,18 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   async function importarProcedimentos() {
     const procs = await listUnbilledProcedures(patientId)
     if (procs.length === 0) { alert('Nenhum procedimento avulso (sem orçamento) com valor a cobrar.'); return }
+    const ids = procs.map((p) => p.id)
     const novos: QuoteItem[] = []
     for (const p of procs) {
-      novos.push({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado) || 0, total: Number(p.valor_cobrado) || 0, origem: 'procedimento', ref_id: p.id })
+      if (Number(p.valor_cobrado) > 0) novos.push({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado), total: Number(p.valor_cobrado), origem: 'procedimento', ref_id: p.id })
       // Produtos utilizados com preço de venda entram como itens cobráveis do orçamento.
       for (const u of p.produtos_usados ?? []) {
         if (Number(u.preco_venda) > 0) novos.push(produtoParaItem(u, p.id))
       }
     }
-    setProcImportados((ids) => [...new Set([...ids, ...procs.map((p) => p.id)])])
-    setItens((arr) => [...arr.filter((i) => i.descricao.trim()), ...novos])
+    setProcImportados((prev) => [...new Set([...prev, ...ids])])
+    // Reconcilia: remove itens já referentes a esses procedimentos (evita duplicar em clique repetido).
+    setItens((arr) => [...arr.filter((i) => i.descricao.trim() && !(i.ref_id && ids.includes(i.ref_id))), ...novos])
   }
 
   async function salvar() {
@@ -474,6 +476,7 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
   const [salvando, setSalvando] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
   const [produtosUsados, setProdutosUsados] = useState<UsedProduct[]>([])
+  const [procImportados, setProcImportados] = useState<string[]>([])
 
   // Produtos utilizados nos procedimentos vinculados a este orçamento (para poder importar como itens).
   useEffect(() => {
@@ -500,6 +503,24 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
     setAviso(`${novos.length} produto(s) adicionado(s) ao orçamento.`)
   }
 
+  // Importa procedimentos avulsos (valor do procedimento + produtos), reconciliando por procedimento (não duplica).
+  async function importarProcedimentos() {
+    const procs = await listUnbilledProcedures(quote.patient_id)
+    if (procs.length === 0) { setAviso('Nenhum procedimento avulso para importar.'); return }
+    const ids = procs.map((p) => p.id)
+    setItens((arr) => {
+      const base = arr.filter((it) => !(it.ref_id && ids.includes(it.ref_id)) && it.descricao.trim())
+      const novos: QuoteItem[] = []
+      for (const p of procs) {
+        if (Number(p.valor_cobrado) > 0) novos.push({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado), total: Number(p.valor_cobrado), origem: 'procedimento', ref_id: p.id })
+        for (const u of p.produtos_usados ?? []) { if (Number(u.preco_venda) > 0) novos.push(produtoParaItem(u, p.id)) }
+      }
+      return [...base, ...novos]
+    })
+    setProcImportados((s) => [...new Set([...s, ...ids])])
+    setAviso(`${procs.length} procedimento(s) importado(s) com valor e produtos.`)
+  }
+
   async function desvincular(idx: number) {
     const it = itens[idx]
     if (it.origem === 'procedimento' && it.ref_id) {
@@ -513,8 +534,11 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
     const validos = itens.filter((i) => i.descricao.trim())
     if (validos.length === 0) { alert('Inclua ao menos um item.'); return }
     setSalvando(true)
-    try { await updateQuote(quote.id, { itens: validos, desconto }); onSaved() }
-    catch { setSalvando(false); alert('Não foi possível salvar.') }
+    try {
+      await updateQuote(quote.id, { itens: validos, desconto })
+      if (procImportados.length > 0) await linkProceduresToQuote(quote.id, procImportados)
+      onSaved()
+    } catch { setSalvando(false); alert('Não foi possível salvar.') }
   }
 
   return (
@@ -562,9 +586,12 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
             <button onClick={() => setItens((a) => [...a, { descricao: '', qtd: 1, valor_unit: 0, total: 0 }])} className="text-xs font-medium text-primaria hover:underline">
               + Adicionar item
             </button>
+            <button onClick={importarProcedimentos} className="text-xs font-medium text-primaria hover:underline">
+              + Importar procedimentos avulsos
+            </button>
             {produtosUsados.some((u) => Number(u.preco_venda) > 0) && (
               <button onClick={importarProdutos} className="text-xs font-medium text-primaria hover:underline">
-                + Importar produtos utilizados
+                + Importar só produtos (procedimentos já vinculados)
               </button>
             )}
           </div>
