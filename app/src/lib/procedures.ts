@@ -50,17 +50,23 @@ export async function listProcedures(patientId: string): Promise<ProcedureRecord
   return data ?? []
 }
 
-/** Procedimentos avulsos: sem orçamento, com valor a cobrar e ainda não pagos. */
+/**
+ * Procedimentos avulsos (sem orçamento) importáveis: com valor a cobrar OU com
+ * produtos de venda utilizados (para que os produtos entrem no orçamento mesmo
+ * quando o procedimento não tem valor avulso próprio).
+ */
 export async function listUnbilledProcedures(patientId: string): Promise<ProcedureRecord[]> {
   const { data, error } = await supabase
     .from('procedures_log')
     .select('*')
     .eq('patient_id', patientId)
     .is('quote_id', null)
-    .gt('valor_cobrado', 0)
     .order('data', { ascending: false })
   if (error) throw error
-  return data ?? []
+  return (data ?? []).filter((p) =>
+    Number(p.valor_cobrado) > 0 ||
+    (p.produtos_usados ?? []).some((u: UsedProduct) => Number(u.preco_venda) > 0),
+  )
 }
 
 /** Vincula procedimentos avulsos a um orçamento (após importá-los no orçamento). */
