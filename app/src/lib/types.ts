@@ -44,6 +44,8 @@ export interface Patient {
   observacoes: string | null
   consentimento_lgpd_em: string | null
   consentimento_lgpd_versao: string | null
+  consentimento_imagem_em: string | null
+  consentimento_imagem_versao: string | null
   senha_provisoria: boolean
   limite_relatorios: number
 }
