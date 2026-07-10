@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase'
-import { formatDateBR } from '@/lib/format'
 
 export type QuoteStatus = 'rascunho' | 'enviado' | 'aprovado' | 'recusado' | 'expirado'
 export type PaymentMethod = 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro' | 'transferencia' | 'outro' | 'credito'
@@ -121,31 +120,6 @@ export async function updateQuote(id: string, args: { itens: QuoteItem[]; descon
     .update({ itens, valor_bruto, desconto: args.desconto || 0, valor_total })
     .eq('id', id)
   if (error) throw error
-}
-
-/**
- * Sincroniza os PRODUTOS de um procedimento como itens do orçamento vinculado.
- * Remove os itens de produto que referenciam este procedimento e recria a partir
- * dos produtos atuais (com preço de venda). Idempotente — não duplica.
- * Passe `produtos: []` para apenas remover (ex.: ao desvincular).
- */
-export async function syncProcedureProductsToQuote(
-  quoteId: string,
-  procedureId: string,
-  produtos: { produto: string; qtd: number; preco_venda?: number; lote?: string | null; validade?: string | null }[],
-): Promise<void> {
-  const { data: q, error } = await supabase.from('quotes').select('itens, desconto').eq('id', quoteId).maybeSingle()
-  if (error || !q) return
-  const outros = ((q.itens as QuoteItem[]) ?? []).filter((it) => !(it.origem === 'produto' && it.ref_id === procedureId))
-  const novos: QuoteItem[] = produtos
-    .filter((u) => Number(u.preco_venda) > 0)
-    .map((u) => {
-      const qtd = Number(u.qtd) || 1
-      const pv = Number(u.preco_venda) || 0
-      const det = [u.lote ? `lote ${u.lote}` : '', u.validade ? `val ${formatDateBR(u.validade)}` : ''].filter(Boolean).join(' · ')
-      return { descricao: `Produto: ${u.produto}${det ? ` (${det})` : ''}`, qtd, valor_unit: pv, total: pv * qtd, origem: 'produto' as const, ref_id: procedureId }
-    })
-  await updateQuote(quoteId, { itens: [...outros, ...novos], desconto: Number(q.desconto) || 0 })
 }
 
 /** Exclui um orçamento. Falha se houver pagamentos vinculados (FK). */
