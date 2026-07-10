@@ -5,6 +5,7 @@ import { listDueNotifications, markNotificationRead, type AppNotification } from
 import { listPatientAppointments, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
 import { listPackages, type TreatmentPackage } from '@/lib/packages'
 import { brl } from '@/lib/finance'
+import NpsCard from './NpsCard'
 import { enablePush, pushSupported } from '@/lib/push'
 
 const fmtDataHora = (iso: string) =>
@@ -13,11 +14,13 @@ const fmtDataHora = (iso: string) =>
 export default function PatientHome() {
   const { profile } = useAuth()
   const clinic = useClinic()
-  const patientId = profile?.patient?.id
+  const patient = profile?.patient
+  const patientId = patient?.id
   const wpp = clinic?.whatsapp?.replace(/\D/g, '')
   const [avisos, setAvisos] = useState<AppNotification[]>([])
   const [proxima, setProxima] = useState<Appointment | null>(null)
   const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
+  const [ultimoRealizado, setUltimoRealizado] = useState<Appointment | null>(null)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
   function recarregar() {
@@ -31,6 +34,10 @@ export default function PatientHome() {
           .filter((a) => a.status !== 'cancelado' && a.status !== 'realizado' && new Date(a.inicio).getTime() >= agora)
           .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime())[0]
         setProxima(futura ?? null)
+        const realizado = appts
+          .filter((a) => a.status === 'realizado')
+          .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())[0]
+        setUltimoRealizado(realizado ?? null)
       })
       .catch(() => {})
   }
@@ -106,6 +113,15 @@ export default function PatientHome() {
           <p className="mt-1 text-sm text-texto/60">Nenhuma consulta agendada. Solicite em “Agenda”.</p>
         )}
       </section>
+
+      {patient && (
+        <NpsCard
+          clinicId={patient.clinic_id}
+          patientId={patient.id}
+          appointmentId={ultimoRealizado?.id}
+          elegivel={!!ultimoRealizado}
+        />
+      )}
 
       {pacotes.length > 0 && (
         <section className="rounded-xl border border-black/5 p-4">

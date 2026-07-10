@@ -4,6 +4,7 @@ import { brl, listAllQuotes } from '@/lib/finance'
 import { estoqueBaixo, listInventory, validadeProxima } from '@/lib/inventory'
 import { listExpenses, listPaymentsPeriodo } from '@/lib/cashflow'
 import { buildMapaMensalPdf, type Linha } from '@/lib/mapaMensalPdf'
+import { listNpsResponses, calcNps, type NpsResponse } from '@/lib/nps'
 import { useClinic } from '@/theme/ThemeProvider'
 import { formatDateBR } from '@/lib/format'
 
@@ -31,6 +32,11 @@ interface Resumo {
 export default function Reports() {
   const [r, setR] = useState<Resumo | null>(null)
   const [porMetodo, setPorMetodo] = useState<Record<string, number>>({})
+  const [nps, setNps] = useState<NpsResponse[]>([])
+
+  useEffect(() => {
+    listNpsResponses(300).then(setNps).catch(() => {})
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -81,6 +87,11 @@ export default function Reports() {
     </div>
   )
 
+  const nps90 = nps.filter((n) => (Date.now() - new Date(n.created_at).getTime()) / 86400000 <= 90)
+  const npsCalc = calcNps(nps90)
+  const npsCor = npsCalc.nps >= 50 ? 'text-emerald-600' : npsCalc.nps >= 0 ? 'text-amber-600' : 'text-secundaria'
+  const comentarios = nps.filter((n) => n.comentario && n.comentario.trim()).slice(0, 6)
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-texto">Relatórios</h1>
@@ -119,6 +130,33 @@ export default function Reports() {
         {card('Faltas no mês', String(r.faltasMes), r.faltasMes > 0 ? 'text-secundaria' : 'text-primaria')}
         {card('Taxa de faltas', `${r.taxaFaltaMes}%`, r.taxaFaltaMes >= 20 ? 'text-secundaria' : r.taxaFaltaMes > 0 ? 'text-amber-600' : 'text-primaria')}
       </div>
+
+      <h2 className="mt-8 mb-2 text-sm font-semibold text-texto/70">Satisfação (NPS — últimos 90 dias)</h2>
+      {npsCalc.total === 0 ? (
+        <p className="rounded-xl border border-black/5 bg-white p-5 text-sm text-texto/50">Ainda sem respostas de pesquisa de satisfação.</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {card('NPS', String(npsCalc.nps), npsCor)}
+            {card('Respostas', String(npsCalc.total))}
+            {card('Promotores (9-10)', String(npsCalc.promotores), 'text-emerald-600')}
+            {card('Detratores (0-6)', String(npsCalc.detratores), npsCalc.detratores > 0 ? 'text-secundaria' : 'text-primaria')}
+          </div>
+          {comentarios.length > 0 && (
+            <div className="mt-4 rounded-xl border border-black/5 bg-white p-5">
+              <h3 className="mb-2 text-sm font-semibold text-texto/70">Comentários recentes</h3>
+              <ul className="space-y-2">
+                {comentarios.map((c) => (
+                  <li key={c.id} className="flex items-start gap-2 text-sm">
+                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold ${c.score >= 9 ? 'bg-emerald-100 text-emerald-700' : c.score >= 7 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>{c.score}</span>
+                    <span className="text-texto/80">“{c.comentario}” <span className="text-texto/40">— {c.patients?.nome ?? 'Paciente'}</span></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
