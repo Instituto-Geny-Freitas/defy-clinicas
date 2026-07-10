@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
-import { listPatientAppointments, requestAppointment, type Appointment } from '@/lib/appointments'
+import { listPatientAppointments, requestAppointment, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
 import { checkSlot, SLOT_MENSAGEM, type SlotStatus } from '@/lib/availability'
 import { listPublicProfessionals, type PublicProfessional } from '@/lib/patients'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
@@ -28,6 +28,11 @@ export default function PatientAppointments() {
 
   const wpp = clinic?.whatsapp?.replace(/\D/g, '')
 
+  async function confirmar(a: Appointment) {
+    await updateAppointmentStatus(a.id, 'confirmado')
+    recarregar()
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between">
@@ -46,15 +51,26 @@ export default function PatientAppointments() {
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhuma consulta agendada.</p>
       ) : (
         <div className="space-y-2">
-          {appts.map((a) => (
-            <div key={a.id} className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4">
-              <div>
-                <div className="text-sm font-medium capitalize text-texto">{quando(a.inicio)}</div>
-                <div className="text-xs text-texto/60">{a.procedimento ?? 'Atendimento'}</div>
+          {appts.map((a) => {
+            const futura = new Date(a.inicio).getTime() >= Date.now()
+            const podeConfirmar = a.status === 'agendado' && futura
+            return (
+              <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white p-4">
+                <div>
+                  <div className="text-sm font-medium capitalize text-texto">{quando(a.inicio)}</div>
+                  <div className="text-xs text-texto/60">{a.procedimento ?? 'Atendimento'}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {podeConfirmar && (
+                    <button onClick={() => confirmar(a)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                      Confirmar presença
+                    </button>
+                  )}
+                  <ApptStatusBadge status={a.status} />
+                </div>
               </div>
-              <ApptStatusBadge status={a.status} />
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

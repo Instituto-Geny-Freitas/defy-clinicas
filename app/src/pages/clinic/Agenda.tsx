@@ -221,6 +221,7 @@ export default function Agenda() {
                           )}
                           <button onClick={() => setRemarcando(a)} className="rounded-md bg-sky-50 px-2 py-1 font-medium text-sky-700 hover:bg-sky-100">Remarcar</button>
                           <button onClick={() => mudarStatus(a.id, 'realizado')} className="rounded-md bg-black/5 px-2 py-1 font-medium text-texto/70 hover:bg-black/10">Realizado</button>
+                          <button onClick={() => mudarStatus(a.id, 'faltou')} className="rounded-md bg-amber-50 px-2 py-1 font-medium text-amber-700 hover:bg-amber-100">Faltou</button>
                           <button onClick={() => mudarStatus(a.id, 'cancelado')} className="rounded-md bg-rose-50 px-2 py-1 font-medium text-rose-700 hover:bg-rose-100">Cancelar</button>
                         </>
                       )}
