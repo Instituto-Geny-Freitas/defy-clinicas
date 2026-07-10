@@ -3,6 +3,8 @@ import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listDueNotifications, markNotificationRead, type AppNotification } from '@/lib/notifications'
 import { listPatientAppointments, type Appointment } from '@/lib/appointments'
+import { listPackages, type TreatmentPackage } from '@/lib/packages'
+import { brl } from '@/lib/finance'
 import { enablePush, pushSupported } from '@/lib/push'
 
 const fmtDataHora = (iso: string) =>
@@ -15,11 +17,13 @@ export default function PatientHome() {
   const wpp = clinic?.whatsapp?.replace(/\D/g, '')
   const [avisos, setAvisos] = useState<AppNotification[]>([])
   const [proxima, setProxima] = useState<Appointment | null>(null)
+  const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
   function recarregar() {
     if (!patientId) return
     listDueNotifications(patientId).then(setAvisos).catch(() => {})
+    listPackages(patientId).then(setPacotes).catch(() => {})
     listPatientAppointments(patientId)
       .then((appts) => {
         const agora = Date.now()
@@ -78,6 +82,40 @@ export default function PatientHome() {
           <p className="mt-1 text-sm text-texto/60">Nenhuma consulta agendada. Solicite em “Agenda”.</p>
         )}
       </section>
+
+      {pacotes.length > 0 && (
+        <section className="rounded-xl border border-black/5 p-4">
+          <h2 className="mb-2 text-sm font-semibold text-texto">Meus pacotes</h2>
+          <div className="space-y-2">
+            {pacotes.map((p) => {
+              const feitas = p.realizadas ?? 0
+              const restantes = Math.max(0, p.sessoes_compradas - feitas)
+              const pct = p.sessoes_compradas > 0 ? Math.min(100, Math.round((feitas / p.sessoes_compradas) * 100)) : 0
+              const concluido = restantes === 0
+              const valorTotal = Number(p.valor_total)
+              const valorUtilizado = p.sessoes_compradas > 0 ? Math.round((valorTotal * feitas / p.sessoes_compradas) * 100) / 100 : 0
+              const valorRestante = Math.max(0, valorTotal - valorUtilizado)
+              return (
+                <div key={p.id} className="rounded-lg bg-white p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-texto">{p.procedimento}</span>
+                    <span className={concluido ? 'text-emerald-600' : 'text-texto/70'}>
+                      {concluido ? 'Concluído' : <><strong>{restantes}</strong> de {p.sessoes_compradas} restantes</>}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/5">
+                    <div className={`h-full rounded-full ${concluido ? 'bg-emerald-500' : 'bg-primaria'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-texto/50">
+                    <span>{feitas} sessão(ões) realizada(s)</span>
+                    {valorTotal > 0 && <span>· Total {brl(valorTotal)} · Utilizado {brl(valorUtilizado)} · Restante <strong className="text-texto/70">{brl(valorRestante)}</strong></span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {pushSupported() && (
         <section className="rounded-xl border border-black/5 p-4">

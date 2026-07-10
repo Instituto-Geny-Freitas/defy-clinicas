@@ -29,6 +29,7 @@ export const FEATURES: FeatureDef[] = [
   { key: 'paciente.anamnese', label: 'Anamnese', group: 'Abas do paciente' },
   { key: 'paciente.avaliacoes', label: 'Avaliações', group: 'Abas do paciente' },
   { key: 'paciente.plano', label: 'Plano', group: 'Abas do paciente' },
+  { key: 'paciente.pacotes', label: 'Pacotes', group: 'Abas do paciente' },
   { key: 'paciente.procedimentos', label: 'Procedimentos', group: 'Abas do paciente' },
   { key: 'paciente.medidas', label: 'Medidas', group: 'Abas do paciente' },
   { key: 'paciente.suplementacao', label: 'Suplementação', group: 'Abas do paciente' },

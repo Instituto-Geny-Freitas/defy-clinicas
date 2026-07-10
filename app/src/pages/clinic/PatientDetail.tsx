@@ -14,6 +14,7 @@ import ProceduresPanel from './ProceduresPanel'
 import FinancePanel from './FinancePanel'
 import PhotosPanel from './PhotosPanel'
 import TreatmentPlansPanel from './TreatmentPlansPanel'
+import PackagesPanel from './PackagesPanel'
 import SupplementationsPanel from './SupplementationsPanel'
 import FormulationsPanel from './FormulationsPanel'
 import LabsPanel from './LabsPanel'
@@ -23,7 +24,7 @@ import PatientReportsPanel from './PatientReportsPanel'
 import { usePermissions } from '@/auth/PermissionsProvider'
 
 type Aba =
-  | 'resumo' | 'agenda' | 'anamnese' | 'avaliacoes' | 'plano' | 'procedimentos' | 'medidas'
+  | 'resumo' | 'agenda' | 'anamnese' | 'avaliacoes' | 'plano' | 'pacotes' | 'procedimentos' | 'medidas'
   | 'suplementacao' | 'manipulacao' | 'exames' | 'fotos' | 'documentos' | 'financeiro' | 'relatorios'
 
 const ABAS: { key: Aba; label: string }[] = [
@@ -32,6 +33,7 @@ const ABAS: { key: Aba; label: string }[] = [
   { key: 'anamnese', label: 'Anamnese' },
   { key: 'avaliacoes', label: 'Avaliações' },
   { key: 'plano', label: 'Plano' },
+  { key: 'pacotes', label: 'Pacotes' },
   { key: 'procedimentos', label: 'Procedimentos' },
   { key: 'medidas', label: 'Medidas' },
   { key: 'suplementacao', label: 'Suplementação' },
@@ -197,6 +199,7 @@ export default function PatientDetail() {
           />
         )}
         {aba === 'plano' && <TreatmentPlansPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
+        {aba === 'pacotes' && <PackagesPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
         {aba === 'medidas' && <MeasurementsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
         {aba === 'suplementacao' && <SupplementationsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} />}
         {aba === 'manipulacao' && <FormulationsPanel patientId={paciente.id} clinicId={paciente.clinic_id} professionalId={profile?.professional?.id} pacienteNome={paciente.nome} pacienteWhatsapp={paciente.whatsapp} />}
