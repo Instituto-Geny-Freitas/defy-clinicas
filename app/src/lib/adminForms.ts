@@ -103,6 +103,23 @@ export const DEFAULT_FORMS: FormDef[] = [
       { key: 'data_aquisicao', label: 'Data de aquisição', tipo: 'date' },
     ],
   },
+  // C.b) Manutenção preventiva de equipamentos --------------------------------
+  {
+    chave: 'manutencao_preventiva', titulo: 'Manutenção Preventiva de Equipamentos', grupo: 'Estrutura', ordem: 21,
+    vinculo: 'none', campoData: 'proxima_manutencao',
+    descricao: 'Cronograma de manutenção preventiva. A "próxima manutenção" gera alerta no Dashboard quando se aproxima/vence.',
+    campos: [
+      { key: 'equipamento', label: 'Equipamento', tipo: 'text', obrigatorio: true },
+      { key: 'periodicidade', label: 'Periodicidade', tipo: 'text', suffix: '' },
+      { key: 'ultima_manutencao', label: 'Última manutenção', tipo: 'date' },
+      { key: 'proxima_manutencao', label: 'Próxima manutenção', tipo: 'date', obrigatorio: true },
+      { key: 'efetuado', label: 'Última efetuada?', tipo: 'boolean' },
+      { key: 'fornecedor', label: 'Empresa (Fornecedor)', tipo: 'text' },
+      { key: 'tecnico', label: 'Nome do Técnico', tipo: 'text' },
+      { key: 'observacoes', label: 'Observações', tipo: 'textarea', full: true },
+      { key: 'documento', label: 'Anexo (laudo/ordem de serviço)', tipo: 'upload', full: true },
+    ],
+  },
   // F) EPIs -------------------------------------------------------------------
   {
     chave: 'epis', titulo: 'Relação de EPIs', grupo: 'Estrutura', ordem: 21,
