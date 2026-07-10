@@ -388,8 +388,9 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
       }
     }
     setProcImportados((prev) => [...new Set([...prev, ...ids])])
-    // Reconcilia: remove itens já referentes a esses procedimentos (evita duplicar em clique repetido).
-    setItens((arr) => [...arr.filter((i) => i.descricao.trim() && !(i.ref_id && ids.includes(i.ref_id))), ...novos])
+    // Reconcilia: remove itens já referentes a esses procedimentos ou de mesma descrição (evita duplicar).
+    const novasDesc = new Set(novos.map((n) => n.descricao))
+    setItens((arr) => [...arr.filter((i) => i.descricao.trim() && !(i.ref_id && ids.includes(i.ref_id)) && !novasDesc.has(i.descricao)), ...novos])
   }
 
   async function salvar() {
@@ -503,20 +504,20 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
     setAviso(`${novos.length} produto(s) adicionado(s) ao orçamento.`)
   }
 
-  // Importa procedimentos avulsos (valor do procedimento + produtos), reconciliando por procedimento (não duplica).
+  // Importa procedimentos avulsos (valor do procedimento + produtos), reconciliando (não duplica):
+  // remove itens que referenciam esses procedimentos OU que tenham a mesma descrição dos novos
+  // (limpa produtos soltos importados antes).
   async function importarProcedimentos() {
     const procs = await listUnbilledProcedures(quote.patient_id)
     if (procs.length === 0) { setAviso('Nenhum procedimento avulso para importar.'); return }
     const ids = procs.map((p) => p.id)
-    setItens((arr) => {
-      const base = arr.filter((it) => !(it.ref_id && ids.includes(it.ref_id)) && it.descricao.trim())
-      const novos: QuoteItem[] = []
-      for (const p of procs) {
-        if (Number(p.valor_cobrado) > 0) novos.push({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado), total: Number(p.valor_cobrado), origem: 'procedimento', ref_id: p.id })
-        for (const u of p.produtos_usados ?? []) { if (Number(u.preco_venda) > 0) novos.push(produtoParaItem(u, p.id)) }
-      }
-      return [...base, ...novos]
-    })
+    const novos: QuoteItem[] = []
+    for (const p of procs) {
+      if (Number(p.valor_cobrado) > 0) novos.push({ descricao: `Procedimento: ${p.procedimento}`, qtd: 1, valor_unit: Number(p.valor_cobrado), total: Number(p.valor_cobrado), origem: 'procedimento', ref_id: p.id })
+      for (const u of p.produtos_usados ?? []) { if (Number(u.preco_venda) > 0) novos.push(produtoParaItem(u, p.id)) }
+    }
+    const novasDesc = new Set(novos.map((n) => n.descricao))
+    setItens((arr) => [...arr.filter((it) => it.descricao.trim() && !(it.ref_id && ids.includes(it.ref_id)) && !novasDesc.has(it.descricao)), ...novos])
     setProcImportados((s) => [...new Set([...s, ...ids])])
     setAviso(`${procs.length} procedimento(s) importado(s) com valor e produtos.`)
   }
