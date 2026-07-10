@@ -6,6 +6,7 @@ import { listPatientAppointments, updateAppointmentStatus, type Appointment } fr
 import { listPackages, type TreatmentPackage } from '@/lib/packages'
 import { brl } from '@/lib/finance'
 import NpsCard from './NpsCard'
+import { getReferralConfig, myReferralInfo, type ReferralConfig } from '@/lib/referral'
 import { enablePush, pushSupported } from '@/lib/push'
 
 const fmtDataHora = (iso: string) =>
@@ -21,6 +22,9 @@ export default function PatientHome() {
   const [proxima, setProxima] = useState<Appointment | null>(null)
   const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
   const [ultimoRealizado, setUltimoRealizado] = useState<Appointment | null>(null)
+  const [refCfg, setRefCfg] = useState<ReferralConfig | null>(null)
+  const [refInfo, setRefInfo] = useState<{ total: number; count: number }>({ total: 0, count: 0 })
+  const [copiado, setCopiado] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
   function recarregar() {
@@ -42,6 +46,12 @@ export default function PatientHome() {
       .catch(() => {})
   }
   useEffect(recarregar, [patientId])
+
+  useEffect(() => {
+    if (!patientId) return
+    getReferralConfig().then(setRefCfg).catch(() => {})
+    myReferralInfo(patientId).then(setRefInfo).catch(() => {})
+  }, [patientId])
 
   async function ativarPush() {
     setPushMsg(null)
@@ -66,6 +76,22 @@ export default function PatientHome() {
     if (n.appointment_id) await updateAppointmentStatus(n.appointment_id, 'confirmado').catch(() => {})
     await markNotificationRead(n.id)
     recarregar()
+  }
+
+  function compartilharIndicacao() {
+    if (!patient?.codigo_indicacao) return
+    const base = refCfg?.mensagem?.trim() || 'Estou te indicando!'
+    const msg = `${base} Meu código de indicação é ${patient.codigo_indicacao}.`
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
+  async function copiarCodigo() {
+    if (!patient?.codigo_indicacao) return
+    try {
+      await navigator.clipboard.writeText(patient.codigo_indicacao)
+      setCopiado(true)
+      setTimeout(() => setCopiado(false), 2000)
+    } catch { /* clipboard indisponível */ }
   }
 
   return (
@@ -121,6 +147,25 @@ export default function PatientHome() {
           appointmentId={ultimoRealizado?.id}
           elegivel={!!ultimoRealizado}
         />
+      )}
+
+      {refCfg?.ativo && patient?.codigo_indicacao && (
+        <section className="rounded-xl border border-primaria/20 bg-primaria/5 p-4">
+          <h2 className="text-sm font-semibold text-texto">Indique um amigo 💚</h2>
+          <p className="mt-0.5 text-xs text-texto/60">
+            Compartilhe seu código.{refCfg.valor > 0 && ` A cada amigo que fecha um tratamento, você ganha ${brl(refCfg.valor)} de crédito.`}
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <code className="rounded-lg border border-black/10 bg-white px-3 py-2 text-base font-bold tracking-widest text-primaria">{patient.codigo_indicacao}</code>
+            <button onClick={copiarCodigo} className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5">{copiado ? 'Copiado!' : 'Copiar'}</button>
+          </div>
+          <button onClick={compartilharIndicacao} className="mt-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+            Compartilhar no WhatsApp
+          </button>
+          {refInfo.count > 0 && (
+            <p className="mt-2 text-xs font-medium text-emerald-700">Você já ganhou {brl(refInfo.total)} em {refInfo.count} {refInfo.count === 1 ? 'indicação' : 'indicações'}. 🎉</p>
+          )}
+        </section>
       )}
 
       {pacotes.length > 0 && (
