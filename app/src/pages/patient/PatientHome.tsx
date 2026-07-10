@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listDueNotifications, markNotificationRead, type AppNotification } from '@/lib/notifications'
-import { listPatientAppointments, type Appointment } from '@/lib/appointments'
+import { listPatientAppointments, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
 import { listPackages, type TreatmentPackage } from '@/lib/packages'
 import { brl } from '@/lib/finance'
 import { enablePush, pushSupported } from '@/lib/push'
@@ -49,6 +49,18 @@ export default function PatientHome() {
     recarregar()
   }
 
+  async function confirmarProxima() {
+    if (!proxima) return
+    await updateAppointmentStatus(proxima.id, 'confirmado')
+    recarregar()
+  }
+
+  async function confirmarAviso(n: AppNotification) {
+    if (n.appointment_id) await updateAppointmentStatus(n.appointment_id, 'confirmado').catch(() => {})
+    await markNotificationRead(n.id)
+    recarregar()
+  }
+
   return (
     <div className="space-y-4">
       {naoLidos.length > 0 && (
@@ -59,11 +71,16 @@ export default function PatientHome() {
               <li key={a.id} className="flex items-start justify-between gap-3 rounded-lg bg-white p-3">
                 <div>
                   <div className="text-sm font-medium text-texto">{a.titulo}</div>
-                  <div className="text-sm text-texto/70">{String(a.payload?.mensagem ?? '')}</div>
+                  <div className="text-sm text-texto/70">{String(a.payload?.mensagem ?? (a.tipo === 'lembrete_consulta' ? 'Confirme sua presença na próxima consulta.' : ''))}</div>
                 </div>
-                <button onClick={() => marcar(a.id)} className="shrink-0 text-xs font-medium text-primaria hover:underline">
-                  OK
-                </button>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {a.tipo === 'lembrete_consulta' && a.appointment_id && (
+                    <button onClick={() => confirmarAviso(a)} className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90">
+                      Confirmar presença
+                    </button>
+                  )}
+                  <button onClick={() => marcar(a.id)} className="text-xs font-medium text-primaria hover:underline">OK</button>
+                </div>
               </li>
             ))}
           </ul>
@@ -77,6 +94,13 @@ export default function PatientHome() {
             <p className="text-sm font-medium capitalize text-texto">{fmtDataHora(proxima.inicio)}</p>
             {proxima.procedimento && <p className="text-sm text-texto/60">{proxima.procedimento}</p>}
             <p className="mt-0.5 text-xs text-texto/50">Situação: {proxima.status}</p>
+            {proxima.status === 'agendado' ? (
+              <button onClick={confirmarProxima} className="mt-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                Confirmar presença
+              </button>
+            ) : proxima.status === 'confirmado' && (
+              <p className="mt-1 text-xs font-medium text-emerald-600">✓ Presença confirmada</p>
+            )}
           </div>
         ) : (
           <p className="mt-1 text-sm text-texto/60">Nenhuma consulta agendada. Solicite em “Agenda”.</p>

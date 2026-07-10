@@ -24,6 +24,8 @@ interface Resumo {
   vendaEstoque: number
   procedimentosMes: number
   atendimentosMes: number
+  faltasMes: number
+  taxaFaltaMes: number
 }
 
 export default function Reports() {
@@ -35,12 +37,13 @@ export default function Reports() {
       const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0)
       const isoMes = inicioMes.toISOString()
 
-      const [pays, saldos, inv, procs, appts] = await Promise.all([
+      const [pays, saldos, inv, procs, appts, faltas] = await Promise.all([
         supabase.from('payments').select('valor, metodo, pago_em, status').eq('status', 'pago').neq('metodo', 'credito'),
         supabase.from('v_quote_balances').select('saldo_a_receber'),
         listInventory(),
         supabase.from('procedures_log').select('id', { count: 'exact', head: true }).gte('data', isoMes),
         supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'realizado').gte('inicio', isoMes),
+        supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'faltou').gte('inicio', isoMes),
       ])
 
       const pagamentos = pays.data ?? []
@@ -60,6 +63,10 @@ export default function Reports() {
         vendaEstoque: inv.reduce((s, i) => s + i.preco_venda * i.qtd_atual, 0),
         procedimentosMes: procs.count ?? 0,
         atendimentosMes: appts.count ?? 0,
+        faltasMes: faltas.count ?? 0,
+        taxaFaltaMes: (appts.count ?? 0) + (faltas.count ?? 0) > 0
+          ? Math.round(((faltas.count ?? 0) / ((appts.count ?? 0) + (faltas.count ?? 0))) * 100)
+          : 0,
       })
     }
     load().catch(() => {})
@@ -108,6 +115,9 @@ export default function Reports() {
       <h2 className="mt-8 mb-2 text-sm font-semibold text-texto/70">Atendimento</h2>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {card('Procedimentos no mês', String(r.procedimentosMes))}
+        {card('Atendimentos realizados', String(r.atendimentosMes))}
+        {card('Faltas no mês', String(r.faltasMes), r.faltasMes > 0 ? 'text-secundaria' : 'text-primaria')}
+        {card('Taxa de faltas', `${r.taxaFaltaMes}%`, r.taxaFaltaMes >= 20 ? 'text-secundaria' : r.taxaFaltaMes > 0 ? 'text-amber-600' : 'text-primaria')}
       </div>
     </div>
   )

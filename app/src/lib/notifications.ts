@@ -9,13 +9,14 @@ export interface AppNotification {
   agendado_para: string
   status: string
   lido_em: string | null
+  appointment_id: string | null
 }
 
 /** Notificações já "vencidas" (agendado_para <= agora) do paciente. */
 export async function listDueNotifications(patientId: string): Promise<AppNotification[]> {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, patient_id, tipo, titulo, payload, agendado_para, status, lido_em')
+    .select('id, patient_id, tipo, titulo, payload, agendado_para, status, lido_em, appointment_id')
     .eq('patient_id', patientId)
     .lte('agendado_para', new Date().toISOString())
     .order('agendado_para', { ascending: false })
