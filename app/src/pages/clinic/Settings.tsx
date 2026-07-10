@@ -55,6 +55,7 @@ import {
   type Supplier,
 } from '@/lib/domains'
 import Calculadora from '@/components/Calculadora'
+import { getImageConsentConfig, saveImageConsentConfig } from '@/lib/imageConsent'
 import { brl } from '@/lib/finance'
 import {
   createFormulation,
@@ -85,7 +86,7 @@ import { formatDateBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -125,6 +126,7 @@ export default function Settings() {
           { k: 'vacinas', l: 'Vacinas' },
           { k: 'formularios', l: 'Formulários (Admin)' },
           { k: 'lgpd', l: 'LGPD' },
+          { k: 'imagem', l: 'Termo de Imagem' },
         ].map((t) => (
           <button
             key={t.k}
@@ -157,6 +159,7 @@ export default function Settings() {
       {sec === 'vacinas' && <VacinasSection clinicId={clinicId} />}
       {sec === 'formularios' && <FormulariosSection clinicId={clinicId} />}
       {sec === 'lgpd' && <LgpdSection />}
+      {sec === 'imagem' && <ImagemSection />}
     </div>
   )
 }
@@ -1255,6 +1258,54 @@ function LgpdSection() {
         </div>
         <div className="mt-3">
           <label className="mb-1 block text-sm text-texto/70">Texto do consentimento</label>
+          <textarea rows={5} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+function ImagemSection() {
+  const [clinicId, setClinicId] = useState<string | null>(null)
+  const [texto, setTexto] = useState('')
+  const [versao, setVersao] = useState('1')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    getClinic().then((c) => setClinicId(c?.id ?? null)).catch(() => {})
+    getImageConsentConfig().then((cfg) => { setTexto(cfg.texto); setVersao(cfg.versao) }).catch(() => {})
+  }, [])
+
+  async function salvar() {
+    if (!clinicId) return
+    setSalvando(true); setMsg(null)
+    try { await saveImageConsentConfig(clinicId, { texto, versao }); setMsg('Termo de imagem salvo.') }
+    catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Termo de Uso de Imagem</h3>
+        <p className="mb-4 text-xs text-texto/50">
+          Texto apresentado ao recolher o consentimento de uso de imagem (fotos antes/depois e evolução).
+          Ao mudar a versão, os consentimentos antigos continuam válidos com a versão em que foram aceitos.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-1">
+            <label className="mb-1 block text-sm text-texto/70">Versão</label>
+            <input className={field} value={versao} onChange={(e) => setVersao(e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-sm text-texto/70">Texto do termo de imagem</label>
           <textarea rows={5} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} />
         </div>
       </div>

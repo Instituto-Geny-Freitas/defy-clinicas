@@ -26,6 +26,7 @@ import PatientEvolution from '@/pages/patient/PatientEvolution'
 import PatientReports from '@/pages/patient/PatientReports'
 import PatientLabs from '@/pages/patient/PatientLabs'
 import PatientLgpd from '@/pages/patient/PatientLgpd'
+import PatientImageConsent from '@/pages/patient/PatientImageConsent'
 
 function FullScreen({ children }: { children: React.ReactNode }) {
   return <div className="flex min-h-full items-center justify-center text-sm text-texto/60">{children}</div>
@@ -93,6 +94,7 @@ export default function App() {
             <Route path="evolucao" element={<PatientEvolution />} />
             <Route path="relatorios" element={<PatientReports />} />
             <Route path="lgpd" element={<PatientLgpd />} />
+            <Route path="imagem" element={<PatientImageConsent />} />
             <Route path="financeiro" element={<PatientFinance />} />
           </Route>
         )}

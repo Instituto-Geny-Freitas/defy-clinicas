@@ -12,6 +12,7 @@ const NAV = [
   { to: '/portal/relatorios', label: 'Relatórios' },
   { to: '/portal/financeiro', label: 'Financeiro' },
   { to: '/portal/lgpd', label: 'LGPD' },
+  { to: '/portal/imagem', label: 'Uso de imagem' },
 ]
 
 export default function PatientLayout() {

@@ -67,6 +67,15 @@ export async function uploadPhoto(args: UploadArgs): Promise<void> {
   if (insErr) throw insErr
 }
 
+export async function updatePhoto(id: string, patch: {
+  categoria?: PhotoCategoria
+  regiao?: string | null
+  visivel_paciente?: boolean
+}): Promise<void> {
+  const { error } = await supabase.from('clinical_photos').update(patch).eq('id', id)
+  if (error) throw error
+}
+
 export async function deletePhoto(photo: ClinicalPhoto): Promise<void> {
   await supabase.storage.from(BUCKET).remove([photo.arquivo_url])
   const { error } = await supabase.from('clinical_photos').delete().eq('id', photo.id)
