@@ -35,8 +35,9 @@ import {
   type Periodo,
 } from '@/lib/cashflow'
 import { listReferrals, grantReferralReward, getReferralConfig, type ReferralRow, type ReferralConfig } from '@/lib/referral'
+import { listLoyalty, grantCashback, getLoyaltyConfig, type LoyaltyRow, type LoyaltyConfig } from '@/lib/loyalty'
 
-type Tab = 'consolidado' | 'receitas' | 'despesas' | 'caixa' | 'relatorio' | 'indicacoes'
+type Tab = 'consolidado' | 'receitas' | 'despesas' | 'caixa' | 'relatorio' | 'indicacoes' | 'fidelidade'
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -135,6 +136,7 @@ export default function Finance() {
           ['despesas', 'Despesas'],
           ['caixa', 'Caixa & Aportes'],
           ['indicacoes', 'Indicações'],
+          ['fidelidade', 'Fidelidade'],
           ['relatorio', 'Relatório'],
         ] as [Tab, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)}
@@ -158,6 +160,8 @@ export default function Finance() {
         <RelatorioView anoAtual={ano} mesAtual={mes} />
       ) : tab === 'indicacoes' ? (
         <IndicacoesView clinicId={clinicId} createdBy={profile?.professional?.id} onChange={recarregar} />
+      ) : tab === 'fidelidade' ? (
+        <FidelidadeView clinicId={clinicId} createdBy={profile?.professional?.id} onChange={recarregar} />
       ) : (
         <CaixaView clinicId={clinicId} movimentos={movimentos} totais={{ totalCaixa, totalAplic, totalAportes }} onChange={recarregar} />
       )}
@@ -285,6 +289,87 @@ function IndicacoesView({ clinicId, createdBy, onChange }: { clinicId: string; c
         </table>
       </div>
       <p className="mt-2 text-xs text-texto/50">A recompensa vira crédito do indicador (aba Receitas → “Crédito do paciente”), abatível em pagamentos futuros.</p>
+    </div>
+  )
+}
+
+// ---- Fidelidade (cashback) --------------------------------------------------
+function FidelidadeView({ clinicId, createdBy, onChange }: { clinicId: string; createdBy?: string; onChange: () => void }) {
+  const [rows, setRows] = useState<LoyaltyRow[]>([])
+  const [cfg, setCfg] = useState<LoyaltyConfig | null>(null)
+  const [carregando, setCarregando] = useState(true)
+  const [processando, setProcessando] = useState<string | null>(null)
+  const [busca, setBusca] = useState('')
+
+  function load() {
+    setCarregando(true)
+    Promise.all([listLoyalty(), getLoyaltyConfig()])
+      .then(([r, c]) => { setRows(r); setCfg(c) })
+      .catch(() => {})
+      .finally(() => setCarregando(false))
+  }
+  useEffect(load, [])
+
+  async function conceder(r: LoyaltyRow) {
+    if (r.disponivel <= 0) return
+    if (!confirm(`Conceder ${brl(r.disponivel)} de crédito (cashback) para ${r.nome}?`)) return
+    setProcessando(r.patientId)
+    try {
+      await grantCashback({ clinicId, patientId: r.patientId, valor: r.disponivel, createdBy })
+      load(); onChange()
+    } catch { alert('Não foi possível conceder o cashback.') } finally { setProcessando(null) }
+  }
+
+  if (carregando) return <p className="p-6 text-sm text-texto/50">Carregando…</p>
+  if (!cfg?.ativo) return <p className="rounded-xl border border-black/5 bg-white p-5 text-sm text-texto/60">O programa de fidelidade está desativado. Ative em Configurações → Fidelidade.</p>
+
+  const filtradas = busca ? rows.filter((r) => r.nome.toLowerCase().includes(busca.toLowerCase())) : rows
+  const totalDisponivel = rows.reduce((s, r) => s + r.disponivel, 0)
+
+  return (
+    <div>
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Card label="Cashback a conceder (total)" valor={totalDisponivel} cor="text-emerald-600" />
+        <Card label="Cashback configurado" valor={cfg.cashbackPct} cor="text-primaria" fmt={false} />
+      </div>
+
+      <div className="mb-3">
+        <input className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Paciente…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+            <th className="px-4 py-2 font-medium">Paciente</th>
+            <th className="px-4 py-2 font-medium text-right">Total gasto</th>
+            <th className="px-4 py-2 font-medium text-right">Acumulado</th>
+            <th className="px-4 py-2 font-medium text-right">Já creditado</th>
+            <th className="px-4 py-2 font-medium text-right">Disponível</th>
+            <th className="px-4 py-2 font-medium text-right">Ações</th>
+          </tr></thead>
+          <tbody>
+            {filtradas.map((r) => (
+              <tr key={r.patientId} className="border-t border-black/5">
+                <td className="px-4 py-2 text-texto">{r.nome}</td>
+                <td className="px-4 py-2 text-right text-texto/60">{brl(r.totalGasto)}</td>
+                <td className="px-4 py-2 text-right text-texto/70">{brl(r.acumulado)}</td>
+                <td className="px-4 py-2 text-right text-texto/60">{brl(r.concedido)}</td>
+                <td className="px-4 py-2 text-right font-medium text-emerald-600">{brl(r.disponivel)}</td>
+                <td className="px-4 py-2 text-right whitespace-nowrap">
+                  {r.disponivel > 0.005 && (
+                    <button onClick={() => conceder(r)} disabled={processando === r.patientId}
+                      className="rounded-lg bg-primaria px-3 py-1 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                      {processando === r.patientId ? '…' : 'Conceder crédito'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {filtradas.length === 0 && <tr><td colSpan={6} className="px-4 py-3 text-texto/50">Nenhum paciente com cashback acumulado.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-texto/50">O cashback vira crédito do paciente (aba Receitas → “Crédito do paciente”), abatível em pagamentos futuros.</p>
     </div>
   )
 }

@@ -105,6 +105,7 @@ export async function grantReferralReward(args: {
     valor: args.valor,
     motivo: `Indicação de ${args.referredNome}`,
     referral_patient_id: args.referredId,
+    tipo: 'indicacao',
     created_by: args.createdBy ?? null,
   })
   if (error) throw error

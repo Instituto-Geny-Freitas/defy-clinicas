@@ -7,6 +7,7 @@ import { listPackages, type TreatmentPackage } from '@/lib/packages'
 import { brl } from '@/lib/finance'
 import NpsCard from './NpsCard'
 import { getReferralConfig, myReferralInfo, type ReferralConfig } from '@/lib/referral'
+import { getLoyaltyConfig, myLoyaltyInfo, type LoyaltyConfig } from '@/lib/loyalty'
 import { enablePush, pushSupported } from '@/lib/push'
 
 const fmtDataHora = (iso: string) =>
@@ -24,6 +25,8 @@ export default function PatientHome() {
   const [ultimoRealizado, setUltimoRealizado] = useState<Appointment | null>(null)
   const [refCfg, setRefCfg] = useState<ReferralConfig | null>(null)
   const [refInfo, setRefInfo] = useState<{ total: number; count: number }>({ total: 0, count: 0 })
+  const [loyCfg, setLoyCfg] = useState<LoyaltyConfig | null>(null)
+  const [loyInfo, setLoyInfo] = useState<{ acumulado: number; concedido: number; disponivel: number }>({ acumulado: 0, concedido: 0, disponivel: 0 })
   const [copiado, setCopiado] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
@@ -51,6 +54,8 @@ export default function PatientHome() {
     if (!patientId) return
     getReferralConfig().then(setRefCfg).catch(() => {})
     myReferralInfo(patientId).then(setRefInfo).catch(() => {})
+    getLoyaltyConfig().then(setLoyCfg).catch(() => {})
+    myLoyaltyInfo(patientId).then(setLoyInfo).catch(() => {})
   }, [patientId])
 
   async function ativarPush() {
@@ -164,6 +169,18 @@ export default function PatientHome() {
           </button>
           {refInfo.count > 0 && (
             <p className="mt-2 text-xs font-medium text-emerald-700">Você já ganhou {brl(refInfo.total)} em {refInfo.count} {refInfo.count === 1 ? 'indicação' : 'indicações'}. 🎉</p>
+          )}
+        </section>
+      )}
+
+      {loyCfg?.ativo && loyInfo.acumulado > 0.005 && (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <h2 className="text-sm font-semibold text-texto">Programa de fidelidade 💚</h2>
+          <p className="mt-0.5 text-xs text-texto/70">
+            Você acumulou <strong className="text-emerald-700">{brl(loyInfo.acumulado)}</strong> em cashback ({loyCfg.cashbackPct}% de volta em cada pagamento).
+          </p>
+          {loyInfo.disponivel > 0.005 && (
+            <p className="mt-1 text-xs text-texto/60">Há <strong>{brl(loyInfo.disponivel)}</strong> a ser convertido em crédito — fale com a clínica para usar no próximo atendimento.</p>
           )}
         </section>
       )}

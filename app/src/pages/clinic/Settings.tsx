@@ -85,9 +85,10 @@ import {
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import { getReferralConfig, saveReferralConfig } from '@/lib/referral'
+import { getLoyaltyConfig, saveLoyaltyConfig } from '@/lib/loyalty'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -129,6 +130,7 @@ export default function Settings() {
           { k: 'lgpd', l: 'LGPD' },
           { k: 'imagem', l: 'Termo de Imagem' },
           { k: 'indicacao', l: 'Indicação' },
+          { k: 'fidelidade', l: 'Fidelidade' },
         ].map((t) => (
           <button
             key={t.k}
@@ -163,6 +165,7 @@ export default function Settings() {
       {sec === 'lgpd' && <LgpdSection />}
       {sec === 'imagem' && <ImagemSection />}
       {sec === 'indicacao' && <IndicacaoSection clinicId={clinicId} />}
+      {sec === 'fidelidade' && <FidelidadeSection clinicId={clinicId} />}
     </div>
   )
 }
@@ -1368,6 +1371,58 @@ function IndicacaoSection({ clinicId }: { clinicId: string }) {
           <label className="mb-1 block text-sm text-texto/70">Mensagem de compartilhamento</label>
           <textarea rows={3} className={field} value={mensagem} onChange={(e) => setMensagem(e.target.value)} />
           <p className="mt-1 text-xs text-texto/40">O código do paciente é anexado automaticamente ao compartilhar.</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+function FidelidadeSection({ clinicId }: { clinicId: string }) {
+  const [ativo, setAtivo] = useState(false)
+  const [pct, setPct] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    getLoyaltyConfig().then((c) => {
+      setAtivo(c.ativo)
+      setPct(c.cashbackPct ? String(c.cashbackPct).replace('.', ',') : '')
+    }).catch(() => {})
+  }, [])
+
+  async function salvar() {
+    setSalvando(true); setMsg(null)
+    try {
+      const n = Number(pct.replace(',', '.')) || 0
+      await saveLoyaltyConfig(clinicId, { ativo, cashbackPct: n })
+      setMsg('Programa de fidelidade salvo.')
+    } catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Programa de fidelidade (cashback)</h3>
+        <p className="mb-4 text-xs text-texto/50">
+          O paciente acumula um percentual dos pagamentos reais como cashback. A equipe converte o cashback
+          acumulado em crédito (em Financeiro → Fidelidade), abatível em pagamentos futuros. Créditos por
+          cashback e por indicação somam ao “Crédito do paciente”.
+        </p>
+        <label className="flex items-center gap-2 text-sm text-texto/80">
+          <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
+          <span>Ativar programa de fidelidade</span>
+        </label>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-1">
+            <label className="mb-1 block text-sm text-texto/70">Cashback (%)</label>
+            <input className={field} value={pct} onChange={(e) => setPct(e.target.value)} placeholder="0" inputMode="decimal" />
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-3">
