@@ -36,14 +36,22 @@ exception when duplicate_object then null; end $$;
 alter table appointments add column if not exists resource_id uuid references resources(id) on delete set null;
 create index if not exists idx_appointments_resource on appointments(resource_id);
 
--- Impede dois agendamentos do MESMO recurso com períodos sobrepostos
--- (fim ausente => 30 min). Cancelados são ignorados. Períodos meio-abertos
--- [inicio, fim): agendamentos encostados (fim == inicio seguinte) não colidem.
+-- Período do agendamento como tstzrange (fim ausente => +30 min). Envolvido numa
+-- função IMMUTABLE porque `timestamptz + interval` é STABLE (DST) e índices exigem
+-- IMMUTABLE; para um offset fixo de 30 min o resultado é determinístico.
+create or replace function app.appt_period(p_inicio timestamptz, p_fim timestamptz)
+returns tstzrange language sql immutable as $$
+  select tstzrange(p_inicio, coalesce(p_fim, p_inicio + interval '30 minutes'));
+$$;
+
+-- Impede dois agendamentos do MESMO recurso com períodos sobrepostos.
+-- Cancelados são ignorados. Períodos meio-abertos [inicio, fim): agendamentos
+-- encostados (fim == inicio seguinte) não colidem.
 do $$ begin
   alter table appointments add constraint excl_appointments_resource
     exclude using gist (
       resource_id with =,
-      tstzrange(inicio, coalesce(fim, inicio + interval '30 minutes')) with &&
+      app.appt_period(inicio, fim) with &&
     ) where (resource_id is not null and status <> 'cancelado');
 exception when duplicate_object then null; end $$;
 
