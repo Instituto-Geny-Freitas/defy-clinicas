@@ -87,9 +87,10 @@ import { createExamType, deleteExamType, listExamTypes, updateExamType, type Exa
 import { getReferralConfig, saveReferralConfig } from '@/lib/referral'
 import { getLoyaltyConfig, saveLoyaltyConfig } from '@/lib/loyalty'
 import { getGestaoConfig, saveGestaoConfig } from '@/lib/gestao'
+import { listResources, createResource, deleteResource, type Resource } from '@/lib/resources'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas' | 'recursos'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -123,6 +124,7 @@ export default function Settings() {
           { k: 'fornecedores', l: 'Fornecedores' },
           { k: 'formulas', l: 'Fórmulas' },
           { k: 'procedimentos', l: 'Procedimentos' },
+          { k: 'recursos', l: 'Recursos' },
           { k: 'despesas', l: 'Tipos de Despesa' },
           { k: 'exames', l: 'Exames' },
           { k: 'servicos', l: 'Serviços Prestados' },
@@ -158,6 +160,7 @@ export default function Settings() {
       {sec === 'fornecedores' && <FornecedoresSection clinicId={clinicId} />}
       {sec === 'formulas' && <FormulasSection clinicId={clinicId} />}
       {sec === 'procedimentos' && <ProcedimentosSection clinicId={clinicId} />}
+      {sec === 'recursos' && <RecursosSection clinicId={clinicId} />}
       {sec === 'despesas' && <DespesasSection clinicId={clinicId} />}
       {sec === 'exames' && <ExamesSection clinicId={clinicId} />}
       {sec === 'unidades' && <UnidadesSection clinicId={clinicId} />}
@@ -1517,6 +1520,61 @@ function MetasSection({ clinicId }: { clinicId: string }) {
           {salvando ? 'Salvando…' : 'Salvar'}
         </button>
         {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+function RecursosSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<Resource[]>([])
+  const [nome, setNome] = useState('')
+  const [tipo, setTipo] = useState<'sala' | 'equipamento'>('sala')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listResources().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    try { await createResource(clinicId, nome.trim(), tipo); setNome('') ; recarregar() }
+    finally { setSalvando(false) }
+  }
+  async function remover(r: Resource) {
+    if (!confirm(`Desativar o recurso "${r.nome}"?`)) return
+    await deleteResource(r.id); recarregar()
+  }
+
+  const ativos = itens.filter((r) => r.ativo)
+
+  return (
+    <div className="max-w-2xl">
+      <h3 className="mb-1 font-semibold text-texto">Recursos (salas e equipamentos)</h3>
+      <p className="mb-4 text-xs text-texto/50">
+        Recursos que não podem ser usados em dois atendimentos ao mesmo tempo. Ao agendar, escolha o recurso e o
+        sistema bloqueia conflitos de horário.
+      </p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do recurso" />
+        <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={tipo} onChange={(e) => setTipo(e.target.value as 'sala' | 'equipamento')}>
+          <option value="sala">Sala</option>
+          <option value="equipamento">Equipamento</option>
+        </select>
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Adicionar</button>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <table className="w-full text-sm">
+          <tbody>
+            {ativos.map((r) => (
+              <tr key={r.id} className="border-t border-black/5 first:border-t-0">
+                <td className="px-4 py-2 text-texto">{r.nome}</td>
+                <td className="px-4 py-2 text-texto/50">{r.tipo === 'sala' ? 'Sala' : 'Equipamento'}</td>
+                <td className="px-4 py-2 text-right"><button onClick={() => remover(r)} className="text-xs text-secundaria hover:underline">Remover</button></td>
+              </tr>
+            ))}
+            {ativos.length === 0 && <tr><td className="px-4 py-3 text-texto/50">Nenhum recurso cadastrado.</td></tr>}
+          </tbody>
+        </table>
       </div>
     </div>
   )

@@ -16,15 +16,17 @@ export interface Appointment {
   nome_avulso: string | null
   telefone_avulso: string | null
   recorrencia_grupo: string | null
+  resource_id: string | null
   patients?: { nome: string; whatsapp: string | null } | null
   professionals?: { nome: string } | null
+  resources?: { nome: string } | null
 }
 
 /** Agendamentos da clínica (com nome do paciente e profissional). Pode limitar por período/profissional/paciente. */
 export async function listAppointments(desde?: string, professionalId?: string, ate?: string, patientId?: string): Promise<Appointment[]> {
   let q = supabase
     .from('appointments')
-    .select('*, patients(nome, whatsapp), professionals(nome)')
+    .select('*, patients(nome, whatsapp), professionals(nome), resources(nome)')
     .order('inicio', { ascending: true })
   if (desde) q = q.gte('inicio', desde)
   if (ate) q = q.lte('inicio', ate)
@@ -54,6 +56,7 @@ interface CreateArgs {
   inicio: string
   fim?: string | null
   observacoes?: string | null
+  resourceId?: string | null
   // Agendamento prévio sem cadastro (paciente ainda não cadastrado):
   nomeAvulso?: string | null
   telefoneAvulso?: string | null
@@ -70,12 +73,13 @@ export async function createAppointment(args: CreateArgs): Promise<Appointment> 
       inicio: args.inicio,
       fim: args.fim ?? null,
       observacoes: args.observacoes ?? null,
+      resource_id: args.resourceId ?? null,
       nome_avulso: args.nomeAvulso ?? null,
       telefone_avulso: args.telefoneAvulso ?? null,
       status: 'agendado',
       origem: 'profissional',
     })
-    .select('*, patients(nome, whatsapp), professionals(nome)')
+    .select('*, patients(nome, whatsapp), professionals(nome), resources(nome)')
     .single()
   if (error) throw error
   return data
@@ -105,6 +109,7 @@ export async function createRecurringAppointments(args: {
   professionalId?: string | null
   procedimento?: string | null
   observacoes?: string | null
+  resourceId?: string | null
   date: string          // YYYY-MM-DD (primeira ocorrência)
   horaInicio: string    // HH:MM
   horaFim?: string | null
@@ -126,6 +131,7 @@ export async function createRecurringAppointments(args: {
       inicio: new Date(`${ymd}T${args.horaInicio}:00`).toISOString(),
       fim: args.horaFim ? new Date(`${ymd}T${args.horaFim}:00`).toISOString() : null,
       observacoes: args.observacoes ?? null,
+      resource_id: args.resourceId ?? null,
       nome_avulso: args.nomeAvulso ?? null,
       telefone_avulso: args.telefoneAvulso ?? null,
       status: 'agendado',
