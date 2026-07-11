@@ -54,6 +54,7 @@ export default function PatientFinance() {
                     <div key={i} className="flex items-start justify-between gap-3">
                       <span className="flex-1">
                         {it.qtd}× {it.descricao}
+                        {it.origem && <span className="ml-1 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-texto/60">{({ procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto' } as Record<string, string>)[it.origem]}</span>}
                         {Number(it.valor_unit) > 0 && it.qtd > 1 && (
                           <span className="block text-xs text-texto/40">{brl(Number(it.valor_unit))} cada</span>
                         )}

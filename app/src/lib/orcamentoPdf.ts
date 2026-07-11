@@ -42,7 +42,11 @@ export function buildOrcamentoPdf(args: {
     headStyles: { fillColor: TEAL, textColor: 255 },
     alternateRowStyles: { fillColor: [248, 250, 252] as [number, number, number] },
     head: [['Item', 'Qtd', 'Valor unit.', 'Total']],
-    body: (quote.itens ?? []).map((it) => [it.descricao, String(it.qtd), brl(it.valor_unit), brl(it.total)]),
+    body: (quote.itens ?? []).map((it) => {
+      const origemLabel: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto' }
+      const desc = it.origem ? `${it.descricao}  ·  ${origemLabel[it.origem] ?? ''}`.trim() : it.descricao
+      return [desc, String(it.qtd), brl(it.valor_unit), brl(it.total)]
+    }),
     columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
   })
 
