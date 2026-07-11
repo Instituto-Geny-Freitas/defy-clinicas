@@ -1,0 +1,325 @@
+<title>Guia da equipe — Instituto Geny Freitas</title>
+<style>
+  :root {
+    --bg: #FAF6F4; --surface: #FFFFFF; --surface-2: #F5EEF0; --text: #2B2530; --muted: #6E6470;
+    --accent: #8A3D5B; --accent-2: #6E3B52; --accent-soft: #F3E4EA; --border: #ECE3E6;
+    --good: #2F855A; --good-soft: #E7F2EC; --warn: #9A6413; --warn-soft: #F7EEDD;
+    --shadow: 0 1px 2px rgba(43,37,48,.04), 0 6px 20px rgba(43,37,48,.05);
+    --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17131A; --surface: #201B24; --surface-2: #271F2B; --text: #F0E9EE; --muted: #A99FAC;
+      --accent: #D98BA8; --accent-2: #E4A6BE; --accent-soft: #37232F; --border: #322A36;
+      --good: #7FC9A3; --good-soft: #1E2C25; --warn: #D9AE63; --warn-soft: #2C2415;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #FAF6F4; --surface: #FFFFFF; --surface-2: #F5EEF0; --text: #2B2530; --muted: #6E6470;
+    --accent: #8A3D5B; --accent-2: #6E3B52; --accent-soft: #F3E4EA; --border: #ECE3E6;
+    --good: #2F855A; --good-soft: #E7F2EC; --warn: #9A6413; --warn-soft: #F7EEDD;
+    --shadow: 0 1px 2px rgba(43,37,48,.04), 0 6px 20px rgba(43,37,48,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #17131A; --surface: #201B24; --surface-2: #271F2B; --text: #F0E9EE; --muted: #A99FAC;
+    --accent: #D98BA8; --accent-2: #E4A6BE; --accent-soft: #37232F; --border: #322A36;
+    --good: #7FC9A3; --good-soft: #1E2C25; --warn: #D9AE63; --warn-soft: #2C2415;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-sans); line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 56px 24px 80px; }
+
+  .eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+  h1 { font-family: var(--font-serif); font-weight: 600; font-size: clamp(2rem, 5vw, 2.6rem); line-height: 1.12; letter-spacing: -.01em; margin: 0 0 14px; text-wrap: balance; }
+  .lede { font-size: 1.08rem; color: var(--muted); margin: 0; max-width: 62ch; }
+  .meta { margin-top: 18px; font-size: .8rem; color: var(--muted); }
+  .meta span { color: var(--accent); font-weight: 600; }
+  .rule { height: 1px; background: var(--border); border: 0; margin: 40px 0; }
+
+  /* Setup box */
+  .setup { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; margin-top: 34px; }
+  .setup h2 { font-family: var(--font-serif); font-size: 1.2rem; font-weight: 600; margin: 0 0 6px; }
+  .setup p { margin: 0 0 14px; color: var(--muted); font-size: .95rem; }
+  .setup ol { margin: 0; padding-left: 20px; }
+  .setup li { margin: 6px 0; }
+  .setup li b { color: var(--text); }
+
+  /* TOC */
+  .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 30px; }
+  .toc a { text-decoration: none; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 15px; font-size: .85rem; font-weight: 500; transition: border-color .15s, color .15s; }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Group band */
+  .group { margin: 48px 0 4px; scroll-margin-top: 20px; }
+  .group-eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+  .group-title { font-family: var(--font-serif); font-weight: 600; font-size: 1.7rem; line-height: 1.15; margin: 0; letter-spacing: -.01em; }
+  .group-title::after { content: ""; display: block; width: 46px; height: 3px; border-radius: 3px; background: var(--accent); margin-top: 12px; }
+
+  /* Feature card */
+  .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 26px 28px; margin-top: 18px; box-shadow: var(--shadow); }
+  .feature > .eyebrow { margin-bottom: 8px; }
+  .feature h3 { font-family: var(--font-serif); font-weight: 600; font-size: 1.35rem; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; text-wrap: balance; }
+  .feature .purpose { color: var(--muted); margin: 0 0 16px; }
+
+  .where { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: .82rem; color: var(--muted); margin-bottom: 16px; }
+  .where b { color: var(--text); font-weight: 600; }
+  .where .sep { color: var(--accent); }
+
+  .block-label { font-size: .74rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 16px 0 8px; }
+  .steps { margin: 0; padding-left: 22px; }
+  .steps li { margin: 7px 0; }
+  .steps li::marker { color: var(--accent); font-weight: 700; }
+  .steps b, .purpose b { font-weight: 600; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  @media (max-width: 620px) { .split { grid-template-columns: 1fr; gap: 6px; } }
+  .split h4 { font-size: 1rem; font-weight: 650; margin: 4px 0 6px; }
+
+  .callout { border-radius: 12px; padding: 12px 15px; margin-top: 16px; font-size: .9rem; border: 1px solid var(--border); background: var(--surface-2); }
+  .callout .tag { font-weight: 700; }
+  .callout.tip { background: var(--good-soft); border-color: transparent; }
+  .callout.tip .tag { color: var(--good); }
+  .callout.warn { background: var(--warn-soft); border-color: transparent; }
+  .callout.warn .tag { color: var(--warn); }
+
+  footer { margin-top: 46px; text-align: center; color: var(--muted); font-size: .82rem; }
+  a.top { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+  @media print {
+    body { background: #fff; }
+    .wrap { padding: 0; max-width: none; }
+    .toc { display: none; }
+    .feature, .setup { box-shadow: none; break-inside: avoid; }
+    .group { break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Instituto Geny Freitas · Guia da equipe</p>
+    <h1>Guia rápido do sistema</h1>
+    <p class="lede">Os recursos de relacionamento, atendimento, agenda e financeiro reunidos por área. Cada item mostra onde fica e como usar no dia a dia.</p>
+    <p class="meta">Atualizado em <span>julho/2026</span> · leitura de ~8 minutos</p>
+  </header>
+
+  <div class="setup">
+    <h2>Antes de começar (para o administrador)</h2>
+    <p>Alguns recursos só “ganham vida” após uma configuração inicial. Vale fazer uma vez, em <b>Configurações</b>:</p>
+    <ol>
+      <li><b>Fidelidade</b> — ative o cashback e defina o percentual.</li>
+      <li><b>Indicação</b> — ative o programa e defina o valor da recompensa.</li>
+      <li><b>Metas</b> — meta mensal de faturamento e <b>% de comissão</b> por profissional.</li>
+      <li><b>Recursos</b> — cadastre salas e equipamentos.</li>
+      <li><b>Termo de Imagem</b> — texto e versão do termo usado nas fotos.</li>
+      <li><b>Permissões</b> — se algum menu/aba <b>não aparecer</b> para profissional ou recepção, abra Permissões e clique em <b>Salvar</b> uma vez. O administrador já enxerga tudo.</li>
+    </ol>
+  </div>
+
+  <nav class="toc" aria-label="Índice">
+    <a href="#area-relacionamento">Relacionamento &amp; marketing</a>
+    <a href="#area-clinico">Atendimento &amp; clínico</a>
+    <a href="#area-agenda">Agenda</a>
+    <a href="#area-financeiro">Fidelidade &amp; financeiro</a>
+  </nav>
+
+  <hr class="rule" />
+
+  <!-- ============ ÁREA: RELACIONAMENTO ============ -->
+  <div class="group" id="area-relacionamento">
+    <p class="group-eyebrow">Área</p>
+    <h2 class="group-title">Relacionamento &amp; marketing</h2>
+  </div>
+
+  <section class="feature">
+    <p class="eyebrow">Menu · Relacionamento</p>
+    <h3>Aniversariantes e reativação de inativos</h3>
+    <p class="purpose">Aproxima quem faz aniversário e traz de volta quem sumiu — com mensagem pronta no WhatsApp.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> Menu lateral <span class="sep">›</span> <b>Relacionamento</b></div>
+    <div class="split">
+      <div>
+        <h4>Aniversariantes</h4>
+        <ol class="steps">
+          <li>Abra a aba <b>Aniversariantes</b> (abre no mês atual; troque o mês para planejar).</li>
+          <li>Quem faz aniversário <b>hoje</b> aparece destacado.</li>
+          <li>Clique em <b>Parabenizar</b> — abre o WhatsApp com a mensagem pronta.</li>
+        </ol>
+      </div>
+      <div>
+        <h4>Inativos</h4>
+        <ol class="steps">
+          <li>Abra a aba <b>Inativos</b> e escolha o período (3 a 24 meses sem atendimento).</li>
+          <li>Mostra quem não tem consulta futura marcada.</li>
+          <li>Clique em <b>Reativar</b> para chamar no WhatsApp.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Indicação · member-get-member</p>
+    <h3>Programa de indicação</h3>
+    <p class="purpose">Transforma clientes satisfeitos em novos pacientes, recompensando quem indica com crédito.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> <b>Configurações → Indicação</b> <span class="sep">·</span> portal do paciente <span class="sep">·</span> <b>Financeiro → Indicações</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>Ative o programa e defina o valor da recompensa em <b>Configurações → Indicação</b>.</li>
+      <li>Cada paciente ganha um <b>código</b> e compartilha pelo portal (“Indique um amigo”).</li>
+      <li>Ao cadastrar o novo paciente, informe quem indicou no campo <b>“Indicado por”</b>.</li>
+      <li>Quando o indicado faz o <b>1º pagamento</b>, conceda a recompensa em <b>Financeiro → Indicações</b>.</li>
+    </ol>
+    <div class="callout warn"><span class="tag">Atenção:</span> a recompensa (crédito) é concedida <b>manualmente</b> pela equipe — nada é creditado automaticamente.</div>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Satisfação · NPS</p>
+    <h3>Pesquisa de satisfação (NPS)</h3>
+    <p class="purpose">Mede a satisfação após o atendimento e gera depoimentos para prova social.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> portal do paciente <span class="sep">·</span> <b>Relatórios → Satisfação (NPS)</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>Após um atendimento <b>realizado</b>, o portal mostra a pesquisa (nota <b>0 a 10</b> + comentário).</li>
+      <li>Em <b>Relatórios</b>, acompanhe o NPS dos últimos 90 dias e os comentários recentes.</li>
+    </ol>
+    <div class="callout tip"><span class="tag">Dica:</span> comentários elogiosos são ótimos depoimentos — reaproveite (com autorização) nas redes.</div>
+  </section>
+
+  <!-- ============ ÁREA: CLÍNICO ============ -->
+  <div class="group" id="area-clinico">
+    <p class="group-eyebrow">Área</p>
+    <h2 class="group-title">Atendimento &amp; clínico</h2>
+  </div>
+
+  <section class="feature">
+    <p class="eyebrow">Ficha do paciente · Pacotes</p>
+    <h3>Pacotes de sessões</h3>
+    <p class="purpose">Venda um conjunto de sessões e acompanhe o que já foi usado e o que resta.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> ficha do paciente <span class="sep">›</span> aba <b>Pacotes</b> <span class="sep">·</span> paciente vê em <b>“Meus pacotes”</b> no portal</div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>Na aba <b>Pacotes</b>, cadastre o pacote: procedimento, nº de sessões e valor.</li>
+      <li>Conforme as sessões são realizadas, acompanhe <b>compradas × realizadas × restantes</b>.</li>
+      <li>O paciente vê o progresso e o valor do pacote no portal.</li>
+    </ol>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Ficha do paciente · Fotos</p>
+    <h3>Fotos clínicas &amp; termo de imagem</h3>
+    <p class="purpose">Registre antes/depois, compare a evolução e controle o consentimento de uso de imagem.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> ficha do paciente <span class="sep">›</span> aba <b>Fotos</b> <span class="sep">·</span> termo em <b>Configurações → Termo de Imagem</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>Recolha o <b>Termo de Uso de Imagem</b> (presencial na aba Fotos, ou o paciente aceita no portal).</li>
+      <li>Adicione fotos escolhendo a <b>categoria</b> (antes/depois/evolução) e, se quiser, o <b>procedimento</b>.</li>
+      <li>Selecione <b>2 fotos</b> para comparar antes/depois lado a lado.</li>
+      <li>Marque cada foto como <b>visível</b> ou <b>oculta</b> ao paciente.</li>
+    </ol>
+    <div class="callout tip"><span class="tag">Dica:</span> fotos vinculadas a um procedimento aparecem também como miniaturas na aba <b>Procedimentos</b>, montando a evolução por atendimento.</div>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Anamnese · pré-consulta</p>
+    <h3>Anamnese antes da consulta</h3>
+    <p class="purpose">Agiliza o atendimento com a ficha preenchida (ou revisada) pelo paciente antes de chegar.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> portal do paciente <span class="sep">·</span> ficha do paciente <span class="sep">›</span> <b>Resumo</b> e <b>Anamnese</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>Com consulta marcada e ficha vazia/antiga, o portal avisa o paciente para <b>preencher a anamnese</b>.</li>
+      <li>Na ficha, o <b>Resumo</b> mostra se a anamnese foi preenchida, <b>quando</b> e <b>por quem</b>.</li>
+    </ol>
+  </section>
+
+  <!-- ============ ÁREA: AGENDA ============ -->
+  <div class="group" id="area-agenda">
+    <p class="group-eyebrow">Área</p>
+    <h2 class="group-title">Agenda</h2>
+  </div>
+
+  <section class="feature">
+    <p class="eyebrow">Agenda · Confirmação</p>
+    <h3>Confirmação de presença e faltas</h3>
+    <p class="purpose">Reduz faltas confirmando presença um dia antes e registrando quem não compareceu.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> portal do paciente <span class="sep">·</span> <b>Agenda</b> (botões de situação)</div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>O paciente recebe o lembrete e <b>confirma presença</b> pelo portal.</li>
+      <li>Na Agenda você acompanha a situação: <b>agendado</b> → <b>confirmado</b>.</li>
+      <li>Se o paciente não vier, use o botão <b>Faltou</b> para registrar o no-show.</li>
+      <li>As faltas viram indicador em <b>Relatórios</b> (taxa de faltas do mês).</li>
+    </ol>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Agenda · Recursos &amp; espera</p>
+    <h3>Agenda inteligente</h3>
+    <p class="purpose">Evita conflito de sala/equipamento e organiza quem está esperando por um horário.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> <b>Agenda</b> <span class="sep">·</span> recursos em <b>Configurações → Recursos</b></div>
+    <div class="split">
+      <div>
+        <h4>Recursos sem conflito</h4>
+        <ol class="steps">
+          <li>Cadastre salas/equipamentos em <b>Configurações → Recursos</b>.</li>
+          <li>Ao agendar, escolha o <b>Recurso</b>.</li>
+          <li>Se já estiver ocupado no horário, o sistema <b>bloqueia</b> e avisa.</li>
+        </ol>
+      </div>
+      <div>
+        <h4>Lista de espera</h4>
+        <ol class="steps">
+          <li>Na Agenda, clique em <b>Lista de espera</b> (mostra quantos aguardam).</li>
+          <li><b>Adicione</b> o paciente com procedimento/profissional.</li>
+          <li>Abriu vaga? Clique em <b>Agendar</b> — o modal abre já preenchido.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="callout tip"><span class="tag">Dica:</span> ao cancelar uma consulta, o horário fica livre na hora — abra a <b>Lista de espera</b> e chame o próximo.</div>
+  </section>
+
+  <!-- ============ ÁREA: FINANCEIRO ============ -->
+  <div class="group" id="area-financeiro">
+    <p class="group-eyebrow">Área</p>
+    <h2 class="group-title">Fidelidade &amp; financeiro</h2>
+  </div>
+
+  <section class="feature">
+    <p class="eyebrow">Financeiro · Fidelidade</p>
+    <h3>Fidelidade (cashback em crédito)</h3>
+    <p class="purpose">O paciente acumula um percentual do que paga; a equipe converte esse acúmulo em crédito.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> <b>Financeiro</b> <span class="sep">›</span> aba <b>Fidelidade</b> <span class="sep">·</span> ativação em <b>Configurações → Fidelidade</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li>O acúmulo é calculado automaticamente: <b>% definido × pagamentos reais</b>.</li>
+      <li>Veja por paciente o <b>acumulado</b>, o <b>já creditado</b> e o <b>disponível</b>.</li>
+      <li>Clique em <b>Conceder crédito</b> para transformar o disponível em crédito do paciente.</li>
+      <li>O crédito é usado como forma de pagamento <b>“Crédito do paciente”</b> numa próxima cobrança.</li>
+    </ol>
+    <div class="callout warn"><span class="tag">Atenção:</span> assim como a indicação, a concessão é <b>manual</b> — você decide quando recompensar.</div>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Relatórios · Gestão</p>
+    <h3>Gestão financeira</h3>
+    <p class="purpose">Indicadores para acompanhar o negócio: ticket médio, conversão, meta e comissão.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> <b>Relatórios</b> <span class="sep">›</span> seção <b>Gestão financeira</b> <span class="sep">·</span> config em <b>Configurações → Metas</b></div>
+    <p class="block-label">O que cada indicador mostra</p>
+    <ol class="steps">
+      <li><b>Ticket médio (mês):</b> recebido ÷ nº de pacientes que pagaram.</li>
+      <li><b>Conversão de orçamentos:</b> quantos orçamentos viraram pagamento, sobre o total.</li>
+      <li><b>Meta × Realizado:</b> quanto da meta mensal já foi atingido.</li>
+      <li><b>Comissões por profissional:</b> receita atribuída × o % configurado (apenas informativo).</li>
+    </ol>
+    <div class="callout tip"><span class="tag">Dica:</span> defina meta e comissões em <b>Configurações → Metas</b>; deixe a comissão em branco para não calcular.</div>
+  </section>
+
+  <footer>
+    <p>Dúvidas ou algo fora do esperado? Fale com o administrador do sistema. · <a class="top" href="#">▲ topo</a></p>
+  </footer>
+</div>
