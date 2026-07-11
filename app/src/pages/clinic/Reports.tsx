@@ -5,6 +5,8 @@ import { estoqueBaixo, listInventory, validadeProxima } from '@/lib/inventory'
 import { listExpenses, listPaymentsPeriodo } from '@/lib/cashflow'
 import { buildMapaMensalPdf, type Linha } from '@/lib/mapaMensalPdf'
 import { listNpsResponses, calcNps, type NpsResponse } from '@/lib/nps'
+import { getGestaoConfig } from '@/lib/gestao'
+import { listProfessionals } from '@/lib/settings'
 import { useClinic } from '@/theme/ThemeProvider'
 import { formatDateBR } from '@/lib/format'
 
@@ -27,11 +29,17 @@ interface Resumo {
   atendimentosMes: number
   faltasMes: number
   taxaFaltaMes: number
+  ticketMedio: number
+  taxaConversao: number
+  metaMensal: number
 }
+
+interface ComissaoProf { nome: string; receita: number; pct: number; comissao: number }
 
 export default function Reports() {
   const [r, setR] = useState<Resumo | null>(null)
   const [porMetodo, setPorMetodo] = useState<Record<string, number>>({})
+  const [comissoes, setComissoes] = useState<ComissaoProf[]>([])
   const [nps, setNps] = useState<NpsResponse[]>([])
 
   useEffect(() => {
@@ -43,21 +51,47 @@ export default function Reports() {
       const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0)
       const isoMes = inicioMes.toISOString()
 
-      const [pays, saldos, inv, procs, appts, faltas] = await Promise.all([
-        supabase.from('payments').select('valor, metodo, pago_em, status').eq('status', 'pago').neq('metodo', 'credito'),
+      const [pays, saldos, inv, procs, appts, faltas, totQuotes, convQuotes, cfg, profs] = await Promise.all([
+        supabase.from('payments').select('valor, metodo, pago_em, status, patient_id, quotes(professional_id)').eq('status', 'pago').neq('metodo', 'credito'),
         supabase.from('v_quote_balances').select('saldo_a_receber'),
         listInventory(),
         supabase.from('procedures_log').select('id', { count: 'exact', head: true }).gte('data', isoMes),
         supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'realizado').gte('inicio', isoMes),
         supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'faltou').gte('inicio', isoMes),
+        supabase.from('quotes').select('id', { count: 'exact', head: true }),
+        supabase.from('v_quote_balances').select('quote_id', { count: 'exact', head: true }).gt('total_pago', 0),
+        getGestaoConfig(),
+        listProfessionals(),
       ])
 
       const pagamentos = pays.data ?? []
+      const doMes = pagamentos.filter((p) => p.pago_em && p.pago_em >= isoMes)
       const recebidoTotal = pagamentos.reduce((s, p) => s + Number(p.valor), 0)
-      const recebidoMes = pagamentos.filter((p) => p.pago_em && p.pago_em >= isoMes).reduce((s, p) => s + Number(p.valor), 0)
+      const recebidoMes = doMes.reduce((s, p) => s + Number(p.valor), 0)
       const metodos: Record<string, number> = {}
-      for (const p of pagamentos.filter((p) => p.pago_em && p.pago_em >= isoMes)) metodos[p.metodo] = (metodos[p.metodo] ?? 0) + Number(p.valor)
+      for (const p of doMes) metodos[p.metodo] = (metodos[p.metodo] ?? 0) + Number(p.valor)
       setPorMetodo(metodos)
+
+      // Ticket médio do mês = recebido / nº de pacientes distintos que pagaram.
+      const pagantes = new Set(doMes.map((p) => p.patient_id).filter(Boolean))
+      const ticketMedio = pagantes.size > 0 ? recebidoMes / pagantes.size : 0
+
+      // Comissões do mês: receita atribuída ao profissional do orçamento do pagamento.
+      const nomeProf = new Map(profs.map((p) => [p.id, p.nome]))
+      const receitaPorProf = new Map<string, number>()
+      for (const p of doMes) {
+        const q = p.quotes as { professional_id?: string | null } | { professional_id?: string | null }[] | null
+        const profId = Array.isArray(q) ? q[0]?.professional_id : q?.professional_id
+        if (!profId) continue
+        receitaPorProf.set(profId, (receitaPorProf.get(profId) ?? 0) + Number(p.valor))
+      }
+      const comis: ComissaoProf[] = [...receitaPorProf.entries()]
+        .map(([id, receita]) => {
+          const pct = Number(cfg.comissoes[id]) || 0
+          return { nome: nomeProf.get(id) ?? '—', receita, pct, comissao: Math.round(receita * pct) / 100 }
+        })
+        .sort((a, b) => b.receita - a.receita)
+      setComissoes(comis)
 
       setR({
         recebidoMes,
@@ -73,6 +107,9 @@ export default function Reports() {
         taxaFaltaMes: (appts.count ?? 0) + (faltas.count ?? 0) > 0
           ? Math.round(((faltas.count ?? 0) / ((appts.count ?? 0) + (faltas.count ?? 0))) * 100)
           : 0,
+        ticketMedio,
+        taxaConversao: (totQuotes.count ?? 0) > 0 ? Math.round(((convQuotes.count ?? 0) / (totQuotes.count ?? 1)) * 100) : 0,
+        metaMensal: cfg.metaMensal,
       })
     }
     load().catch(() => {})
@@ -112,6 +149,44 @@ export default function Reports() {
           {Object.entries(porMetodo).map(([m, v]) => (
             <span key={m} className="rounded-full bg-black/5 px-2 py-0.5">{m}: {brl(v)}</span>
           ))}
+        </div>
+      )}
+
+      <h2 className="mt-8 mb-2 text-sm font-semibold text-texto/70">Gestão financeira</h2>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {card('Ticket médio (mês)', brl(r.ticketMedio))}
+        {card('Conversão de orçamentos', `${r.taxaConversao}%`, r.taxaConversao >= 50 ? 'text-emerald-600' : r.taxaConversao > 0 ? 'text-amber-600' : 'text-primaria')}
+        {card('Meta do mês', r.metaMensal > 0 ? brl(r.metaMensal) : '—')}
+        {(() => {
+          const pct = r.metaMensal > 0 ? Math.round((r.recebidoMes / r.metaMensal) * 100) : 0
+          const cor = r.metaMensal <= 0 ? 'text-primaria' : pct >= 100 ? 'text-emerald-600' : pct >= 70 ? 'text-amber-600' : 'text-secundaria'
+          return card('Realizado da meta', r.metaMensal > 0 ? `${pct}%` : '—', cor)
+        })()}
+      </div>
+      {comissoes.length > 0 && (
+        <div className="mt-4 overflow-hidden rounded-xl border border-black/5 bg-white">
+          <div className="border-b border-black/5 px-4 py-2 text-sm font-semibold text-texto/70">Comissões por profissional (mês)</div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+                <th className="px-4 py-2 font-medium">Profissional</th>
+                <th className="px-4 py-2 font-medium text-right">Receita</th>
+                <th className="px-4 py-2 font-medium text-right">%</th>
+                <th className="px-4 py-2 font-medium text-right">Comissão</th>
+              </tr></thead>
+              <tbody>
+                {comissoes.map((c) => (
+                  <tr key={c.nome} className="border-t border-black/5">
+                    <td className="px-4 py-2 text-texto">{c.nome}</td>
+                    <td className="px-4 py-2 text-right text-texto/70">{brl(c.receita)}</td>
+                    <td className="px-4 py-2 text-right text-texto/60">{c.pct > 0 ? `${c.pct}%` : '—'}</td>
+                    <td className="px-4 py-2 text-right font-medium text-emerald-600">{brl(c.comissao)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-4 py-2 text-xs text-texto/50">Receita atribuída ao profissional do orçamento; configure os percentuais em Configurações → Metas.</p>
         </div>
       )}
 

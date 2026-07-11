@@ -86,9 +86,10 @@ import { formatDateBR, parseMoneyBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import { getReferralConfig, saveReferralConfig } from '@/lib/referral'
 import { getLoyaltyConfig, saveLoyaltyConfig } from '@/lib/loyalty'
+import { getGestaoConfig, saveGestaoConfig } from '@/lib/gestao'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 export default function Settings() {
@@ -131,6 +132,7 @@ export default function Settings() {
           { k: 'imagem', l: 'Termo de Imagem' },
           { k: 'indicacao', l: 'Indicação' },
           { k: 'fidelidade', l: 'Fidelidade' },
+          { k: 'metas', l: 'Metas' },
         ].map((t) => (
           <button
             key={t.k}
@@ -166,6 +168,7 @@ export default function Settings() {
       {sec === 'imagem' && <ImagemSection />}
       {sec === 'indicacao' && <IndicacaoSection clinicId={clinicId} />}
       {sec === 'fidelidade' && <FidelidadeSection clinicId={clinicId} />}
+      {sec === 'metas' && <MetasSection clinicId={clinicId} />}
     </div>
   )
 }
@@ -1425,6 +1428,90 @@ function FidelidadeSection({ clinicId }: { clinicId: string }) {
           </div>
         </div>
       </div>
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+function MetasSection({ clinicId }: { clinicId: string }) {
+  const [meta, setMeta] = useState('')
+  const [profs, setProfs] = useState<{ id: string; nome: string; ativo: boolean }[]>([])
+  const [comissoes, setComissoes] = useState<Record<string, string>>({})
+  const [msg, setMsg] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
+  useEffect(() => {
+    Promise.all([getGestaoConfig(), listProfessionals()]).then(([cfg, ps]) => {
+      setMeta(cfg.metaMensal ? String(cfg.metaMensal).replace('.', ',') : '')
+      setProfs(ps.map((p) => ({ id: p.id, nome: p.nome, ativo: p.ativo })))
+      const c: Record<string, string> = {}
+      for (const [id, pct] of Object.entries(cfg.comissoes)) c[id] = String(pct).replace('.', ',')
+      setComissoes(c)
+    }).catch(() => {})
+  }, [])
+
+  async function salvar() {
+    setSalvando(true); setMsg(null)
+    try {
+      const comis: Record<string, number> = {}
+      for (const [id, v] of Object.entries(comissoes)) {
+        const n = Number(v.replace(',', '.')) || 0
+        if (n > 0) comis[id] = n
+      }
+      await saveGestaoConfig(clinicId, { metaMensal: parseMoneyBR(meta), comissoes: comis })
+      setMsg('Metas salvas.')
+    } catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+
+  const ativos = profs.filter((p) => p.ativo)
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Meta de faturamento</h3>
+        <p className="mb-4 text-xs text-texto/50">Meta de recebimento do mês. Aparece em Relatórios → Gestão financeira, comparada ao realizado.</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-1">
+            <label className="mb-1 block text-sm text-texto/70">Meta mensal (R$)</label>
+            <input className={field} value={meta} onChange={(e) => setMeta(e.target.value)} placeholder="0,00" inputMode="decimal" />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Comissão por profissional</h3>
+        <p className="mb-4 text-xs text-texto/50">
+          Percentual sobre a receita recebida atribuída a cada profissional (pelo orçamento). A comissão calculada
+          aparece em Relatórios → Gestão financeira. Deixe em branco/zero para não calcular.
+        </p>
+        {ativos.length === 0 ? (
+          <p className="text-sm text-texto/50">Nenhum profissional ativo.</p>
+        ) : (
+          <div className="space-y-2">
+            {ativos.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-texto">{p.nome}</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    className="w-24 rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria"
+                    value={comissoes[p.id] ?? ''}
+                    onChange={(e) => setComissoes((c) => ({ ...c, [p.id]: e.target.value }))}
+                    placeholder="0"
+                    inputMode="decimal"
+                  />
+                  <span className="text-sm text-texto/50">%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center gap-3">
         <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
           {salvando ? 'Salvando…' : 'Salvar'}
