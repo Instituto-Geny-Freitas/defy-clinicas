@@ -206,7 +206,10 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                     <div className="text-sm text-texto/50">{new Date(q.created_at).toLocaleDateString('pt-BR')}</div>
                     <div className="mt-1 space-y-0.5 text-sm text-texto/80">
                       {q.itens.map((it, i) => (
-                        <div key={i}>{it.qtd}× {it.descricao} — {brl(it.total)}</div>
+                        <div key={i} className="flex flex-wrap items-center gap-1.5">
+                          <span>{it.qtd}× {it.descricao} — {brl(it.total)}</span>
+                          {it.origem && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${ORIGEM_CHIP[it.origem] ?? 'bg-black/5 text-texto/60'}`}>{ORIGEM_LABEL[it.origem]}</span>}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -330,6 +333,7 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto' }
+const ORIGEM_CHIP: Record<string, string> = { procedimento: 'bg-violet-100 text-violet-700', suplementacao: 'bg-amber-100 text-amber-700', produto: 'bg-sky-100 text-sky-700' }
 
 /** Cria um item cobrável do orçamento a partir de um produto utilizado (usa o preço de venda do estoque). */
 function produtoParaItem(u: UsedProduct, refId: string): QuoteItem {

@@ -281,6 +281,14 @@ function RegistrarModal({
                 )}
               </div>
             )}
+            {!avulso && (
+              <p className="mt-2 text-xs text-texto/70">
+                A cobrança vem do <strong>orçamento selecionado</strong> — o valor precisa estar como item do orçamento.
+                {parseMoneyBR(valorCobrado) > 0 && (
+                  <span className="mt-1 block text-amber-700">Atenção: o “valor a cobrar” avulso ({brl(parseMoneyBR(valorCobrado))}) não será usado enquanto houver orçamento vinculado.</span>
+                )}
+              </p>
+            )}
           </div>
 
           <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
