@@ -6,6 +6,7 @@ import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
+import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
 export default function ProceduresPanel({ patientId, clinicId, professionalId }: Props) {
   const [procs, setProcs] = useState<ProcedureRecord[]>([])
   const [pagas, setPagas] = useState<Set<string>>(new Set())
+  const [fotosPorProc, setFotosPorProc] = useState<Map<string, ClinicalPhoto[]>>(new Map())
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<ProcedureRecord | null>(null)
@@ -26,6 +28,12 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
     // Orçamentos quitados do paciente → marca os procedimentos vinculados como pagos.
     supabase.from('v_quote_balances').select('quote_id, saldo_a_receber').eq('patient_id', patientId)
       .then(({ data }) => setPagas(new Set((data ?? []).filter((b) => Number(b.saldo_a_receber) <= 0.005).map((b) => b.quote_id as string))))
+    // Fotos ligadas a cada procedimento (evolução por procedimento).
+    listPhotos(patientId).then((fotos) => {
+      const map = new Map<string, ClinicalPhoto[]>()
+      for (const f of fotos) if (f.procedure_id) { const arr = map.get(f.procedure_id) ?? []; arr.push(f); map.set(f.procedure_id, arr) }
+      setFotosPorProc(map)
+    }).catch(() => {})
   }
   useEffect(recarregar, [patientId])
 
@@ -93,6 +101,21 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+              {(fotosPorProc.get(p.id)?.length ?? 0) > 0 && (
+                <div className="mt-2">
+                  <div className="mb-1 text-xs font-medium text-texto/60">Fotos ({fotosPorProc.get(p.id)!.length})</div>
+                  <div className="flex flex-wrap gap-2">
+                    {fotosPorProc.get(p.id)!.map((f) => (
+                      f.signedUrl && (
+                        <a key={f.id} href={f.signedUrl} target="_blank" rel="noreferrer" title={`${f.categoria}${f.regiao ? ` · ${f.regiao}` : ''} · ${formatDateBR(f.capturada_em)}`}>
+                          <img src={f.signedUrl} alt={f.categoria} className="h-16 w-16 rounded-lg border border-black/5 object-cover" />
+                        </a>
+                      )
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-texto/40">Vincule fotos a este procedimento na aba Fotos.</p>
                 </div>
               )}
             </div>

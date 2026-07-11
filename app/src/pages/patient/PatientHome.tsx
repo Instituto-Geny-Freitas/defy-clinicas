@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listDueNotifications, markNotificationRead, type AppNotification } from '@/lib/notifications'
 import { listPatientAppointments, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
 import { listPackages, type TreatmentPackage } from '@/lib/packages'
+import { getLatestAnamnesis } from '@/lib/anamnesis'
 import { brl } from '@/lib/finance'
 import NpsCard from './NpsCard'
 import { getReferralConfig, myReferralInfo, type ReferralConfig } from '@/lib/referral'
@@ -27,6 +29,7 @@ export default function PatientHome() {
   const [refInfo, setRefInfo] = useState<{ total: number; count: number }>({ total: 0, count: 0 })
   const [loyCfg, setLoyCfg] = useState<LoyaltyConfig | null>(null)
   const [loyInfo, setLoyInfo] = useState<{ acumulado: number; concedido: number; disponivel: number }>({ acumulado: 0, concedido: 0, disponivel: 0 })
+  const [anamneseAtualizadaEm, setAnamneseAtualizadaEm] = useState<string | null | undefined>(undefined) // undefined = ainda carregando
   const [copiado, setCopiado] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
@@ -56,6 +59,7 @@ export default function PatientHome() {
     myReferralInfo(patientId).then(setRefInfo).catch(() => {})
     getLoyaltyConfig().then(setLoyCfg).catch(() => {})
     myLoyaltyInfo(patientId).then(setLoyInfo).catch(() => {})
+    getLatestAnamnesis(patientId).then((a) => setAnamneseAtualizadaEm(a?.updated_at ?? null)).catch(() => setAnamneseAtualizadaEm(null))
   }, [patientId])
 
   async function ativarPush() {
@@ -144,6 +148,20 @@ export default function PatientHome() {
           <p className="mt-1 text-sm text-texto/60">Nenhuma consulta agendada. Solicite em “Agenda”.</p>
         )}
       </section>
+
+      {proxima && anamneseAtualizadaEm !== undefined && (anamneseAtualizadaEm === null || (Date.now() - new Date(anamneseAtualizadaEm).getTime()) / 86400000 > 180) && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-sm font-semibold text-amber-900">Antes da sua consulta 📋</h2>
+          <p className="mt-0.5 text-xs text-amber-800">
+            {anamneseAtualizadaEm === null
+              ? 'Preencha sua ficha de anamnese para agilizar o atendimento.'
+              : 'Faz um tempo desde a última atualização da sua ficha. Revise seus dados de saúde antes da consulta.'}
+          </p>
+          <Link to="/portal/anamnese" className="mt-2 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+            {anamneseAtualizadaEm === null ? 'Preencher anamnese' : 'Revisar anamnese'}
+          </Link>
+        </section>
+      )}
 
       {patient && (
         <NpsCard

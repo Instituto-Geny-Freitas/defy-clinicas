@@ -10,6 +10,7 @@ export interface ClinicalPhoto {
   categoria: PhotoCategoria
   regiao: string | null
   grupo_id: string | null
+  procedure_id: string | null
   arquivo_url: string
   observacoes: string | null
   visivel_paciente: boolean
@@ -43,6 +44,7 @@ interface UploadArgs {
   professionalId?: string | null
   categoria: PhotoCategoria
   regiao?: string | null
+  procedureId?: string | null
   visivelPaciente?: boolean
 }
 
@@ -61,6 +63,7 @@ export async function uploadPhoto(args: UploadArgs): Promise<void> {
     professional_id: args.professionalId ?? null,
     categoria: args.categoria,
     regiao: args.regiao ?? null,
+    procedure_id: args.procedureId ?? null,
     arquivo_url: path,
     visivel_paciente: args.visivelPaciente ?? true,
   })
@@ -70,6 +73,7 @@ export async function uploadPhoto(args: UploadArgs): Promise<void> {
 export async function updatePhoto(id: string, patch: {
   categoria?: PhotoCategoria
   regiao?: string | null
+  procedure_id?: string | null
   visivel_paciente?: boolean
 }): Promise<void> {
   const { error } = await supabase.from('clinical_photos').update(patch).eq('id', id)
