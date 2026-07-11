@@ -7,6 +7,7 @@ import PatientFormModal from './PatientFormModal'
 import { useAuth } from '@/auth/AuthProvider'
 import type { Patient } from '@/lib/types'
 import AnamnesisForm from '@/forms/AnamnesisForm'
+import { getLatestAnamnesis, type AnamnesisRecord } from '@/lib/anamnesis'
 import AssessmentForm from '@/forms/AssessmentForm'
 import type { AssessmentType } from '@/lib/assessments'
 import DocumentsPanel from './DocumentsPanel'
@@ -62,6 +63,7 @@ export default function PatientDetail() {
   const [carregando, setCarregando] = useState(true)
   const [editando, setEditando] = useState(false)
   const [consentLogs, setConsentLogs] = useState<ConsentLog[]>([])
+  const [anamnese, setAnamnese] = useState<AnamnesisRecord | null>(null)
 
   function recarregar() {
     if (!id) return
@@ -70,6 +72,7 @@ export default function PatientDetail() {
       .catch(() => {})
       .finally(() => setCarregando(false))
     listConsentLogs(id).then(setConsentLogs).catch(() => {})
+    getLatestAnamnesis(id).then(setAnamnese).catch(() => {})
   }
   useEffect(recarregar, [id])
 
@@ -137,6 +140,10 @@ export default function PatientDetail() {
             <Info label="Profissão" valor={paciente.profissao} />
             <Info label="Estilo de trabalho" valor={paciente.estilo_trabalho === 'sentado' ? 'Sentado' : paciente.estilo_trabalho === 'em_pe_ativo' ? 'Em pé / Ativo' : null} />
             <Info label="Alergias" valor={paciente.alergias} />
+            <Info
+              label="Ficha de anamnese"
+              valor={anamnese ? `Preenchida em ${formatDateBR(anamnese.updated_at)} · por ${anamnese.preenchido_por}` : 'Não preenchida'}
+            />
             <Info
               label="Consentimento LGPD"
               valor={paciente.consentimento_lgpd_em ? `Sim — ${new Date(paciente.consentimento_lgpd_em).toLocaleString('pt-BR')} (v${paciente.consentimento_lgpd_versao ?? '?'})` : 'Pendente'}

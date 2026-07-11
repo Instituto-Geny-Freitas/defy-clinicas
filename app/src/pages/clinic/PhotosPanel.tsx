@@ -5,6 +5,7 @@ import {
 } from '@/lib/photos'
 import { getImageConsentConfig, recordImageConsent } from '@/lib/imageConsent'
 import { getPatient } from '@/lib/patients'
+import { listProcedures, type ProcedureRecord } from '@/lib/procedures'
 import { formatDateBR } from '@/lib/format'
 
 interface Props {
@@ -25,6 +26,8 @@ export default function PhotosPanel({ patientId, clinicId, professionalId }: Pro
   const [carregando, setCarregando] = useState(true)
   const [categoria, setCategoria] = useState<PhotoCategoria>('antes')
   const [regiao, setRegiao] = useState('')
+  const [procedimentos, setProcedimentos] = useState<ProcedureRecord[]>([])
+  const [procedureId, setProcedureId] = useState('')
   const [enviando, setEnviando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   // Filtro + comparação
@@ -43,7 +46,12 @@ export default function PhotosPanel({ patientId, clinicId, professionalId }: Pro
     getImageConsentConfig().then((c) => setConsentVersao(c.versao)).catch(() => {})
     getPatient(patientId).then((p) => { setConsentEm(p?.consentimento_imagem_em ?? null); setConsentVersaoAceita(p?.consentimento_imagem_versao ?? null) }).catch(() => {})
   }
-  useEffect(() => { recarregar(); recarregarConsent() }, [patientId])
+  useEffect(() => {
+    recarregar(); recarregarConsent()
+    listProcedures(patientId).then(setProcedimentos).catch(() => {})
+  }, [patientId])
+
+  const nomeProc = useMemo(() => new Map(procedimentos.map((p) => [p.id, p.procedimento])), [procedimentos])
 
   const consentiu = !!consentEm && consentVersaoAceita === consentVersao
 
@@ -60,7 +68,7 @@ export default function PhotosPanel({ patientId, clinicId, professionalId }: Pro
     if (!file) return
     setEnviando(true)
     try {
-      await uploadPhoto({ file, clinicId, patientId, professionalId, categoria, regiao })
+      await uploadPhoto({ file, clinicId, patientId, professionalId, categoria, regiao, procedureId: procedureId || null })
       setRegiao('')
       recarregar()
     } catch { /* toast em produção */ } finally {
@@ -118,6 +126,15 @@ export default function PhotosPanel({ patientId, clinicId, professionalId }: Pro
           <label className="mb-1 block text-sm text-texto/70">Região (opcional)</label>
           <input value={regiao} onChange={(e) => setRegiao(e.target.value)} placeholder="Ex.: abdome, face" className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" />
         </div>
+        {procedimentos.length > 0 && (
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Procedimento (opcional)</label>
+            <select value={procedureId} onChange={(e) => setProcedureId(e.target.value)} className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria">
+              <option value="">— nenhum —</option>
+              {procedimentos.map((p) => <option key={p.id} value={p.id}>{p.procedimento} · {formatDateBR(p.data)}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={onFile} hidden />
           <button onClick={() => inputRef.current?.click()} disabled={enviando} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
@@ -175,6 +192,7 @@ export default function PhotosPanel({ patientId, clinicId, professionalId }: Pro
                     <div>
                       <div className="text-xs font-medium capitalize text-texto">{f.categoria}</div>
                       <div className="text-[11px] text-texto/50">{f.regiao ? `${f.regiao} · ` : ''}{formatDateBR(f.capturada_em)}</div>
+                      {f.procedure_id && nomeProc.has(f.procedure_id) && <div className="text-[11px] text-primaria">{nomeProc.get(f.procedure_id)}</div>}
                     </div>
                     <button onClick={() => remover(f)} className="text-texto/30 hover:text-secundaria" title="Remover">✕</button>
                   </div>
