@@ -19,6 +19,8 @@ import {
 import { checkSlot, SLOT_MENSAGEM } from '@/lib/availability'
 import { listPatients } from '@/lib/patients'
 import { listProfessionals } from '@/lib/settings'
+import { listResources, resourceConflict, type Resource } from '@/lib/resources'
+import { addWaitlist, countWaitlist, deleteWaitlist, listWaitlist, updateWaitlistStatus, type WaitlistEntry } from '@/lib/waitlist'
 import type { Patient, Professional } from '@/lib/types'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
 import MonthCalendar from '@/components/MonthCalendar'
@@ -51,6 +53,10 @@ export default function Agenda() {
   const [remarcando, setRemarcando] = useState<Appointment | null>(null)
   const [serieDe, setSerieDe] = useState<Appointment | null>(null)
   const [regularizando, setRegularizando] = useState<Appointment | null>(null)
+  const [recursos, setRecursos] = useState<Resource[]>([])
+  const [waitCount, setWaitCount] = useState(0)
+  const [waitlistOpen, setWaitlistOpen] = useState(false)
+  const [preAgendar, setPreAgendar] = useState<WaitlistEntry | null>(null)
 
   function recarregar() {
     let desde: string | undefined, ate: string | undefined
@@ -66,6 +72,9 @@ export default function Agenda() {
   useEffect(recarregar, [filtroProf, filtroPac, dataFiltro])
   useEffect(() => { listProfessionals().then((p) => setProfissionais(p.filter((x) => x.ativo))).catch(() => {}) }, [])
   useEffect(() => { listPatients().then(setPacientes).catch(() => {}) }, [])
+  useEffect(() => { listResources().then((rs) => setRecursos(rs.filter((r) => r.ativo))).catch(() => {}) }, [])
+  function carregarWait() { countWaitlist().then(setWaitCount).catch(() => {}) }
+  useEffect(carregarWait, [])
 
   // Resolve o texto digitado para o id do paciente (casamento exato pelo nome).
   function aplicarBuscaPac(texto: string) {
@@ -114,6 +123,9 @@ export default function Agenda() {
             <option value="">Todos os profissionais</option>
             {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
+          <button onClick={() => setWaitlistOpen(true)} className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5">
+            Lista de espera{waitCount > 0 && <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs font-medium text-amber-700">{waitCount}</span>}
+          </button>
           <button onClick={() => setModal(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo</button>
         </div>
       </div>
@@ -169,7 +181,26 @@ export default function Agenda() {
       )}
 
       {modal && clinicId && (
-        <AgendamentoModal clinicId={clinicId} profissionais={profissionais} defaultProf={profile?.professional?.id} onClose={() => setModal(false)} onSaved={() => { setModal(false); recarregar(); carregarMarcados() }} />
+        <AgendamentoModal
+          clinicId={clinicId}
+          profissionais={profissionais}
+          recursos={recursos}
+          defaultProf={profile?.professional?.id}
+          initial={preAgendar ? { patientId: preAgendar.patient_id, nomeAvulso: preAgendar.nome_avulso, telefoneAvulso: preAgendar.telefone_avulso, professionalId: preAgendar.professional_id, procedimento: preAgendar.procedimento } : undefined}
+          onClose={() => { setModal(false); setPreAgendar(null) }}
+          onSaved={async () => {
+            if (preAgendar) { await updateWaitlistStatus(preAgendar.id, 'agendado').catch(() => {}); setPreAgendar(null); carregarWait() }
+            setModal(false); recarregar(); carregarMarcados()
+          }}
+        />
+      )}
+      {waitlistOpen && clinicId && (
+        <WaitlistModal
+          clinicId={clinicId}
+          profissionais={profissionais}
+          onClose={() => { setWaitlistOpen(false); carregarWait() }}
+          onAgendar={(entry) => { setWaitlistOpen(false); setPreAgendar(entry); setModal(true) }}
+        />
       )}
       {remarcando && (
         <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar(); carregarMarcados() }} />
@@ -207,6 +238,7 @@ export default function Agenda() {
                         {a.procedimento ?? 'Atendimento'}
                         {!a.patient_id && a.telefone_avulso && <span className="text-texto/40"> · 📞 {a.telefone_avulso}</span>}
                         {a.professionals?.nome && <span className="text-texto/40"> · {a.professionals.nome}</span>}
+                        {a.resources?.nome && <span className="text-texto/40"> · 🚪 {a.resources.nome}</span>}
                       </div>
                     </div>
                     <ApptStatusBadge status={a.status} />
@@ -241,16 +273,19 @@ export default function Agenda() {
   )
 }
 
-function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSaved }: {
-  clinicId: string; profissionais: Professional[]; defaultProf?: string | null; onClose: () => void; onSaved: () => void
+interface PreAgendarInit { patientId?: string | null; nomeAvulso?: string | null; telefoneAvulso?: string | null; professionalId?: string | null; procedimento?: string | null }
+
+function AgendamentoModal({ clinicId, profissionais, recursos, defaultProf, initial, onClose, onSaved }: {
+  clinicId: string; profissionais: Professional[]; recursos: Resource[]; defaultProf?: string | null; initial?: PreAgendarInit; onClose: () => void; onSaved: () => void | Promise<void>
 }) {
   const [pacientes, setPacientes] = useState<Patient[]>([])
-  const [semCadastro, setSemCadastro] = useState(false)
-  const [patientId, setPatientId] = useState('')
-  const [nomeAvulso, setNomeAvulso] = useState('')
-  const [telefoneAvulso, setTelefoneAvulso] = useState('')
-  const [professionalId, setProfessionalId] = useState(defaultProf ?? '')
-  const [procedimento, setProcedimento] = useState('')
+  const [semCadastro, setSemCadastro] = useState(!!initial && !initial.patientId && !!initial.nomeAvulso)
+  const [patientId, setPatientId] = useState(initial?.patientId ?? '')
+  const [nomeAvulso, setNomeAvulso] = useState(initial?.nomeAvulso ?? '')
+  const [telefoneAvulso, setTelefoneAvulso] = useState(initial?.telefoneAvulso ?? '')
+  const [professionalId, setProfessionalId] = useState(initial?.professionalId ?? defaultProf ?? '')
+  const [procedimento, setProcedimento] = useState(initial?.procedimento ?? '')
+  const [resourceId, setResourceId] = useState('')
   const [data, setData] = useState<string | null>(null)
   const [horaInicio, setHoraInicio] = useState('09:00')
   const [horaFim, setHoraFim] = useState('')
@@ -278,6 +313,13 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
         if (st !== 'ok' && !confirm(`${SLOT_MENSAGEM[st]} Deseja agendar mesmo assim?`)) { setSalvando(false); return }
       } catch { /* se a verificação falhar, segue o fluxo normal */ }
     }
+    // Conflito de RECURSO (sala/equipamento): bloqueia de verdade — sem duplo-agendamento.
+    if (resourceId && !recorrente) {
+      try {
+        const ocupado = await resourceConflict(resourceId, toISO(data, horaInicio), horaFim ? toISO(data, horaFim) : null)
+        if (ocupado) { setErro('Este recurso já está reservado nesse horário. Escolha outro recurso ou horário.'); setSalvando(false); return }
+      } catch { /* backstop no banco (exclusion constraint) */ }
+    }
     const comum = {
       clinicId,
       patientId: semCadastro ? null : patientId,
@@ -286,6 +328,7 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
       professionalId: professionalId || null,
       procedimento,
       observacoes: obs,
+      resourceId: resourceId || null,
     }
     try {
       if (recorrente) {
@@ -294,8 +337,14 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
       } else {
         await createAppointment({ ...comum, inicio: toISO(data, horaInicio), fim: horaFim ? toISO(data, horaFim) : null })
       }
-      onSaved()
-    } catch { setErro('Não foi possível agendar.'); setSalvando(false) }
+      await onSaved()
+    } catch (e) {
+      const err = e as { code?: string; message?: string }
+      if (err?.code === '23P01' || /excl_appointments_resource/.test(err?.message ?? '')) {
+        setErro('Este recurso já está reservado nesse horário. Escolha outro recurso ou horário.')
+      } else setErro('Não foi possível agendar.')
+      setSalvando(false)
+    }
   }
 
   return (
@@ -327,6 +376,16 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
             {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
         </div>
+        {recursos.length > 0 && (
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Recurso (sala/equipamento)</label>
+            <select className={field} value={resourceId} onChange={(e) => setResourceId(e.target.value)}>
+              <option value="">— Nenhum —</option>
+              {recursos.map((r) => <option key={r.id} value={r.id}>{r.nome} ({r.tipo === 'sala' ? 'sala' : 'equip.'})</option>)}
+            </select>
+            {recorrente && resourceId && <p className="mt-1 text-xs text-amber-600">Em série, se algum horário do recurso conflitar, a série não é criada.</p>}
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-sm text-texto/70">Procedimento</label>
           <input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} placeholder="Ex.: Avaliação, Toxina…" />
@@ -368,6 +427,87 @@ function AgendamentoModal({ clinicId, profissionais, defaultProf, onClose, onSav
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
         {erro && <p className="text-sm text-secundaria">{erro}</p>}
         <Footer onClose={onClose} onSave={salvar} disabled={salvando} label={salvando ? 'Salvando…' : 'Agendar'} />
+      </div>
+    </Shell>
+  )
+}
+
+function WaitlistModal({ clinicId, profissionais, onClose, onAgendar }: {
+  clinicId: string; profissionais: Professional[]; onClose: () => void; onAgendar: (e: WaitlistEntry) => void
+}) {
+  const [itens, setItens] = useState<WaitlistEntry[]>([])
+  const [pacientes, setPacientes] = useState<Patient[]>([])
+  const [semCadastro, setSemCadastro] = useState(false)
+  const [patientId, setPatientId] = useState('')
+  const [nomeAvulso, setNomeAvulso] = useState('')
+  const [telefoneAvulso, setTelefoneAvulso] = useState('')
+  const [professionalId, setProfessionalId] = useState('')
+  const [procedimento, setProcedimento] = useState('')
+  const [obs, setObs] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listWaitlist('aguardando').then(setItens).catch(() => {}) }
+  useEffect(() => { recarregar(); listPatients().then(setPacientes).catch(() => {}) }, [])
+
+  async function adicionar() {
+    if (semCadastro ? !nomeAvulso.trim() : !patientId) return
+    setSalvando(true)
+    try {
+      await addWaitlist({ clinicId, patientId: semCadastro ? null : patientId, nomeAvulso: semCadastro ? nomeAvulso.trim() : null, telefoneAvulso: semCadastro ? telefoneAvulso.trim() : null, professionalId: professionalId || null, procedimento: procedimento || null, observacoes: obs || null })
+      setPatientId(''); setNomeAvulso(''); setTelefoneAvulso(''); setProcedimento(''); setObs('')
+      recarregar()
+    } finally { setSalvando(false) }
+  }
+  async function remover(e: WaitlistEntry) { await deleteWaitlist(e.id); recarregar() }
+
+  return (
+    <Shell titulo="Lista de espera" onClose={onClose}>
+      <div className="space-y-4">
+        <div className="space-y-2 rounded-xl border border-black/5 bg-black/[0.02] p-3">
+          <label className="flex items-center gap-2 text-sm text-texto/70">
+            <input type="checkbox" checked={semCadastro} onChange={(e) => setSemCadastro(e.target.checked)} /> Sem cadastro
+          </label>
+          {semCadastro ? (
+            <div className="grid grid-cols-2 gap-2">
+              <input className={field} placeholder="Nome" value={nomeAvulso} onChange={(e) => setNomeAvulso(e.target.value)} />
+              <input className={field} placeholder="Telefone" value={telefoneAvulso} onChange={(e) => setTelefoneAvulso(e.target.value)} />
+            </div>
+          ) : (
+            <select className={field} value={patientId} onChange={(e) => setPatientId(e.target.value)}>
+              <option value="">Selecione o paciente…</option>
+              {pacientes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <input className={field} placeholder="Procedimento (opcional)" value={procedimento} onChange={(e) => setProcedimento(e.target.value)} />
+            <select className={field} value={professionalId} onChange={(e) => setProfessionalId(e.target.value)}>
+              <option value="">Profissional (opcional)</option>
+              {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+          <input className={field} placeholder="Observações (opcional)" value={obs} onChange={(e) => setObs(e.target.value)} />
+          <div className="flex justify-end">
+            <button onClick={adicionar} disabled={salvando} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Adicionar à lista</button>
+          </div>
+        </div>
+        {itens.length === 0 ? (
+          <p className="text-sm text-texto/50">Ninguém na lista de espera.</p>
+        ) : (
+          <div className="space-y-2">
+            {itens.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-black/5 p-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-texto">{e.patients?.nome ?? e.nome_avulso ?? 'Paciente'}</div>
+                  <div className="text-xs text-texto/50">{[e.procedimento, e.professionals?.nome, e.telefone_avulso].filter(Boolean).join(' · ') || '—'}</div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button onClick={() => onAgendar(e)} className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Agendar</button>
+                  <button onClick={() => remover(e)} className="rounded-md px-2 py-1 text-xs font-medium text-secundaria hover:bg-secundaria/10">Remover</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </Shell>
   )
