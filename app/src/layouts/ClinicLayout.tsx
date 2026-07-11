@@ -12,6 +12,7 @@ const NAV = [
   { to: '/clinica/estoque', label: 'Estoque', perm: 'menu.estoque' },
   { to: '/clinica/financeiro', label: 'Financeiro', perm: 'menu.financeiro' },
   { to: '/clinica/relatorios', label: 'Relatórios', perm: 'menu.relatorios' },
+  { to: '/clinica/relacionamento', label: 'Relacionamento', perm: 'menu.relacionamento' },
   { to: '/clinica/administrativo', label: 'Administrativo', perm: 'menu.administrativo' },
   { to: '/clinica/configuracoes', label: 'Configurações', perm: 'admin' },
 ]

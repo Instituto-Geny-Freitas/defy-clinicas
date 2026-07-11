@@ -22,6 +22,7 @@ export const FEATURES: FeatureDef[] = [
   { key: 'menu.estoque', label: 'Estoque', group: 'Menu lateral' },
   { key: 'menu.financeiro', label: 'Financeiro', group: 'Menu lateral' },
   { key: 'menu.relatorios', label: 'Relatórios', group: 'Menu lateral' },
+  { key: 'menu.relacionamento', label: 'Relacionamento', group: 'Menu lateral' },
   { key: 'menu.administrativo', label: 'Administrativo', group: 'Menu lateral' },
   // Abas da ficha do paciente
   { key: 'paciente.resumo', label: 'Resumo', group: 'Abas do paciente' },
@@ -49,7 +50,7 @@ export const DEFAULTS: Record<Exclude<Nivel, 'admin'>, string[]> = {
   profissional: ALL_KEYS.slice(),
   // Secretaria/Recepção: agenda, cadastro (pacientes) e financeiro.
   recepcao: [
-    'menu.dashboard', 'menu.agenda', 'menu.pacientes', 'menu.financeiro',
+    'menu.dashboard', 'menu.agenda', 'menu.pacientes', 'menu.financeiro', 'menu.relacionamento',
     'paciente.resumo', 'paciente.agenda', 'paciente.documentos', 'paciente.financeiro',
   ],
 }
