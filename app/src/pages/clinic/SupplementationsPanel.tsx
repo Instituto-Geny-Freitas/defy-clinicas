@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { createSupplementation, deleteSupplementation, listSupplementations, setSupplementationPaid, updateSupplementation, type Supplementation } from '@/lib/supplementations'
 import { listActiveIngredients, listAtivoLotes, listRoutes, type ActiveIngredient, type AtivoLote, type DomainItem } from '@/lib/domains'
 import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, type Payment } from '@/lib/finance'
-import { formatDateBR, parseMoneyBR } from '@/lib/format'
+import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
+import { createRecurrence, PERIOD_LABEL, type Periodicidade } from '@/lib/recurrence'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
@@ -139,6 +140,8 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
   const [fornecedor, setFornecedor] = useState(supl?.fornecedor ?? '')
   const [valorVenda, setValorVenda] = useState(supl && Number(supl.valor_venda) > 0 ? String(Number(supl.valor_venda).toFixed(2)).replace('.', ',') : '')
   const [obs, setObs] = useState(supl?.observacoes ?? '')
+  const [recPeriodo, setRecPeriodo] = useState<'' | Periodicidade>('')
+  const [recAntecedencia, setRecAntecedencia] = useState('7')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -192,12 +195,18 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           ativo_lote_id: ativoLoteId || null, quantidade: qtdNum,
         })
       } else {
-        await createSupplementation({
+        const novoId = await createSupplementation({
           clinicId, patientId, professionalId, medicacao,
           via_adm: via || null, validade: validade || null, lote: lote || null,
           fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
           ativoLoteId: ativoLoteId || null, quantidade: qtdNum,
         })
+        if (recPeriodo) {
+          await createRecurrence({
+            clinicId, patientId, professionalId, tipo: 'suplementacao', supplementationId: novoId,
+            descricao: medicacao, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: localDateToday(),
+          }).catch(() => {})
+        }
       }
       onSaved()
     } catch { setSalvando(false) }
@@ -258,6 +267,24 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           </div>
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
+        {!editar && (
+          <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">
+            <label className="mb-1 block text-sm font-medium text-texto/80">Recorrência recomendada (opcional)</label>
+            <p className="mb-2 text-xs text-texto/50">Registra a recomendação de repetir e gera alerta de retorno para a equipe e o paciente.</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <select className={field} value={recPeriodo} onChange={(e) => setRecPeriodo(e.target.value as '' | Periodicidade)}>
+                <option value="">— Sem recorrência —</option>
+                {(Object.keys(PERIOD_LABEL) as Periodicidade[]).map((p) => <option key={p} value={p}>{PERIOD_LABEL[p]}</option>)}
+              </select>
+              {recPeriodo && (
+                <div className="flex items-center gap-2">
+                  <input type="number" min={0} max={365} className={field} value={recAntecedencia} onChange={(e) => setRecAntecedencia(e.target.value)} />
+                  <span className="whitespace-nowrap text-xs text-texto/60">dias de antecedência</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {erro && <p className="text-sm text-secundaria">{erro}</p>}
         <Footer onClose={onClose} onSave={salvar} disabled={salvando || !podeSalvar} label={salvando ? 'Salvando…' : 'Salvar'} />
       </div>

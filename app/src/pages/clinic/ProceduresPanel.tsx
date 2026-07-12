@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
+import { createRecurrence, PERIOD_LABEL, type Periodicidade } from '@/lib/recurrence'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 
 interface Props {
@@ -152,6 +153,8 @@ function RegistrarModal({
   const [valorCobrado, setValorCobrado] = useState(proc && Number(proc.valor_cobrado) > 0 ? String(Number(proc.valor_cobrado).toFixed(2)).replace('.', ',') : '')
   const [produtos, setProdutos] = useState<UsedProduct[]>(proc?.produtos_usados ?? [])
   const [filtroLote, setFiltroLote] = useState('')
+  const [recPeriodo, setRecPeriodo] = useState<'' | Periodicidade>('')
+  const [recAntecedencia, setRecAntecedencia] = useState('7')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -207,11 +210,17 @@ function RegistrarModal({
           regiao, observacoes: obs, valorCobrado: valor, produtos: prods,
         })
       } else {
-        await createProcedure({
+        const novo = await createProcedure({
           clinicId, patientId, professionalId, quoteId: quoteId || null, procedimento,
           data, regiao, observacoes: obs,
           valorCobrado: valor, produtos: prods,
         })
+        if (recPeriodo) {
+          await createRecurrence({
+            clinicId, patientId, professionalId, tipo: 'procedimento', procedureId: novo.id,
+            descricao: procedimento, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: data,
+          }).catch(() => {})
+        }
       }
       onSaved()
     } catch { setSalvando(false) }
@@ -290,6 +299,25 @@ function RegistrarModal({
               </p>
             )}
           </div>
+
+          {!editar && (
+            <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">
+              <label className="mb-1 block text-sm font-medium text-texto/80">Recorrência recomendada (opcional)</label>
+              <p className="mb-2 text-xs text-texto/50">Deixa registrado que você recomenda repetir e gera alerta de retorno para a equipe e o paciente.</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <select className={field} value={recPeriodo} onChange={(e) => setRecPeriodo(e.target.value as '' | Periodicidade)}>
+                  <option value="">— Sem recorrência —</option>
+                  {(Object.keys(PERIOD_LABEL) as Periodicidade[]).map((p) => <option key={p} value={p}>{PERIOD_LABEL[p]}</option>)}
+                </select>
+                {recPeriodo && (
+                  <div className="flex items-center gap-2">
+                    <input type="number" min={0} max={365} className={field} value={recAntecedencia} onChange={(e) => setRecAntecedencia(e.target.value)} />
+                    <span className="whitespace-nowrap text-xs text-texto/60">dias de antecedência</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
 
