@@ -235,6 +235,29 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'sugerir_recorrencias',
+      description: 'Lista os retornos recomendados (recorrência de procedimentos/suplementações) que já entraram na janela de antecedência e ainda não foram agendados. Use quando a profissional pedir sugestões de agendamentos recorrentes pendentes.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'agendar_recorrencia',
+      description: 'Agenda o retorno recomendado (obtido em sugerir_recorrencias). CONFIRME com a profissional antes. Se nenhuma data for informada, usa a data recomendada às 09:00.',
+      parameters: {
+        type: 'object',
+        properties: {
+          recorrencia_id: { type: 'string', description: 'ID da recomendação (campo id de sugerir_recorrencias).' },
+          inicio: { type: 'string', description: 'Opcional. Início em ISO 8601 com offset -03:00. Se omitido, usa a data recomendada às 09:00.' },
+        },
+        required: ['recorrencia_id'],
+      },
+    },
+  },
 ]
 
 // --- Implementação das ferramentas -------------------------------------------
@@ -541,6 +564,65 @@ async function runTool(name: string, args: Record<string, unknown>, prof: Prof, 
       return { registrado: true, id: data.id, valor, metodo }
     }
 
+    case 'sugerir_recorrencias': {
+      const { data, error } = await admin
+        .from('recurrence_recommendations')
+        .select('id, descricao, periodicidade, dias_antecedencia, proxima_data, patient_id, professional_id, patients(nome)')
+        .eq('clinic_id', prof.clinic_id)
+        .eq('status', 'ativa')
+        .order('proxima_data', { ascending: true })
+      if (error) return { erro: error.message }
+      const addDias = (ymd: string, n: number) => {
+        const [y, m, d] = ymd.split('-').map(Number)
+        return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+      }
+      const pendentes = (data ?? [])
+        .filter((r: Record<string, any>) => r.proxima_data <= addDias(hoje, Number(r.dias_antecedencia) || 0))
+        .map((r: Record<string, any>) => ({
+          id: r.id,
+          paciente: Array.isArray(r.patients) ? r.patients[0]?.nome : r.patients?.nome,
+          patient_id: r.patient_id,
+          item: r.descricao,
+          periodicidade: r.periodicidade,
+          proxima_data: r.proxima_data,
+          atrasado: r.proxima_data < hoje,
+        }))
+      return { total: pendentes.length, retornos: pendentes }
+    }
+
+    case 'agendar_recorrencia': {
+      const recId = args.recorrencia_id as string
+      const { data: rec, error: e1 } = await admin
+        .from('recurrence_recommendations')
+        .select('*')
+        .eq('id', recId)
+        .eq('clinic_id', prof.clinic_id)
+        .maybeSingle()
+      if (e1 || !rec) return { criado: false, erro: 'Recomendação não encontrada.' }
+      const inicio = (args.inicio as string) || `${(rec as Record<string, any>).proxima_data}T09:00:00-03:00`
+      const profId = (rec as Record<string, any>).professional_id ?? prof.id
+      const { data: slot } = await admin.rpc('check_slot', { p_prof: profId, p_inicio: inicio, p_fim: null })
+      if (slot && slot !== 'ok') {
+        const msg: Record<string, string> = { ocupado: 'Horário já reservado.', fora_horario: 'Fora do horário de atendimento.', bloqueado: 'Profissional indisponível nesta data.' }
+        return { criado: false, motivo: msg[slot as string] ?? String(slot) }
+      }
+      const { data: appt, error: e2 } = await admin
+        .from('appointments')
+        .insert({
+          clinic_id: prof.clinic_id, patient_id: (rec as Record<string, any>).patient_id, professional_id: profId,
+          procedimento: (rec as Record<string, any>).descricao, inicio, status: 'agendado', origem: 'profissional',
+        })
+        .select('id, inicio')
+        .single()
+      if (e2) return { criado: false, erro: e2.message }
+      // Adianta a próxima recorrência em um período.
+      const meses: Record<string, number> = { mensal: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12 }
+      const [yy, mm, dd] = String((rec as Record<string, any>).proxima_data).split('-').map(Number)
+      const prox = new Date(Date.UTC(yy, (mm - 1) + (meses[(rec as Record<string, any>).periodicidade] ?? 1), dd)).toISOString().slice(0, 10)
+      await admin.from('recurrence_recommendations').update({ proxima_data: prox }).eq('id', recId)
+      return { criado: true, id: appt.id, quando: localBR(appt.inicio), proxima_recorrencia: prox }
+    }
+
     default:
       return { erro: `Ferramenta desconhecida: ${name}` }
   }
@@ -580,7 +662,8 @@ Deno.serve(async (req) => {
       `Você conversa com a profissional ${(prof as Prof).nome} (perfil: ${(prof as Prof).role}).`,
       `Agora é ${agoraLocal} (fuso America/Sao_Paulo, UTC-03:00). A data de hoje é ${hoje}.`,
       `Ao interpretar horários informados pela profissional, use SEMPRE o fuso America/Sao_Paulo e gere datas em ISO 8601 com offset -03:00 (ex.: 2026-07-15T14:00:00-03:00).`,
-      `Você só pode ajudar com assuntos do sistema (agenda, pacientes, financeiro, regularização de agendamentos, alertas e registros administrativos). Recuse educadamente pedidos fora desse escopo.`,
+      `Você só pode ajudar com assuntos do sistema (agenda, pacientes, financeiro, regularização de agendamentos, retornos recomendados/recorrência, alertas e registros administrativos). Recuse educadamente pedidos fora desse escopo.`,
+      `Retornos recomendados: use sugerir_recorrencias para listar retornos pendentes; para agendar um deles, CONFIRME com a profissional e chame agendar_recorrencia (ela revalida o horário e adianta a próxima recorrência).`,
       `Regras de agendamento: 1) identifique o paciente com buscar_paciente; se houver mais de um com o mesmo nome, PERGUNTE qual antes de prosseguir; 2) confirme data e horário; 3) só então chame criar_agendamento (ela revalida o horário). Nunca invente IDs de paciente.`,
       `Antes de executar QUALQUER ação que grava dados (criar agendamento, preencher registro administrativo, registrar despesa, registrar recebimento, marcar despesa como paga), confirme os detalhes com a profissional em uma frase e só prossiga após um "sim".`,
       `Para registrar recebimento: primeiro identifique o paciente (buscar_paciente) e liste os orçamentos com saldo (listar_orcamentos_paciente); se houver mais de um, pergunte em qual registrar. Para marcar despesa como paga: use listar_despesas_abertas e, se houver mais de uma, pergunte qual.`,
