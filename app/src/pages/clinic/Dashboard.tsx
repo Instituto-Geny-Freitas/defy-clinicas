@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { listAppointments, type Appointment } from '@/lib/appointments'
+import { createAppointment, listAppointments, type Appointment } from '@/lib/appointments'
 import { estoqueBaixo, listInventory, validadeProxima, type InventoryItem } from '@/lib/inventory'
 import { listActiveIngredients, listAtivoLotes } from '@/lib/domains'
 import { listRecords } from '@/lib/admin'
+import { advanceRecurrence, dismissRecurrence, listDueRecurrences, PERIOD_LABEL, type RecurrenceRec } from '@/lib/recurrence'
 import { brl } from '@/lib/finance'
 import { formatDateBR, localDateToday } from '@/lib/format'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [alertasEstoque, setAlertasEstoque] = useState<InventoryItem[]>([])
   const [alertasAtivos, setAlertasAtivos] = useState<AtivoAlerta[]>([])
   const [alertasManutencao, setAlertasManutencao] = useState<ManutencaoAlerta[]>([])
+  const [retornos, setRetornos] = useState<RecurrenceRec[]>([])
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export default function Dashboard() {
       const hojeYmd = localDateToday()
       const limiteYmd = ymdSoma(30)
 
-      const [pac, docs, appts, inv, saldos, ativos, ativoLotes, manut, calib] = await Promise.all([
+      const [pac, docs, appts, inv, saldos, ativos, ativoLotes, manut, calib, recs] = await Promise.all([
         supabase.from('patients').select('id', { count: 'exact', head: true }),
         supabase.from('document_instances').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
         listAppointments(inicioHoje.toISOString()),
@@ -42,6 +44,7 @@ export default function Dashboard() {
         listAtivoLotes(),
         listRecords('manutencao_preventiva', { modo: 'faixa', de: '2000-01-01', ate: limiteYmd }),
         listRecords('calibracao', { modo: 'faixa', de: '2000-01-01', ate: limiteYmd }),
+        listDueRecurrences(),
       ])
 
       setPacientes(pac.count ?? 0)
@@ -79,9 +82,26 @@ export default function Dashboard() {
         }))
         .sort((a, b) => a.quando.localeCompare(b.quando))
       setAlertasManutencao(manutAlertas)
+      setRetornos(recs)
     }
     load().catch(() => {}).finally(() => setCarregando(false))
   }, [])
+
+  const hojeYmd2 = localDateToday()
+  async function agendarRetorno(rec: RecurrenceRec) {
+    if (!confirm(`Agendar retorno de ${rec.patients?.nome ?? 'paciente'} para "${rec.descricao}" em ${formatDateBR(rec.proxima_data)} às 09:00? Você poderá remarcar depois na Agenda.`)) return
+    try {
+      const inicio = new Date(`${rec.proxima_data}T09:00:00`).toISOString()
+      await createAppointment({ clinicId: rec.clinic_id, patientId: rec.patient_id, professionalId: rec.professional_id, procedimento: rec.descricao, inicio })
+      await advanceRecurrence(rec)
+      setRetornos((rs) => rs.filter((r) => r.id !== rec.id))
+    } catch { alert('Não foi possível agendar o retorno.') }
+  }
+  async function dispensarRetorno(rec: RecurrenceRec) {
+    if (!confirm('Encerrar esta recomendação de retorno? Ela deixará de gerar alertas.')) return
+    await dismissRecurrence(rec.id).catch(() => {})
+    setRetornos((rs) => rs.filter((r) => r.id !== rec.id))
+  }
 
   const cards = [
     { label: 'Pacientes', valor: pacientes ?? '—', to: '/clinica/pacientes' },
@@ -197,6 +217,39 @@ export default function Dashboard() {
           <Link to="/clinica/administrativo" className="mt-3 inline-block text-sm font-medium text-primaria hover:underline">
             Ver administrativo →
           </Link>
+        </section>
+
+        {/* Retornos recomendados (recorrência de procedimentos/suplementações) */}
+        <section className="rounded-xl border border-black/5 bg-white p-5 lg:col-span-2">
+          <h2 className="mb-3 font-semibold text-texto">Retornos recomendados</h2>
+          {carregando ? (
+            <p className="text-sm text-texto/50">Carregando…</p>
+          ) : retornos.length === 0 ? (
+            <p className="text-sm text-texto/50">Nenhum retorno recomendado no momento.</p>
+          ) : (
+            <ul className="space-y-2">
+              {retornos.map((r) => {
+                const vencido = r.proxima_data < hojeYmd2
+                return (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 pb-2 text-sm last:border-0 last:pb-0">
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium text-texto">{r.patients?.nome ?? 'Paciente'}</span>
+                      <span className="text-texto/60"> · {r.descricao}</span>
+                      <span className="text-texto/40"> · {PERIOD_LABEL[r.periodicidade]}</span>
+                    </span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${vencido ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {vencido ? 'atrasado' : 'em breve'} · {formatDateBR(r.proxima_data)}
+                    </span>
+                    <span className="flex shrink-0 gap-1">
+                      <button onClick={() => agendarRetorno(r)} className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Agendar</button>
+                      <button onClick={() => dispensarRetorno(r)} className="rounded-md px-2 py-1 text-xs font-medium text-texto/50 hover:bg-black/5">Dispensar</button>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <p className="mt-3 text-xs text-texto/40">“Agendar” cria a consulta na data recomendada (09:00) e adianta a próxima recorrência. Você pode remarcar na Agenda.</p>
         </section>
       </div>
     </div>

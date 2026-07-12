@@ -104,7 +104,7 @@ interface CreateArgs {
   quantidade?: number
 }
 
-export async function createSupplementation(args: CreateArgs): Promise<void> {
+export async function createSupplementation(args: CreateArgs): Promise<string> {
   const qtd = args.quantidade ?? 1
   const { data, error } = await supabase.from('supplementations').insert({
     clinic_id: args.clinicId,
@@ -123,5 +123,5 @@ export async function createSupplementation(args: CreateArgs): Promise<void> {
   if (error) throw error
   // Baixa no estoque do ativo (lote escolhido).
   if (args.ativoLoteId && qtd > 0) await moverAtivo(args.clinicId, args.ativoLoteId, 'saida_uso', qtd, args.patientId, 'Uso em suplementação')
-  return void data
+  return data.id as string
 }

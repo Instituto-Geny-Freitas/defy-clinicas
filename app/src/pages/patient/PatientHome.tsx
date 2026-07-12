@@ -10,6 +10,7 @@ import { brl } from '@/lib/finance'
 import NpsCard from './NpsCard'
 import { getReferralConfig, myReferralInfo, type ReferralConfig } from '@/lib/referral'
 import { getLoyaltyConfig, myLoyaltyInfo, type LoyaltyConfig } from '@/lib/loyalty'
+import { listDuePatientRecurrences, type RecurrenceRec } from '@/lib/recurrence'
 import { enablePush, pushSupported } from '@/lib/push'
 
 const fmtDataHora = (iso: string) =>
@@ -30,6 +31,7 @@ export default function PatientHome() {
   const [loyCfg, setLoyCfg] = useState<LoyaltyConfig | null>(null)
   const [loyInfo, setLoyInfo] = useState<{ acumulado: number; concedido: number; disponivel: number }>({ acumulado: 0, concedido: 0, disponivel: 0 })
   const [anamneseAtualizadaEm, setAnamneseAtualizadaEm] = useState<string | null | undefined>(undefined) // undefined = ainda carregando
+  const [retornos, setRetornos] = useState<RecurrenceRec[]>([])
   const [copiado, setCopiado] = useState(false)
   const [pushMsg, setPushMsg] = useState<string | null>(null)
 
@@ -60,6 +62,7 @@ export default function PatientHome() {
     getLoyaltyConfig().then(setLoyCfg).catch(() => {})
     myLoyaltyInfo(patientId).then(setLoyInfo).catch(() => {})
     getLatestAnamnesis(patientId).then((a) => setAnamneseAtualizadaEm(a?.updated_at ?? null)).catch(() => setAnamneseAtualizadaEm(null))
+    listDuePatientRecurrences(patientId).then(setRetornos).catch(() => {})
   }, [patientId])
 
   async function ativarPush() {
@@ -159,6 +162,18 @@ export default function PatientHome() {
           </p>
           <Link to="/portal/anamnese" className="mt-2 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
             {anamneseAtualizadaEm === null ? 'Preencher anamnese' : 'Revisar anamnese'}
+          </Link>
+        </section>
+      )}
+
+      {retornos.length > 0 && (
+        <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <h2 className="text-sm font-semibold text-texto">Dando sequência ao seu tratamento 💚</h2>
+          <p className="mt-0.5 text-xs text-texto/70">
+            A clínica recomenda gentilmente um retorno para <strong>{retornos.map((r) => r.descricao).slice(0, 3).join(', ')}</strong>. Que tal agendar seu próximo horário?
+          </p>
+          <Link to="/portal/agendamentos" className="mt-2 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+            Agendar retorno
           </Link>
         </section>
       )}
