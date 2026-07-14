@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import {
@@ -35,6 +35,21 @@ const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outlin
 function toISO(date: string, time: string): string {
   return new Date(`${date}T${time || '00:00'}:00`).toISOString()
 }
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/** Domingo da semana que contém a data (YYYY-MM-DD). */
+function inicioSemanaYmd(baseYmd: string): string {
+  const [y, m, d] = baseYmd.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() - dt.getDay())
+  return ymd(dt)
+}
+function addDaysYmdLocal(baseYmd: string, n: number): string {
+  const [y, m, d] = baseYmd.split('-').map(Number)
+  return ymd(new Date(y, m - 1, d + n))
+}
+// Grade semanal: faixa de horas exibida e escala (px por minuto).
+const HH_INI = 7, HH_FIM = 21, PX_MIN = 0.8
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
 export default function Agenda() {
   const { profile } = useAuth()
@@ -59,6 +74,11 @@ export default function Agenda() {
   const [waitCount, setWaitCount] = useState(0)
   const [waitlistOpen, setWaitlistOpen] = useState(false)
   const [preAgendar, setPreAgendar] = useState<WaitlistEntry | null>(null)
+  const [vista, setVista] = useState<'lista' | 'semana'>('lista')
+  const [semanaBase, setSemanaBase] = useState<string>(() => ymd(new Date()))
+  const [weekAppts, setWeekAppts] = useState<Appointment[]>([])
+  const [acoesDe, setAcoesDe] = useState<Appointment | null>(null)
+  const [novoSlot, setNovoSlot] = useState<{ data: string; horaInicio: string } | null>(null)
 
   function recarregar() {
     let desde: string | undefined, ate: string | undefined
@@ -96,6 +116,22 @@ export default function Agenda() {
   }
   useEffect(carregarMarcados, [filtroProf])
 
+  function carregarSemana() {
+    const ini = inicioSemanaYmd(semanaBase)
+    const desde = new Date(`${ini}T00:00:00`).toISOString()
+    const ate = new Date(`${addDaysYmdLocal(ini, 7)}T00:00:00`).toISOString()
+    listAppointments(desde, filtroProf || undefined, ate).then(setWeekAppts).catch(() => {})
+  }
+  useEffect(() => { if (vista === 'semana') carregarSemana() }, [vista, semanaBase, filtroProf]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function remarcarArrasto(a: Appointment, novoInicioIso: string) {
+    const dur = a.fim ? new Date(a.fim).getTime() - new Date(a.inicio).getTime() : 0
+    const novoFim = dur > 0 ? new Date(new Date(novoInicioIso).getTime() + dur).toISOString() : null
+    if (!confirm(`Remarcar ${a.patients?.nome ?? a.nome_avulso ?? 'agendamento'} para ${new Date(novoInicioIso).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}?`)) return
+    await rescheduleAppointment(a.id, novoInicioIso, novoFim)
+    carregarSemana(); carregarMarcados()
+  }
+
   async function mudarStatus(id: string, status: AppointmentStatus) {
     await updateAppointmentStatus(id, status)
     recarregar()
@@ -131,7 +167,11 @@ export default function Agenda() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-texto">Agenda</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-lg border border-black/10 p-0.5 text-sm">
+            <button onClick={() => setVista('lista')} className={`rounded-md px-3 py-1.5 ${vista === 'lista' ? 'bg-primaria text-white' : 'text-texto/60'}`}>Lista</button>
+            <button onClick={() => setVista('semana')} className={`rounded-md px-3 py-1.5 ${vista === 'semana' ? 'bg-primaria text-white' : 'text-texto/60'}`}>Semana</button>
+          </div>
           <select value={filtroProf} onChange={(e) => setFiltroProf(e.target.value)} className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria">
             <option value="">Todos os profissionais</option>
             {profissionais.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -169,24 +209,26 @@ export default function Agenda() {
         )}
       </div>
 
-      {/* Busca por data + calendário visual */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <input
-          type="date"
-          value={dataFiltro ?? ''}
-          onChange={(e) => setDataFiltro(e.target.value || null)}
-          className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria"
-        />
-        <button onClick={() => setMostrarCal((v) => !v)} className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5">
-          {mostrarCal ? 'Ocultar calendário' : '📅 Ver calendário'}
-        </button>
-        {dataFiltro && (
-          <button onClick={() => { setDataFiltro(null); setMostrarCal(false) }} className="rounded-lg bg-black/5 px-3 py-2 text-sm text-texto/70 hover:bg-black/10">
-            Limpar data
+      {/* Busca por data + calendário visual (apenas na visão em lista) */}
+      {vista === 'lista' && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={dataFiltro ?? ''}
+            onChange={(e) => setDataFiltro(e.target.value || null)}
+            className="rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria"
+          />
+          <button onClick={() => setMostrarCal((v) => !v)} className="rounded-lg border border-black/10 px-3 py-2 text-sm hover:bg-black/5">
+            {mostrarCal ? 'Ocultar calendário' : '📅 Ver calendário'}
           </button>
-        )}
-      </div>
-      {mostrarCal && (
+          {dataFiltro && (
+            <button onClick={() => { setDataFiltro(null); setMostrarCal(false) }} className="rounded-lg bg-black/5 px-3 py-2 text-sm text-texto/70 hover:bg-black/10">
+              Limpar data
+            </button>
+          )}
+        </div>
+      )}
+      {vista === 'lista' && mostrarCal && (
         <div className="mt-3 max-w-sm">
           <MonthCalendar value={dataFiltro} onChange={(d) => { setDataFiltro(d); setMostrarCal(false) }} marcados={diasComAgenda} />
           <p className="mt-1 text-xs text-texto/40">• dias com agendamento marcados</p>
@@ -199,11 +241,13 @@ export default function Agenda() {
           profissionais={profissionais}
           recursos={recursos}
           defaultProf={profile?.professional?.id}
-          initial={preAgendar ? { patientId: preAgendar.patient_id, nomeAvulso: preAgendar.nome_avulso, telefoneAvulso: preAgendar.telefone_avulso, professionalId: preAgendar.professional_id, procedimento: preAgendar.procedimento } : undefined}
-          onClose={() => { setModal(false); setPreAgendar(null) }}
+          initial={preAgendar
+            ? { patientId: preAgendar.patient_id, nomeAvulso: preAgendar.nome_avulso, telefoneAvulso: preAgendar.telefone_avulso, professionalId: preAgendar.professional_id, procedimento: preAgendar.procedimento }
+            : novoSlot ? { data: novoSlot.data, horaInicio: novoSlot.horaInicio } : undefined}
+          onClose={() => { setModal(false); setPreAgendar(null); setNovoSlot(null) }}
           onSaved={async () => {
             if (preAgendar) { await updateWaitlistStatus(preAgendar.id, 'agendado').catch(() => {}); setPreAgendar(null); carregarWait() }
-            setModal(false); recarregar(); carregarMarcados()
+            setModal(false); setNovoSlot(null); recarregar(); carregarMarcados(); if (vista === 'semana') carregarSemana()
           }}
         />
       )}
@@ -216,16 +260,27 @@ export default function Agenda() {
         />
       )}
       {remarcando && (
-        <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar(); carregarMarcados() }} />
+        <RemarcarModal appt={remarcando} onClose={() => setRemarcando(null)} onSaved={() => { setRemarcando(null); recarregar(); carregarMarcados(); carregarSemana() }} />
       )}
       {serieDe && (
-        <SerieModal appt={serieDe} profissionais={profissionais} onClose={() => setSerieDe(null)} onSaved={() => { setSerieDe(null); recarregar(); carregarMarcados() }} />
+        <SerieModal appt={serieDe} profissionais={profissionais} onClose={() => setSerieDe(null)} onSaved={() => { setSerieDe(null); recarregar(); carregarMarcados(); carregarSemana() }} />
       )}
       {regularizando && (
         <RegularizarModal appt={regularizando} onClose={() => setRegularizando(null)} onSaved={() => { setRegularizando(null); recarregar(); carregarMarcados() }} />
       )}
 
-      {carregando ? (
+      {vista === 'semana' ? (
+        <SemanaGrade
+          iniSemana={inicioSemanaYmd(semanaBase)}
+          appts={weekAppts}
+          onPrev={() => setSemanaBase(addDaysYmdLocal(semanaBase, -7))}
+          onProx={() => setSemanaBase(addDaysYmdLocal(semanaBase, 7))}
+          onHoje={() => setSemanaBase(ymd(new Date()))}
+          onCriar={(dataYmd, horaIni) => { setNovoSlot({ data: dataYmd, horaInicio: horaIni }); setModal(true) }}
+          onAbrir={(a) => setAcoesDe(a)}
+          onSoltar={remarcarArrasto}
+        />
+      ) : carregando ? (
         <p className="mt-4 text-sm text-texto/50">Carregando…</p>
       ) : appts.length === 0 ? (
         <p className="mt-4 rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">
@@ -285,11 +340,158 @@ export default function Agenda() {
           ))}
         </div>
       )}
+
+      {acoesDe && (
+        <Shell titulo="Agendamento" onClose={() => setAcoesDe(null)}>
+          <div className="space-y-3">
+            <div>
+              <div className="font-medium text-texto">{acoesDe.patients?.nome ?? acoesDe.nome_avulso ?? 'Paciente'}</div>
+              <div className="text-sm text-texto/60 capitalize">
+                {new Date(acoesDe.inicio).toLocaleString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                {acoesDe.procedimento ? ` · ${acoesDe.procedimento}` : ''}
+              </div>
+              <div className="mt-1"><ApptStatusBadge status={acoesDe.status} /></div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm">
+              {!acoesDe.patient_id && (
+                <button onClick={() => { setRegularizando(acoesDe); setAcoesDe(null) }} className="rounded-lg bg-amber-50 px-3 py-1.5 font-medium text-amber-700 hover:bg-amber-100">Regularizar</button>
+              )}
+              {temTelefone(acoesDe) && (
+                <button onClick={() => lembrarWhatsApp(acoesDe)} className="rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100">WhatsApp</button>
+              )}
+              {acoesDe.status !== 'cancelado' && acoesDe.status !== 'realizado' && (
+                <>
+                  {acoesDe.status === 'agendado' && (
+                    <button onClick={async () => { await mudarStatus(acoesDe.id, 'confirmado'); setAcoesDe(null); carregarSemana() }} className="rounded-lg bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100">Confirmar</button>
+                  )}
+                  <button onClick={() => { setRemarcando(acoesDe); setAcoesDe(null) }} className="rounded-lg bg-sky-50 px-3 py-1.5 font-medium text-sky-700 hover:bg-sky-100">Remarcar</button>
+                  <button onClick={async () => { await mudarStatus(acoesDe.id, 'realizado'); setAcoesDe(null); carregarSemana() }} className="rounded-lg bg-black/5 px-3 py-1.5 font-medium text-texto/70 hover:bg-black/10">Realizado</button>
+                  <button onClick={async () => { await mudarStatus(acoesDe.id, 'faltou'); setAcoesDe(null); carregarSemana() }} className="rounded-lg bg-amber-50 px-3 py-1.5 font-medium text-amber-700 hover:bg-amber-100">Faltou</button>
+                  <button onClick={async () => { await mudarStatus(acoesDe.id, 'cancelado'); setAcoesDe(null); carregarSemana() }} className="rounded-lg bg-rose-50 px-3 py-1.5 font-medium text-rose-700 hover:bg-rose-100">Cancelar</button>
+                </>
+              )}
+              {acoesDe.recorrencia_grupo && (
+                <button onClick={() => { setSerieDe(acoesDe); setAcoesDe(null) }} className="rounded-lg bg-violet-50 px-3 py-1.5 font-medium text-violet-700 hover:bg-violet-100">Série ⋯</button>
+              )}
+              <button onClick={async () => { const alvo = acoesDe; setAcoesDe(null); await excluir(alvo); carregarSemana() }} className="rounded-lg px-3 py-1.5 font-medium text-secundaria hover:bg-secundaria/10">Excluir</button>
+            </div>
+          </div>
+        </Shell>
+      )}
     </div>
   )
 }
 
-interface PreAgendarInit { patientId?: string | null; nomeAvulso?: string | null; telefoneAvulso?: string | null; professionalId?: string | null; procedimento?: string | null }
+// --- Grade semanal (visão visual da agenda) ---------------------------------
+function SemanaGrade({ iniSemana, appts, onPrev, onProx, onHoje, onCriar, onAbrir, onSoltar }: {
+  iniSemana: string
+  appts: Appointment[]
+  onPrev: () => void
+  onProx: () => void
+  onHoje: () => void
+  onCriar: (dataYmd: string, horaIni: string) => void
+  onAbrir: (a: Appointment) => void
+  onSoltar: (a: Appointment, novoInicioIso: string) => void
+}) {
+  const drag = useRef<{ appt: Appointment; offsetMin: number } | null>(null)
+  const dias = Array.from({ length: 7 }, (_, i) => addDaysYmdLocal(iniSemana, i))
+  const bodyH = (HH_FIM - HH_INI) * 60 * PX_MIN
+  const horas = Array.from({ length: HH_FIM - HH_INI + 1 }, (_, i) => HH_INI + i)
+  const hojeStr = ymd(new Date())
+
+  const cor = (s: AppointmentStatus) => (
+    s === 'confirmado' ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+      : s === 'realizado' ? 'bg-black/5 border-black/10 text-texto/60'
+        : s === 'faltou' ? 'bg-rose-100 border-rose-300 text-rose-800'
+          : s === 'cancelado' ? 'bg-black/5 border-black/10 text-texto/40 line-through'
+            : 'bg-amber-100 border-amber-300 text-amber-800'
+  )
+
+  function tempo(clientY: number, rect: DOMRect): { hh: string; mm: string } {
+    let min = (clientY - rect.top) / PX_MIN + HH_INI * 60
+    if (drag.current) min -= drag.current.offsetMin
+    min = Math.max(HH_INI * 60, Math.min(HH_FIM * 60 - 15, Math.round(min / 15) * 15))
+    return { hh: String(Math.floor(min / 60)).padStart(2, '0'), mm: String(min % 60).padStart(2, '0') }
+  }
+
+  return (
+    <div className="mt-4">
+      <div className="mb-3 flex items-center gap-2">
+        <button onClick={onPrev} className="rounded-lg border border-black/10 px-3 py-1.5 text-sm hover:bg-black/5">←</button>
+        <button onClick={onHoje} className="rounded-lg border border-black/10 px-3 py-1.5 text-sm hover:bg-black/5">Hoje</button>
+        <button onClick={onProx} className="rounded-lg border border-black/10 px-3 py-1.5 text-sm hover:bg-black/5">→</button>
+        <span className="ml-2 text-sm text-texto/60">
+          {new Date(dias[0] + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – {new Date(dias[6] + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+        </span>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
+        <div className="min-w-[720px]">
+          <div className="flex border-b border-black/5">
+            <div className="w-12 shrink-0" />
+            {dias.map((d) => {
+              const dt = new Date(d + 'T12:00:00')
+              const ehHoje = d === hojeStr
+              return (
+                <div key={d} className={`flex-1 py-2 text-center text-xs font-medium ${ehHoje ? 'text-primaria' : 'text-texto/60'}`}>
+                  {DIAS_SEMANA[dt.getDay()]} <span className={ehHoje ? 'rounded-full bg-primaria px-1.5 text-white' : ''}>{dt.getDate()}</span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex" style={{ height: bodyH }}>
+            <div className="w-12 shrink-0">
+              {horas.map((h) => (
+                <div key={h} className="relative" style={{ height: 60 * PX_MIN }}>
+                  <span className="absolute -top-2 right-1 text-[10px] text-texto/40">{String(h).padStart(2, '0')}h</span>
+                </div>
+              ))}
+            </div>
+            {dias.map((d) => {
+              const doDia = appts.filter((a) => ymd(new Date(a.inicio)) === d)
+              return (
+                <div
+                  key={d}
+                  className="relative flex-1 border-l border-black/5"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { if (!drag.current) return; const { hh, mm } = tempo(e.clientY, e.currentTarget.getBoundingClientRect()); const iso = new Date(`${d}T${hh}:${mm}:00`).toISOString(); const a = drag.current.appt; drag.current = null; onSoltar(a, iso) }}
+                  onClick={(e) => { const { hh, mm } = tempo(e.clientY, e.currentTarget.getBoundingClientRect()); onCriar(d, `${hh}:${mm}`) }}
+                >
+                  {horas.map((h) => <div key={h} className="border-b border-black/5" style={{ height: 60 * PX_MIN }} />)}
+                  {doDia.map((a) => {
+                    const ini = new Date(a.inicio)
+                    const minIni = ini.getHours() * 60 + ini.getMinutes() - HH_INI * 60
+                    const dur = a.fim ? Math.max(15, (new Date(a.fim).getTime() - ini.getTime()) / 60000) : 30
+                    const top = Math.max(0, Math.min(bodyH - 16, minIni * PX_MIN))
+                    const h = Math.max(16, dur * PX_MIN)
+                    return (
+                      <button
+                        key={a.id}
+                        draggable
+                        onDragStart={(e) => { drag.current = { appt: a, offsetMin: e.nativeEvent.offsetY / PX_MIN }; e.dataTransfer.effectAllowed = 'move' }}
+                        onClick={(e) => { e.stopPropagation(); onAbrir(a) }}
+                        className={`absolute left-0.5 right-0.5 cursor-pointer overflow-hidden rounded-md border px-1 text-left leading-tight ${cor(a.status)}`}
+                        style={{ top, height: h }}
+                        title={`${hora(a.inicio)} · ${a.patients?.nome ?? a.nome_avulso ?? ''}`}
+                      >
+                        <div className="text-[10px] font-semibold">{hora(a.inicio)}</div>
+                        <div className="truncate text-[10px]">{a.patients?.nome ?? a.nome_avulso ?? 'Paciente'}</div>
+                        {a.procedimento && h > 34 && <div className="truncate text-[10px] opacity-80">{a.procedimento}</div>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-texto/40">Clique num horário vazio para agendar · clique num evento para ações · arraste para remarcar (confirma antes de gravar).</p>
+    </div>
+  )
+}
+
+interface PreAgendarInit { patientId?: string | null; nomeAvulso?: string | null; telefoneAvulso?: string | null; professionalId?: string | null; procedimento?: string | null; data?: string | null; horaInicio?: string | null }
 
 function AgendamentoModal({ clinicId, profissionais, recursos, defaultProf, initial, onClose, onSaved }: {
   clinicId: string; profissionais: Professional[]; recursos: Resource[]; defaultProf?: string | null; initial?: PreAgendarInit; onClose: () => void; onSaved: () => void | Promise<void>
@@ -302,8 +504,8 @@ function AgendamentoModal({ clinicId, profissionais, recursos, defaultProf, init
   const [professionalId, setProfessionalId] = useState(initial?.professionalId ?? defaultProf ?? '')
   const [procedimento, setProcedimento] = useState(initial?.procedimento ?? '')
   const [resourceId, setResourceId] = useState('')
-  const [data, setData] = useState<string | null>(null)
-  const [horaInicio, setHoraInicio] = useState('09:00')
+  const [data, setData] = useState<string | null>(initial?.data ?? null)
+  const [horaInicio, setHoraInicio] = useState(initial?.horaInicio ?? '09:00')
   const [horaFim, setHoraFim] = useState('')
   const [obs, setObs] = useState('')
   const [recorrente, setRecorrente] = useState(false)
