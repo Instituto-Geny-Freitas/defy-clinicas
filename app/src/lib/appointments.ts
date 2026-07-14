@@ -37,6 +37,13 @@ export async function listAppointments(desde?: string, professionalId?: string, 
   return data ?? []
 }
 
+/** Horários de início livres do profissional numa data (para agendamento online). */
+export async function slotsLivres(professionalId: string, dateYmd: string, durMin = 30): Promise<string[]> {
+  const { data, error } = await supabase.rpc('slots_livres', { p_prof: professionalId, p_date: dateYmd, p_dur_min: durMin })
+  if (error) return []
+  return (data as string[] | null) ?? []
+}
+
 /** Agendamentos de um paciente (para o portal). */
 export async function listPatientAppointments(patientId: string): Promise<Appointment[]> {
   const { data, error } = await supabase

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
-import { listPatientAppointments, requestAppointment, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
+import { listPatientAppointments, requestAppointment, slotsLivres, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
 import { checkSlot, SLOT_MENSAGEM, type SlotStatus } from '@/lib/availability'
 import { listPublicProfessionals, type PublicProfessional } from '@/lib/patients'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
@@ -99,6 +99,8 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
   const [erro, setErro] = useState<string | null>(null)
   const [slot, setSlot] = useState<SlotStatus | null>(null)
   const [checando, setChecando] = useState(false)
+  const [slots, setSlots] = useState<string[]>([])
+  const [buscandoSlots, setBuscandoSlots] = useState(false)
 
   useEffect(() => {
     listPublicProfessionals().then((lista) => {
@@ -107,6 +109,16 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
       if (lista.length === 1) setProfessionalId(lista[0].id)
     }).catch(() => {})
   }, [])
+
+  // Busca os horários livres ao escolher profissional + data.
+  useEffect(() => {
+    setSlots([])
+    if (!professionalId || !data) return
+    let cancelado = false
+    setBuscandoSlots(true)
+    slotsLivres(professionalId, data).then((s) => { if (!cancelado) setSlots(s) }).catch(() => {}).finally(() => { if (!cancelado) setBuscandoSlots(false) })
+    return () => { cancelado = true }
+  }, [professionalId, data])
 
   // Verifica disponibilidade sempre que profissional + data + hora mudarem.
   useEffect(() => {
@@ -159,8 +171,27 @@ function SolicitarModal({ clinicId, patientId, onClose, onSaved }: { clinicId: s
             </select>
           </div>
           <MonthCalendar value={data} onChange={setData} />
+          {professionalId && data && (
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Horários disponíveis</label>
+              {buscandoSlots ? (
+                <p className="text-sm text-texto/50">Buscando horários…</p>
+              ) : slots.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {slots.map((s) => (
+                    <button key={s} type="button" onClick={() => setHora(s)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm ${hora === s ? 'border-primaria bg-primaria text-white' : 'border-black/10 text-texto/80 hover:border-primaria'}`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">Sem horários livres neste dia. Escolha outra data ou fale pela clínica no WhatsApp.</p>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="mb-1 block text-sm text-texto/70">Horário preferido</label><input type="time" className={field} value={hora} onChange={(e) => setHora(e.target.value)} /></div>
+            <div><label className="mb-1 block text-sm text-texto/70">Horário</label><input type="time" className={field} value={hora} onChange={(e) => setHora(e.target.value)} /></div>
             <div><label className="mb-1 block text-sm text-texto/70">Procedimento</label><input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} /></div>
           </div>
           {professionalId && data && (
