@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
+import { useClinic } from '@/theme/ThemeProvider'
 import {
   createAppointment,
   createRecurringAppointments,
@@ -37,6 +38,7 @@ function toISO(date: string, time: string): string {
 
 export default function Agenda() {
   const { profile } = useAuth()
+  const clinic = useClinic()
   const clinicId = profile?.professional?.clinic_id
   const [appts, setAppts] = useState<Appointment[]>([])
   const [profissionais, setProfissionais] = useState<Professional[]>([])
@@ -107,6 +109,17 @@ export default function Agenda() {
     recarregar()
     carregarMarcados()
   }
+
+  // Lembrete de confirmação por WhatsApp (mensagem pronta, 1 clique).
+  function lembrarWhatsApp(a: Appointment) {
+    const tel = (a.patients?.whatsapp ?? a.telefone_avulso ?? '').replace(/\D/g, '')
+    if (!tel) return
+    const nome = (a.patients?.nome ?? a.nome_avulso ?? '').trim().split(/\s+/)[0]
+    const quando = new Date(a.inicio).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    const msg = `Olá${nome ? ', ' + nome : ''}! Passando para lembrar do seu horário na ${clinic?.nome ?? 'clínica'} em ${quando}${a.procedimento ? ` (${a.procedimento})` : ''}. Podemos confirmar sua presença? 💚`
+    window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+  const temTelefone = (a: Appointment) => !!(a.patients?.whatsapp ?? a.telefone_avulso)
 
   const grupos = appts.reduce<Record<string, Appointment[]>>((acc, a) => {
     const dia = a.inicio.slice(0, 10)
@@ -248,6 +261,9 @@ export default function Agenda() {
                       )}
                       {a.status !== 'cancelado' && a.status !== 'realizado' && (
                         <>
+                          {temTelefone(a) && (
+                            <button onClick={() => lembrarWhatsApp(a)} className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-700 hover:bg-emerald-100" title="Enviar lembrete por WhatsApp">WhatsApp</button>
+                          )}
                           {a.status === 'agendado' && (
                             <button onClick={() => mudarStatus(a.id, 'confirmado')} className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-700 hover:bg-emerald-100">Confirmar</button>
                           )}
