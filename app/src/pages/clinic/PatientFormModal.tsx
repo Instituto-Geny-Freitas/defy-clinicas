@@ -142,8 +142,8 @@ export default function PatientFormModal({ clinicId, patient, onClose, onSaved }
         })
       }
       setSalvando(false)
-    } catch {
-      setErro('Não foi possível salvar (CPF duplicado? migrations aplicadas?).')
+    } catch (e) {
+      setErro((e as Error)?.message || 'Não foi possível salvar (CPF duplicado? migrations aplicadas?).')
       setSalvando(false)
     }
   }

@@ -965,6 +965,7 @@ function DespesaModal(props: {
   async function salvar() {
     setErro('')
     if (!v || v <= 0) { setErro('Informe um valor válido.'); return }
+    if (!data) { setErro('Informe a data.'); return }
     setSalvando(true)
     try {
       if (despesa) {

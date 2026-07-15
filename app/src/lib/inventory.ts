@@ -65,16 +65,17 @@ export async function listInventoryLots(): Promise<InventoryLot[]> {
 const norm = (v?: string | null) => (v ?? '').trim().toLowerCase()
 
 export async function createInventoryItem(clinicId: string, input: InventoryInput) {
+  const validade = input.validade || null // '' (coluna date) quebraria o insert
   const { data, error } = await supabase
     .from('inventory')
-    .insert({ clinic_id: clinicId, ...input })
+    .insert({ clinic_id: clinicId, ...input, validade })
     .select()
     .single()
   if (error) throw error
   // Cria o primeiro lote espelhando o cadastro (quantidade inicial direta, como no produto).
   await supabase.from('inventory_lots').insert({
     clinic_id: clinicId, inventory_id: data.id,
-    marca: input.marca ?? null, lote: input.lote ?? null, validade: input.validade ?? null,
+    marca: input.marca ?? null, lote: input.lote ?? null, validade,
     qtd_atual: input.qtd_atual ?? 0, custo_unit: input.custo_unit ?? 0, preco_venda: input.preco_venda ?? 0,
   }).select('id').single().then(() => {}, () => {})
   return data as InventoryItem
@@ -138,6 +139,7 @@ export async function addStockEntryLot(args: {
 export async function updateInventoryItem(id: string, input: InventoryInput) {
   const patch: Record<string, unknown> = { ...input }
   delete patch.qtd_atual // quantidade é controlada por movimentações, não pela edição
+  if (patch.validade === '') patch.validade = null // '' quebraria a coluna date
   const { data, error } = await supabase
     .from('inventory')
     .update(patch)

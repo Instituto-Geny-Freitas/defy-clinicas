@@ -63,6 +63,7 @@ export async function createPatient(clinicId: string, input: PatientInput): Prom
     clinic_id: clinicId,
     ...input,
     cpf: input.cpf ? digitsOnly(input.cpf) : null,
+    nascimento: input.nascimento || null, // '' (coluna date) quebraria o insert
   }
   const { data, error } = await supabase.from('patients').insert(payload).select().single()
   if (error) throw error
@@ -79,6 +80,7 @@ export interface PatientUpdate extends Partial<PatientInput> {
 export async function updatePatient(id: string, patch: PatientUpdate): Promise<Patient> {
   const body = { ...patch }
   if (body.cpf) body.cpf = digitsOnly(body.cpf)
+  if (body.nascimento === '') body.nascimento = null // '' quebraria a coluna date
   const { data, error } = await supabase.from('patients').update(body).eq('id', id).select().single()
   if (error) throw error
   return data

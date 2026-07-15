@@ -84,15 +84,18 @@ function Modal({ clinicId, patientId, professionalId, medicao, proximaSessao, on
       : { data: localDateToday(), sessao: proximaSessao },
   )
   const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
   const num = (k: keyof MeasurementInput) => (e: React.ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.value === '' ? null : Number(e.target.value) }))
 
   async function salvar() {
+    if (!f.data) { setErro('Informe a data da medição.'); return }
+    setErro(null)
     setSalvando(true)
     try {
       if (medicao) await updateMeasurement(medicao.id, f)
       else await createMeasurement(clinicId, patientId, professionalId, f)
       onSaved()
-    } catch { setSalvando(false) }
+    } catch (e) { setErro((e as Error)?.message || 'Não foi possível salvar a medição.'); setSalvando(false) }
   }
 
   return (
@@ -109,6 +112,7 @@ function Modal({ clinicId, patientId, professionalId, medicao, proximaSessao, on
         <div><label className="mb-1 block text-sm text-texto/70">Idade corporal</label><input type="number" className={field} value={f.idade_corporal ?? ''} onChange={num('idade_corporal')} /></div>
         <div><label className="mb-1 block text-sm text-texto/70">Gord. visceral</label><input type="number" step="0.1" className={field} value={f.gordura_visceral ?? ''} onChange={num('gordura_visceral')} /></div>
       </div>
+      {erro && <p className="mt-3 text-sm text-secundaria">{erro}</p>}
       <div className="mt-4"><Footer onClose={onClose} onSave={salvar} disabled={salvando} label={salvando ? 'Salvando…' : 'Salvar medição'} /></div>
     </Shell>
   )
