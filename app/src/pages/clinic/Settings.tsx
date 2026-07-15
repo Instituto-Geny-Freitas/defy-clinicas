@@ -1729,7 +1729,7 @@ function DisponibilidadeSection({ clinicId }: { clinicId: string }) {
   useEffect(recarregar, [profId])
 
   async function addJanela(diaSemana: number, ini: string, fim: string) {
-    if (!profId || fim <= ini) return
+    if (!profId || !ini || !fim || fim <= ini) return
     await createAvailability(clinicId, profId, diaSemana, ini, fim); recarregar()
   }
   async function addBlock() {
@@ -1800,7 +1800,7 @@ function DiaDisponibilidade({ nome, faixas, onAdd, onRemove }: {
   const ordenadas = [...faixas].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
 
   async function adicionar() {
-    if (fim <= ini) { setErro(true); return }
+    if (!ini || !fim || fim <= ini) { setErro(true); return }
     setErro(false)
     await onAdd(ini, fim)
   }
