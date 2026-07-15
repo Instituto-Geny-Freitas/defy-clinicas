@@ -257,6 +257,7 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
   const [anexando, setAnexando] = useState(false)
   const [entrada, setEntrada] = useState(false)
   const [editandoLote, setEditandoLote] = useState<AtivoLote | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
 
   function recarregarLotes() { if (ativo) listAtivoLotes().then((all) => setLotes(all.filter((l) => l.ativo_id === ativo.id))).catch(() => {}) }
   useEffect(() => {
@@ -266,7 +267,6 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
     recarregarLotes()
   }, [])
 
-  const venda = calcVendaComMargem(f.preco_aquisicao ?? 0, f.margem_pct ?? 0)
   const set = <K extends keyof AtivoInput>(k: K, v: AtivoInput[K]) => setF((s) => ({ ...s, [k]: v }))
   const saldoTotal = lotes.reduce((s, l) => s + Number(l.qtd_atual), 0)
 
@@ -282,14 +282,29 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
   }
 
   async function salvar() {
-    if (!f.nome?.trim()) return
+    if (!f.nome?.trim()) { setErro('Informe o nome/composição.'); return }
+    setErro(null)
     setSalvando(true)
-    const payload = { ...f, preco_venda: venda }
+    // Cadastro do ativo gerencia só estes campos; fornecedor/lote/validade/preços
+    // vivem nos lotes. Strings vazias viram null (evita erro em coluna date etc.).
+    const payload: AtivoInput = {
+      codigo: f.codigo?.trim() || null,
+      nome: f.nome.trim(),
+      categoria: f.categoria,
+      apresentacao: f.apresentacao?.trim() || null,
+      via: f.via?.trim() || null,
+      unidade: f.unidade?.trim() || null,
+      estoque_minimo: Number(f.estoque_minimo) || 0,
+      anexo_url: f.anexo_url ?? null,
+    }
     try {
       if (editando && ativo) await updateActiveIngredient(ativo.id, payload)
       else await createActiveIngredient(clinicId, payload)
       onSaved()
-    } catch { setSalvando(false) }
+    } catch (e) {
+      setErro((e as Error)?.message ?? 'Não foi possível salvar o ativo.')
+      setSalvando(false)
+    }
   }
 
   return (
@@ -367,6 +382,7 @@ function AtivoModal({ clinicId, ativo, onClose, onSaved }: { clinicId: string; a
           </div>
         )}
 
+        {erro && <p className="mt-3 text-sm text-secundaria">{erro}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
