@@ -310,11 +310,13 @@ function ProdutoModal({ clinicId, item, isAdmin, onClose, onSaved }: { clinicId:
       : { produto: '', custo_unit: 0, preco_venda: 0, qtd_atual: 0, qtd_minima: 0 },
   )
   const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
   const set = <K extends keyof InventoryInput>(k: K, v: InventoryInput[K]) => setF((s) => ({ ...s, [k]: v }))
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!f.produto.trim()) return
+    if (!f.produto.trim()) { setErro('Informe o nome do produto.'); return }
+    setErro(null)
     setSalvando(true)
     try {
       if (item) {
@@ -324,7 +326,8 @@ function ProdutoModal({ clinicId, item, isAdmin, onClose, onSaved }: { clinicId:
         await createInventoryItem(clinicId, f)
       }
       onSaved()
-    } catch {
+    } catch (err) {
+      setErro((err as Error)?.message || 'Não foi possível salvar o produto.')
       setSalvando(false)
     }
   }
@@ -364,6 +367,7 @@ function ProdutoModal({ clinicId, item, isAdmin, onClose, onSaved }: { clinicId:
           <div><label className="mb-1 block text-sm text-texto/70">Unidade</label><input className={field} placeholder="un, ml, cx…" value={f.unidade ?? ''} onChange={(e) => set('unidade', e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Custo unit. (R$)</label><input type="number" step="0.01" className={field} value={f.custo_unit ?? 0} onChange={(e) => set('custo_unit', Number(e.target.value))} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Preço venda (R$)</label><input type="number" step="0.01" className={field} value={f.preco_venda ?? 0} onChange={(e) => set('preco_venda', Number(e.target.value))} /></div>
+          {erro && <p className="text-sm text-secundaria sm:col-span-2">{erro}</p>}
           <div className="mt-2 flex justify-end gap-2 sm:col-span-2">
             <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
             <button type="submit" disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">

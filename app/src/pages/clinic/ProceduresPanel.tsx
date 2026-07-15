@@ -195,6 +195,7 @@ function RegistrarModal({
   async function salvar() {
     setErro(null)
     if (!procedimento.trim()) { setErro('Informe o procedimento.'); return }
+    if (!data) { setErro('Informe a data.'); return }
     const prods = produtos.filter((p) => p.inventory_id)
     // Bloqueia registrar baixa acima do saldo do lote (procedimento novo).
     if (!editar) {
@@ -223,7 +224,7 @@ function RegistrarModal({
         }
       }
       onSaved()
-    } catch { setSalvando(false) }
+    } catch (e) { setErro((e as Error)?.message || 'Não foi possível salvar o procedimento.'); setSalvando(false) }
   }
 
   const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
