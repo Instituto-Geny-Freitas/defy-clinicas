@@ -290,6 +290,34 @@ export async function chargebackGroup(grupo: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Correção de lançamento (admin): cancela um parcelamento inteiro para permitir
+ * um novo registro. Só é permitido quando TODAS as parcelas estão "a receber"
+ * (status 'pendente') — nenhuma recebida ('pago') ou estornada — para não
+ * afetar caixa realizado nem estornos. Soft-delete (status 'cancelado'):
+ * preserva o histórico e sai de saldos ([[v_quote_balances]]), receita e
+ * "a receber". Devolve o valor total que estava parcelado (para re-registrar).
+ */
+export async function cancelInstallmentGroup(grupo: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('payments')
+    .select('id, valor, status')
+    .eq('parcelamento_grupo', grupo)
+  if (error) throw error
+  const linhas = data ?? []
+  if (linhas.length === 0) throw new Error('Parcelamento não encontrado.')
+  if (linhas.some((p) => p.status !== 'pendente')) {
+    throw new Error('Só é possível corrigir um parcelamento com todas as parcelas “a receber”. Trate manualmente as parcelas já recebidas ou estornadas (chargeback) antes.')
+  }
+  const total = linhas.reduce((s, p) => s + Number(p.valor), 0)
+  const { error: e2 } = await supabase
+    .from('payments')
+    .update({ status: 'cancelado', liquidado_paciente: false })
+    .eq('parcelamento_grupo', grupo)
+  if (e2) throw e2
+  return Math.round(total * 100) / 100
+}
+
 export interface Receivable {
   id: string
   quote_id: string | null

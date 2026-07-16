@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   brl,
   calcItensTotal,
+  cancelInstallmentGroup,
   chargebackGroup,
   chargebackPayment,
   createQuote,
@@ -27,6 +28,7 @@ import { listUnpaidSupplementations, listSupplementations, setSupplementationPai
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
 import { buildOrcamentoPdf } from '@/lib/orcamentoPdf'
 import { useClinic } from '@/theme/ThemeProvider'
+import { useAuth } from '@/auth/AuthProvider'
 import { formatDateBR } from '@/lib/format'
 
 interface Props {
@@ -38,6 +40,9 @@ interface Props {
 
 export default function FinancePanel({ patientId, clinicId, professionalId, pacienteNome }: Props) {
   const clinic = useClinic()
+  const { profile } = useAuth()
+  const isAdmin = profile?.professional?.role === 'admin'
+  const [corrigindo, setCorrigindo] = useState<{ quote: Quote; grupo: string; parcelasAtuais: number } | null>(null)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [pagamentos, setPagamentos] = useState<Payment[]>([])
   const [procedimentos, setProcedimentos] = useState<ProcedureRecord[]>([])
@@ -190,6 +195,17 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
           onSaved={() => { setEditandoPg(null); recarregar() }}
         />
       )}
+      {corrigindo && (
+        <CorrigirParcelasModal
+          clinicId={clinicId}
+          patientId={patientId}
+          quote={corrigindo.quote}
+          grupo={corrigindo.grupo}
+          parcelasAtuais={corrigindo.parcelasAtuais}
+          onClose={() => setCorrigindo(null)}
+          onSaved={() => { setCorrigindo(null); recarregar() }}
+        />
+      )}
 
       {quotes.length === 0 ? (
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-texto/50">Nenhum orçamento.</p>
@@ -250,7 +266,7 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                 {(() => {
                   const doQuote = pagamentos.filter((p) => p.quote_id === q.id)
                   const avista = doQuote.filter((p) => !p.parcelamento_grupo && p.status === 'pago')
-                  const parcelas = doQuote.filter((p) => p.parcelamento_grupo).sort((a, b) => a.parcela - b.parcela)
+                  const parcelas = doQuote.filter((p) => p.parcelamento_grupo && p.status !== 'cancelado').sort((a, b) => a.parcela - b.parcela)
                   const grupo = parcelas[0]?.parcelamento_grupo ?? null
                   const algumAtivo = parcelas.some((p) => p.status !== 'estornado')
                   if (avista.length === 0 && parcelas.length === 0) return null
@@ -276,9 +292,14 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                         <div className="mt-2">
                           <div className="mb-1 flex items-center justify-between">
                             <span className="text-xs font-medium text-texto/60">Cartão parcelado ({parcelas[0].total_parcelas}×)</span>
-                            {grupo && algumAtivo && (
-                              <button onClick={() => estornarGrupo(grupo)} className="text-xs font-medium text-secundaria hover:underline">Chargeback total</button>
-                            )}
+                            <span className="flex items-center gap-3">
+                              {isAdmin && grupo && (
+                                <button onClick={() => setCorrigindo({ quote: q, grupo, parcelasAtuais: parcelas[0].total_parcelas })} className="text-xs font-medium text-primaria hover:underline" title="Cancelar este parcelamento e registrar com o número correto de parcelas (admin)">Corrigir parcelamento</button>
+                              )}
+                              {grupo && algumAtivo && (
+                                <button onClick={() => estornarGrupo(grupo)} className="text-xs font-medium text-secundaria hover:underline">Chargeback total</button>
+                              )}
+                            </span>
                           </div>
                           <div className="space-y-1">
                             {parcelas.map((p) => {
@@ -660,6 +681,48 @@ function EditarPagamentoModal({ pagamento, onClose, onSaved }: { pagamento: Paym
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/60 hover:bg-black/5">Cancelar</button>
           <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Salvar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Correção (admin) do nº de parcelas: cancela o parcelamento atual (só se todas
+ *  estão "a receber") e re-registra o mesmo valor total com o número correto. */
+function CorrigirParcelasModal({ clinicId, patientId, quote, grupo, parcelasAtuais, onClose, onSaved }: {
+  clinicId: string; patientId: string; quote: Quote; grupo: string; parcelasAtuais: number; onClose: () => void; onSaved: () => void
+}) {
+  const [n, setN] = useState(Math.max(2, parcelasAtuais - 1))
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function salvar() {
+    setErro(null); setSalvando(true)
+    try {
+      const total = await cancelInstallmentGroup(grupo) // cancela e devolve o total que estava parcelado
+      await registerCardInstallments({ clinicId, quoteId: quote.id, patientId, valorTotal: total, parcelas: n })
+      onSaved()
+    } catch (e) { setErro((e as Error)?.message || 'Não foi possível corrigir o parcelamento.'); setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-texto">Corrigir parcelamento</h2>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <p className="mb-3 text-sm text-texto/60">
+          Parcelamento atual: <strong>{parcelasAtuais}×</strong>. Ao confirmar, as parcelas atuais (a receber) são <strong>canceladas</strong> e um novo parcelamento é registrado com o <strong>mesmo valor total</strong>. Se alguma parcela já foi recebida ou estornada, a correção é bloqueada.
+        </p>
+        <label className="mb-1 block text-sm text-texto/70">Novo número de parcelas</label>
+        <select className={field} value={n} onChange={(e) => setN(Number(e.target.value))}>
+          {Array.from({ length: 11 }, (_, i) => i + 2).map((x) => <option key={x} value={x}>{x}×</option>)}
+        </select>
+        {erro && <p className="mt-3 text-sm text-secundaria">{erro}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/60 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Corrigir'}</button>
         </div>
       </div>
     </div>
