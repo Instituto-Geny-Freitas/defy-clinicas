@@ -174,6 +174,7 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
       {editandoOrc && (
         <EditarItensModal
           quote={editandoOrc}
+          pago={totalLiquidado(pagamentos, editandoOrc.id)}
           onClose={() => setEditandoOrc(null)}
           onSaved={() => { setEditandoOrc(null); recarregar() }}
         />
@@ -494,7 +495,7 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   )
 }
 
-function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: () => void; onSaved: () => void }) {
+function EditarItensModal({ quote, pago = 0, onClose, onSaved }: { quote: Quote; pago?: number; onClose: () => void; onSaved: () => void }) {
   const [itens, setItens] = useState<QuoteItem[]>(
     quote.itens?.length ? quote.itens.map((i) => ({ ...i })) : [{ descricao: '', qtd: 1, valor_unit: 0, total: 0 }],
   )
@@ -559,6 +560,11 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
   async function salvar() {
     const validos = itens.filter((i) => i.descricao.trim())
     if (validos.length === 0) { alert('Inclua ao menos um item.'); return }
+    // Guarda contra o erro que gera crédito fantasma: total abaixo do já pago.
+    if (total < pago - 0.005) {
+      const credito = Math.round((pago - total) * 100) / 100
+      if (!confirm(`Atenção: o total do orçamento (${brl(total)}) ficou abaixo do que já foi pago (${brl(pago)}). A diferença de ${brl(credito)} vira CRÉDITO do paciente. Deseja continuar?`)) return
+    }
     setSalvando(true)
     try {
       await updateQuote(quote.id, { itens: validos, desconto })
@@ -625,11 +631,22 @@ function EditarItensModal({ quote, onClose, onSaved }: { quote: Quote; onClose: 
 
         {aviso && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{aviso}</p>}
 
-        <div className="mt-4 flex items-center justify-end gap-3 text-sm">
-          <span className="text-texto/60">Desconto</span>
-          <input type="number" step="0.01" className="w-28 rounded-lg border border-black/10 px-2 py-1.5" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
+        <div className="mt-4 space-y-1 border-t border-black/5 pt-3 text-sm">
+          <div className="flex items-center justify-between text-texto/60"><span>Subtotal</span><span>{brl(bruto)}</span></div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-texto/60">Desconto{bruto > 0 && desconto > 0 ? ` (${Math.round((desconto / bruto) * 100)}%)` : ''}</span>
+            <span className="flex items-center gap-2">
+              {desconto > 0 && <button type="button" onClick={() => setDesconto(0)} className="text-xs font-medium text-primaria hover:underline">zerar</button>}
+              <input type="number" step="0.01" min={0} className="w-28 rounded-lg border border-black/10 px-2 py-1.5 text-right" value={desconto} onChange={(e) => setDesconto(Math.max(0, Number(e.target.value)))} />
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-base font-semibold text-texto"><span>Total</span><span>{brl(total)}</span></div>
         </div>
-        <div className="mt-2 text-right text-lg font-semibold text-texto">Total: {brl(total)}</div>
+        {total < pago - 0.005 && (
+          <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
+            O total ({brl(total)}) está abaixo do já pago ({brl(pago)}). Ao salvar, a diferença de <strong>{brl(Math.round((pago - total) * 100) / 100)}</strong> vira crédito do paciente.
+          </p>
+        )}
 
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
