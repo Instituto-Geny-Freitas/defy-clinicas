@@ -13,6 +13,7 @@ const NAV = [
   { to: '/clinica/financeiro', label: 'Financeiro', perm: 'menu.financeiro' },
   { to: '/clinica/relatorios', label: 'Relatórios', perm: 'menu.relatorios' },
   { to: '/clinica/relacionamento', label: 'Relacionamento', perm: 'menu.relacionamento' },
+  { to: '/clinica/crm', label: 'Comercial', perm: 'menu.crm' },
   { to: '/clinica/administrativo', label: 'Administrativo', perm: 'menu.administrativo' },
   { to: '/clinica/configuracoes', label: 'Configurações', perm: 'admin' },
 ]
