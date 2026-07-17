@@ -197,17 +197,21 @@ export async function getPatientCredit(patientId: string): Promise<number> {
   return v > 0 ? v : 0
 }
 
-/** Lista pacientes que possuem crédito disponível (para a aba de créditos). */
+/** Lista pacientes que possuem crédito disponível (para a aba de créditos).
+ *  Busca os nomes à parte (não usa join embutido na view — que quebra o
+ *  relacionamento no PostgREST ao recriar o projeto Supabase). */
 export async function listPatientCredits(): Promise<PatientCredit[]> {
   const { data, error } = await supabase
     .from('v_patient_credits')
-    .select('patient_id, credito_gerado, credito_consumido, credito_disponivel, patients(nome)')
+    .select('patient_id, credito_gerado, credito_consumido, credito_disponivel')
     .gt('credito_disponivel', 0.005)
   if (error) throw error
-  return (data ?? []).map((r) => ({
-    ...r,
-    patients: Array.isArray(r.patients) ? (r.patients[0] ?? null) : r.patients,
-  })) as PatientCredit[]
+  const rows = data ?? []
+  if (rows.length === 0) return []
+  const ids = rows.map((r) => r.patient_id)
+  const { data: nomes } = await supabase.from('patients').select('id, nome').in('id', ids)
+  const nomePorId = new Map((nomes ?? []).map((n) => [n.id, n.nome]))
+  return rows.map((r) => ({ ...r, patients: { nome: nomePorId.get(r.patient_id) ?? '—' } })) as PatientCredit[]
 }
 
 /** Total já pago (status 'pago') de um orçamento — caixa efetivamente realizado. */
