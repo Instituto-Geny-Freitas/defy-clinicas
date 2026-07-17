@@ -60,6 +60,21 @@ export async function listLeads(): Promise<Lead[]> {
   })) as Lead[]
 }
 
+/** Leads em aberto (não ganho/perdido), ordenados pelo próximo follow-up. Para o painel do Dashboard. */
+export async function listOpenLeads(): Promise<Lead[]> {
+  const { data, error } = await supabase
+    .from('crm_leads')
+    .select('*, professionals(nome)')
+    .neq('etapa', 'ganho')
+    .neq('etapa', 'perdido')
+    .order('proxima_acao', { ascending: true, nullsFirst: false })
+  if (error) throw error
+  return (data ?? []).map((l) => ({
+    ...l,
+    professionals: Array.isArray(l.professionals) ? (l.professionals[0] ?? null) : l.professionals,
+  })) as Lead[]
+}
+
 function clean(input: LeadInput): Record<string, unknown> {
   return {
     nome: input.nome.trim(),

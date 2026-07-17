@@ -6,6 +6,7 @@ import { estoqueBaixo, listInventory, validadeProxima, type InventoryItem } from
 import { listActiveIngredients, listAtivoLotes } from '@/lib/domains'
 import { listRecords } from '@/lib/admin'
 import { advanceRecurrence, dismissRecurrence, listDueRecurrences, PERIOD_LABEL, type RecurrenceRec } from '@/lib/recurrence'
+import { listOpenLeads, ETAPAS, type Lead } from '@/lib/crm'
 import { brl } from '@/lib/finance'
 import { formatDateBR, localDateToday } from '@/lib/format'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const [alertasAtivos, setAlertasAtivos] = useState<AtivoAlerta[]>([])
   const [alertasManutencao, setAlertasManutencao] = useState<ManutencaoAlerta[]>([])
   const [retornos, setRetornos] = useState<RecurrenceRec[]>([])
+  const [leadsAbertos, setLeadsAbertos] = useState<Lead[]>([])
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function Dashboard() {
       const hojeYmd = localDateToday()
       const limiteYmd = ymdSoma(30)
 
-      const [pac, docs, appts, inv, saldos, ativos, ativoLotes, manut, calib, recs] = await Promise.all([
+      const [pac, docs, appts, inv, saldos, ativos, ativoLotes, manut, calib, recs, leads] = await Promise.all([
         supabase.from('patients').select('id', { count: 'exact', head: true }),
         supabase.from('document_instances').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
         listAppointments(inicioHoje.toISOString()),
@@ -45,6 +47,7 @@ export default function Dashboard() {
         listRecords('manutencao_preventiva', { modo: 'faixa', de: '2000-01-01', ate: limiteYmd }),
         listRecords('calibracao', { modo: 'faixa', de: '2000-01-01', ate: limiteYmd }),
         listDueRecurrences(),
+        listOpenLeads(),
       ])
 
       setPacientes(pac.count ?? 0)
@@ -83,6 +86,7 @@ export default function Dashboard() {
         .sort((a, b) => a.quando.localeCompare(b.quando))
       setAlertasManutencao(manutAlertas)
       setRetornos(recs)
+      setLeadsAbertos(leads)
     }
     load().catch(() => {}).finally(() => setCarregando(false))
   }, [])
@@ -109,6 +113,11 @@ export default function Dashboard() {
     { label: 'Documentos pendentes', valor: docsPendentes ?? '—', to: '/clinica/pacientes' },
     { label: 'A receber', valor: aReceber == null ? '—' : brl(aReceber), to: '/clinica/financeiro' },
   ]
+
+  // Follow-ups comerciais: com data vencida/hoje, e leads sem próximo passo (>3 dias).
+  const labelEtapa = (e: string) => ETAPAS.find((x) => x.key === e)?.label ?? e
+  const followVencidos = leadsAbertos.filter((l) => l.proxima_acao && l.proxima_acao <= hojeYmd2)
+  const semProximo = leadsAbertos.filter((l) => !l.proxima_acao && (Date.now() - new Date(l.created_at).getTime()) / 86400000 > 3)
 
   return (
     <div>
@@ -250,6 +259,46 @@ export default function Dashboard() {
             </ul>
           )}
           <p className="mt-3 text-xs text-texto/40">“Agendar” cria a consulta na data recomendada (09:00) e adianta a próxima recorrência. Você pode remarcar na Agenda.</p>
+        </section>
+
+        {/* Follow-ups comerciais (CRM) */}
+        <section className="rounded-xl border border-black/5 bg-white p-5 lg:col-span-2">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold text-texto">Follow-ups (Comercial)</h2>
+            <Link to="/clinica/crm" className="text-sm font-medium text-primaria hover:underline">Ver funil →</Link>
+          </div>
+          {carregando ? (
+            <p className="text-sm text-texto/50">Carregando…</p>
+          ) : followVencidos.length === 0 && semProximo.length === 0 ? (
+            <p className="text-sm text-texto/50">Nenhum follow-up pendente. 👍</p>
+          ) : (
+            <>
+              {followVencidos.length > 0 && (
+                <ul className="space-y-2">
+                  {followVencidos.map((l) => {
+                    const atrasado = !!l.proxima_acao && l.proxima_acao < hojeYmd2
+                    return (
+                      <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 pb-2 text-sm last:border-0 last:pb-0">
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium text-texto">{l.nome}</span>
+                          <span className="text-texto/50"> · {labelEtapa(l.etapa)}</span>
+                          {l.professionals?.nome && <span className="text-texto/40"> · {l.professionals.nome}</span>}
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${atrasado ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {atrasado ? 'atrasado' : 'hoje'} · {formatDateBR(l.proxima_acao)}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {semProximo.length > 0 && (
+                <p className="mt-3 text-sm text-texto/60">
+                  <span className="font-medium text-amber-700">{semProximo.length}</span> lead(s) em aberto <strong>sem próximo follow-up</strong> definido — defina uma ação no funil para não esfriar.
+                </p>
+              )}
+            </>
+          )}
         </section>
       </div>
     </div>
