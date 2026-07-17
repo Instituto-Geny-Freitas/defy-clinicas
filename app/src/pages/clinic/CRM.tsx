@@ -4,7 +4,9 @@ import { useAuth } from '@/auth/AuthProvider'
 import { listProfessionals } from '@/lib/settings'
 import {
   convertLeadToPatient, createLead, deleteLead, listLeads, moveLeadEtapa, updateLead,
-  ETAPAS, FUNIL, ORIGENS, type Lead, type LeadEtapa, type LeadInput,
+  addLeadActivity, listLeadActivities, setLeadFollowup,
+  ETAPAS, FUNIL, ORIGENS, TIPOS_ATIVIDADE, ATIVIDADE_LABEL,
+  type Lead, type LeadEtapa, type LeadInput, type LeadActivity, type AtividadeTipo,
 } from '@/lib/crm'
 import { brl } from '@/lib/finance'
 import { formatDateBR, localDateToday } from '@/lib/format'
@@ -15,6 +17,7 @@ const labelDe = (e: LeadEtapa) => ETAPAS.find((x) => x.key === e)?.label ?? e
 export default function CRM() {
   const { profile } = useAuth()
   const clinicId = profile?.professional?.clinic_id ?? ''
+  const profId = profile?.professional?.id ?? null
   const [leads, setLeads] = useState<Lead[]>([])
   const [profs, setProfs] = useState<{ id: string; nome: string }[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -40,7 +43,9 @@ export default function CRM() {
   async function avancar(l: Lead) {
     const i = FUNIL.indexOf(l.etapa)
     if (i < 0 || i >= FUNIL.length - 1) return
-    await moveLeadEtapa(l.id, FUNIL[i + 1]).catch(() => {})
+    const prox = FUNIL[i + 1]
+    await moveLeadEtapa(l.id, prox).catch(() => {})
+    await addLeadActivity({ clinicId, leadId: l.id, tipo: 'etapa', nota: `Etapa: ${labelDe(l.etapa)} → ${labelDe(prox)}`, createdBy: profId }).catch(() => {})
     recarregar()
   }
 
@@ -119,6 +124,7 @@ export default function CRM() {
       {modal && (
         <LeadModal
           clinicId={clinicId}
+          profId={profId}
           lead={modal === 'novo' ? null : modal}
           profs={profs}
           onClose={() => setModal(null)}
@@ -138,8 +144,8 @@ function Kpi({ label, valor, cor = 'text-texto' }: { label: string; valor: strin
   )
 }
 
-function LeadModal({ clinicId, lead, profs, onClose, onSaved }: {
-  clinicId: string; lead: Lead | null; profs: { id: string; nome: string }[]; onClose: () => void; onSaved: () => void
+function LeadModal({ clinicId, profId, lead, profs, onClose, onSaved }: {
+  clinicId: string; profId: string | null; lead: Lead | null; profs: { id: string; nome: string }[]; onClose: () => void; onSaved: () => void
 }) {
   const editar = !!lead
   const navigate = useNavigate()
@@ -152,13 +158,40 @@ function LeadModal({ clinicId, lead, profs, onClose, onSaved }: {
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const set = <K extends keyof LeadInput>(k: K, v: LeadInput[K]) => setF((s) => ({ ...s, [k]: v }))
+  // Timeline de interações (só para lead existente)
+  const [atividades, setAtividades] = useState<LeadActivity[]>([])
+  const [atvTipo, setAtvTipo] = useState<AtividadeTipo>('nota')
+  const [atvNota, setAtvNota] = useState('')
+  const [atvFollowup, setAtvFollowup] = useState('')
+  const [atvSalvando, setAtvSalvando] = useState(false)
+  const nomeProf = (id: string | null) => (id ? (profs.find((p) => p.id === id)?.nome ?? '—') : null)
+  function recarregarAtividades() { if (lead) listLeadActivities(lead.id).then(setAtividades).catch(() => {}) }
+  useEffect(recarregarAtividades, [lead?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function registrarInteracao() {
+    if (!lead) return
+    if (!atvNota.trim() && atvTipo === 'nota') { setErro('Escreva a nota.'); return }
+    setAtvSalvando(true); setErro(null)
+    try {
+      await addLeadActivity({ clinicId, leadId: lead.id, tipo: atvTipo, nota: atvNota, createdBy: profId })
+      if (atvFollowup) { await setLeadFollowup(lead.id, atvFollowup); set('proxima_acao', atvFollowup) }
+      setAtvNota(''); setAtvFollowup('')
+      recarregarAtividades()
+    } catch { setErro('Não foi possível registrar a interação.') } finally { setAtvSalvando(false) }
+  }
 
   async function salvar() {
     if (!f.nome?.trim()) { setErro('Informe o nome do lead.'); return }
     setErro(null); setSalvando(true)
     try {
-      if (lead) await updateLead(lead.id, f)
-      else await createLead(clinicId, f)
+      if (lead) {
+        await updateLead(lead.id, f)
+        if (f.etapa && f.etapa !== lead.etapa) {
+          await addLeadActivity({ clinicId, leadId: lead.id, tipo: 'etapa', nota: `Etapa: ${labelDe(lead.etapa)} → ${labelDe(f.etapa)}`, createdBy: profId }).catch(() => {})
+        }
+      } else {
+        await createLead(clinicId, f)
+      }
       onSaved()
     } catch (e) { setErro((e as Error)?.message || 'Não foi possível salvar.'); setSalvando(false) }
   }
@@ -168,6 +201,7 @@ function LeadModal({ clinicId, lead, profs, onClose, onSaved }: {
     setSalvando(true)
     try {
       const pid = await convertLeadToPatient(clinicId, lead)
+      await addLeadActivity({ clinicId, leadId: lead.id, tipo: 'etapa', nota: 'Convertido em paciente (Ganho)', createdBy: profId }).catch(() => {})
       navigate(`/clinica/pacientes/${pid}`)
     } catch (e) { setErro((e as Error)?.message || 'Não foi possível converter (e-mail já cadastrado?).'); setSalvando(false) }
   }
@@ -220,6 +254,43 @@ function LeadModal({ clinicId, lead, profs, onClose, onSaved }: {
           )}
           <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={f.observacoes ?? ''} onChange={(e) => set('observacoes', e.target.value)} /></div>
         </div>
+
+        {editar && (
+          <div className="mt-4 border-t border-black/5 pt-4">
+            <h3 className="mb-2 text-sm font-semibold text-texto/70">Histórico e follow-ups</h3>
+            <div className="mb-3 space-y-2 rounded-xl border border-black/5 bg-black/[0.02] p-3">
+              <div className="flex flex-wrap gap-2">
+                <select className="rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={atvTipo} onChange={(e) => setAtvTipo(e.target.value as AtividadeTipo)}>
+                  {TIPOS_ATIVIDADE.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
+                <input className="min-w-[8rem] flex-1 rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="O que aconteceu / combinado…" value={atvNota} onChange={(e) => setAtvNota(e.target.value)} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-xs text-texto/60">Próximo follow-up</label>
+                <input type="date" className="rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={atvFollowup} onChange={(e) => setAtvFollowup(e.target.value)} />
+                <button onClick={registrarInteracao} disabled={atvSalvando} className="ml-auto rounded-lg bg-primaria px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{atvSalvando ? '…' : 'Registrar'}</button>
+              </div>
+            </div>
+            {atividades.length === 0 ? (
+              <p className="text-xs text-texto/40">Nenhuma interação registrada ainda.</p>
+            ) : (
+              <ul className="max-h-48 space-y-2 overflow-auto">
+                {atividades.map((a) => (
+                  <li key={a.id} className="flex gap-2 text-sm">
+                    <span className="mt-0.5 shrink-0 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-texto/60">{ATIVIDADE_LABEL[a.tipo]}</span>
+                    <span className="flex-1">
+                      <span className="text-texto/80">{a.nota || '—'}</span>
+                      <span className="block text-[11px] text-texto/40">
+                        {new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {nomeProf(a.created_by) ? ` · ${nomeProf(a.created_by)}` : ''}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {lead?.patient_id && (
           <button onClick={() => navigate(`/clinica/pacientes/${lead.patient_id}`)} className="mt-3 text-sm font-medium text-primaria hover:underline">Ver paciente vinculado →</button>
