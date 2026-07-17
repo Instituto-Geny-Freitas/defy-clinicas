@@ -99,6 +99,56 @@ export async function deleteLead(id: string): Promise<void> {
   if (error) throw error
 }
 
+// ---- Timeline de interações / follow-ups -----------------------------------
+export type AtividadeTipo = 'nota' | 'ligacao' | 'whatsapp' | 'email' | 'reuniao' | 'etapa' | 'outro'
+/** Tipos que o usuário escolhe ao registrar ('etapa' é gerado automaticamente). */
+export const TIPOS_ATIVIDADE: { key: AtividadeTipo; label: string }[] = [
+  { key: 'nota', label: 'Nota' },
+  { key: 'ligacao', label: 'Ligação' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'reuniao', label: 'Reunião' },
+  { key: 'outro', label: 'Outro' },
+]
+export const ATIVIDADE_LABEL: Record<AtividadeTipo, string> = {
+  nota: 'Nota', ligacao: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', reuniao: 'Reunião', etapa: 'Etapa', outro: 'Outro',
+}
+
+export interface LeadActivity {
+  id: string
+  lead_id: string
+  tipo: AtividadeTipo
+  nota: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export async function listLeadActivities(leadId: string): Promise<LeadActivity[]> {
+  const { data, error } = await supabase
+    .from('crm_lead_activities')
+    .select('id, lead_id, tipo, nota, created_by, created_at')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as LeadActivity[]
+}
+
+export async function addLeadActivity(args: {
+  clinicId: string; leadId: string; tipo: AtividadeTipo; nota?: string | null; createdBy?: string | null
+}): Promise<void> {
+  const { error } = await supabase.from('crm_lead_activities').insert({
+    clinic_id: args.clinicId, lead_id: args.leadId, tipo: args.tipo,
+    nota: args.nota?.trim() || null, created_by: args.createdBy ?? null,
+  })
+  if (error) throw error
+}
+
+/** Atualiza só a data do próximo follow-up do lead. */
+export async function setLeadFollowup(id: string, proximaAcao: string | null): Promise<void> {
+  const { error } = await supabase.from('crm_leads').update({ proxima_acao: proximaAcao || null }).eq('id', id)
+  if (error) throw error
+}
+
 /** Converte um lead em paciente: cria o cadastro e vincula (etapa vira 'ganho'). */
 export async function convertLeadToPatient(clinicId: string, lead: Lead): Promise<string> {
   const paciente = await createPatient(clinicId, {
