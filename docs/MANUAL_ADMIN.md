@@ -580,6 +580,44 @@ O admin pode **personalizar** qualquer formulário padrão:
 
 ---
 
-*Este manual cobre as funcionalidades desenvolvidas até **junho de 2026**. Itens em evolução:
-cobrança PIX automática e **envio por WhatsApp** ao fornecedor (dependem de contas/contratos
-externos; o sistema já está preparado para ativá-los nas Integrações).*
+## 15. Assistente (comandos por conversa)
+
+O **Assistente** (ícone no topo do menu) entende pedidos em português e executa operações reais
+do sistema pela conversa, **com o mesmo login** e as mesmas permissões da equipe.
+
+**Princípios de segurança:**
+- Só responde à **equipe autenticada** e sempre no escopo da própria clínica.
+- Antes de **gravar** qualquer coisa (agendar, lançar despesa, registrar recebimento, marcar
+  despesa paga, criar lead, agendar recorrência), ele **confirma os detalhes** e só age após um "sim".
+- **Não move dinheiro nem concede crédito/cashback/recompensa de indicação** — isso continua sendo
+  feito manualmente no Financeiro, por decisão de segurança.
+- Revalida horário ao agendar (não cria conflito) e nunca inventa IDs de paciente.
+
+### 15.1 O que dá para pedir (por área)
+
+| Área | Exemplos de comando |
+|---|---|
+| **Agenda** | "Qual a agenda de hoje?" · "Minhas consultas de amanhã" · "A clínica tem o quê na sexta?" · "Qual meu próximo atendimento?" |
+| **Agendar** | "Agende a Maria Silva quinta às 14h para avaliação" · "Tem horário livre comigo amanhã de manhã?" |
+| **Pacientes** | "Busque a paciente Ana" · "Qual o telefone da Neli?" |
+| **Financeiro** | "Quanto recebi este mês?" · "Quanto tenho a receber de cartão?" · "Registre um recebimento de R$ 200 no PIX da Ana no orçamento em aberto" · "Lance uma despesa de R$ 450 de aluguel" · "Marque a despesa de energia como paga" |
+| **Retornos (recorrência)** | "Tem retornos recomendados pendentes?" · "Agende o retorno da paciente X" |
+| **Comercial (CRM)** | "Quais leads estão em avaliação?" · "Quantos leads novos temos?" · "Cadastre um lead: Fulana, veio do Instagram, interesse em botox" · "Quais follow-ups tenho para hoje?" · "Tem lead parado?" |
+| **Relacionamento** | "Quem faz aniversário este mês?" · "Aniversariantes de agosto" |
+| **Administrativo** | "Registre uma intercorrência para o paciente X" · "Quais formulários administrativos existem?" |
+| **Alertas** | "Tem algum alerta?" (estoque baixo, validade próxima, agendamentos a regularizar) |
+
+### 15.2 O que o assistente NÃO faz (por segurança)
+- Conceder **crédito**, **cashback** ou **recompensa de indicação** (feito manualmente no Financeiro).
+- **Excluir** dados (orçamentos, pagamentos, pacientes) — ações irreversíveis ficam nas telas.
+- Alterar configurações, permissões ou preços de forma automática.
+
+> Dica: seja específico (nome do paciente, data, valor). Se houver mais de um paciente com o mesmo
+> nome, o assistente pergunta qual antes de prosseguir.
+
+---
+
+*Este manual cobre as funcionalidades desenvolvidas até **julho de 2026**, incluindo recorrência de
+retornos, NPS, indicação, fidelidade/cashback, relacionamento, gestão financeira, agenda semanal,
+agendamento online e o CRM comercial. Itens em evolução: cobrança PIX automática, **envio por
+WhatsApp** e a operação **multi-clínica** (ver `docs/ROADMAP-multiclinica.md`).*
