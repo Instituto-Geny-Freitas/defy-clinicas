@@ -258,6 +258,56 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_leads',
+      description: 'Lista os leads do funil comercial (CRM). Filtre por etapa se pedido. Use para "leads em avaliação", "quantos leads novos", etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          etapa: { type: 'string', enum: ['novo', 'contato', 'avaliacao', 'orcamento', 'ganho', 'perdido'], description: 'Filtra por etapa (opcional).' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'criar_lead',
+      description: 'Cadastra um novo lead no funil comercial (etapa "novo"). CONFIRME nome e dados com a profissional antes de chamar.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome: { type: 'string', description: 'Nome do lead.' },
+          whatsapp: { type: 'string', description: 'WhatsApp/telefone (opcional).' },
+          origem: { type: 'string', description: 'Origem: Instagram, Indicação, WhatsApp, Google, Site, Presencial, Outro (opcional).' },
+          interesse: { type: 'string', description: 'Procedimento/serviço de interesse (opcional).' },
+          valor_estimado: { type: 'number', description: 'Valor estimado em reais (opcional).' },
+        },
+        required: ['nome'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'followups_pendentes',
+      description: 'Lista os leads em aberto com follow-up vencido ou para hoje (e leads sem próximo follow-up). Use para "quais follow-ups tenho hoje", "leads parados".',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'aniversariantes',
+      description: 'Lista os pacientes aniversariantes de um mês (padrão: mês atual). Use para "aniversariantes do mês", "quem faz aniversário em agosto".',
+      parameters: {
+        type: 'object',
+        properties: { mes: { type: 'number', description: 'Mês 1-12 (opcional; padrão o mês atual).' } },
+      },
+    },
+  },
 ]
 
 // --- Implementação das ferramentas -------------------------------------------
@@ -623,6 +673,58 @@ async function runTool(name: string, args: Record<string, unknown>, prof: Prof, 
       return { criado: true, id: appt.id, quando: localBR(appt.inicio), proxima_recorrencia: prox }
     }
 
+    case 'listar_leads': {
+      let q = admin.from('crm_leads')
+        .select('id, nome, etapa, origem, interesse, valor_estimado, proxima_acao')
+        .eq('clinic_id', prof.clinic_id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (args.etapa) q = q.eq('etapa', args.etapa as string)
+      const { data, error } = await q
+      if (error) return { erro: error.message }
+      return { total: data?.length ?? 0, leads: data ?? [] }
+    }
+
+    case 'criar_lead': {
+      const nome = (args.nome as string)?.trim()
+      if (!nome) return { criado: false, erro: 'Informe o nome do lead.' }
+      const { data, error } = await admin.from('crm_leads').insert({
+        clinic_id: prof.clinic_id, nome,
+        whatsapp: (args.whatsapp as string) ?? null, origem: (args.origem as string) ?? null,
+        interesse: (args.interesse as string) ?? null, valor_estimado: Number(args.valor_estimado) || 0,
+        etapa: 'novo',
+      }).select('id').single()
+      if (error) return { criado: false, erro: error.message }
+      return { criado: true, id: data.id, etapa: 'novo' }
+    }
+
+    case 'followups_pendentes': {
+      const { data, error } = await admin.from('crm_leads')
+        .select('id, nome, etapa, proxima_acao, responsavel_id')
+        .eq('clinic_id', prof.clinic_id)
+        .neq('etapa', 'ganho').neq('etapa', 'perdido')
+        .order('proxima_acao', { ascending: true, nullsFirst: false })
+      if (error) return { erro: error.message }
+      const vencidos = (data ?? []).filter((l: Record<string, any>) => l.proxima_acao && l.proxima_acao <= hoje)
+      const semProximo = (data ?? []).filter((l: Record<string, any>) => !l.proxima_acao).length
+      return { vencidos_ou_hoje: vencidos, total_vencidos: vencidos.length, sem_proximo_followup: semProximo }
+    }
+
+    case 'aniversariantes': {
+      const mm = String(args.mes ? Number(args.mes) : Number(hoje.slice(5, 7))).padStart(2, '0')
+      const { data, error } = await admin.from('patients')
+        .select('nome, nascimento, whatsapp')
+        .eq('clinic_id', prof.clinic_id)
+        .eq('ativo', true)
+        .not('nascimento', 'is', null)
+      if (error) return { erro: error.message }
+      const lista = (data ?? [])
+        .filter((p: Record<string, any>) => String(p.nascimento).slice(5, 7) === mm)
+        .map((p: Record<string, any>) => ({ nome: p.nome, dia: String(p.nascimento).slice(8, 10), whatsapp: p.whatsapp }))
+        .sort((a: Record<string, any>, b: Record<string, any>) => a.dia.localeCompare(b.dia))
+      return { mes: mm, total: lista.length, aniversariantes: lista }
+    }
+
     default:
       return { erro: `Ferramenta desconhecida: ${name}` }
   }
@@ -662,7 +764,8 @@ Deno.serve(async (req) => {
       `Você conversa com a profissional ${(prof as Prof).nome} (perfil: ${(prof as Prof).role}).`,
       `Agora é ${agoraLocal} (fuso America/Sao_Paulo, UTC-03:00). A data de hoje é ${hoje}.`,
       `Ao interpretar horários informados pela profissional, use SEMPRE o fuso America/Sao_Paulo e gere datas em ISO 8601 com offset -03:00 (ex.: 2026-07-15T14:00:00-03:00).`,
-      `Você só pode ajudar com assuntos do sistema (agenda, pacientes, financeiro, regularização de agendamentos, retornos recomendados/recorrência, alertas e registros administrativos). Recuse educadamente pedidos fora desse escopo.`,
+      `Você só pode ajudar com assuntos do sistema (agenda, pacientes, financeiro, regularização de agendamentos, retornos recomendados/recorrência, funil comercial/leads, aniversariantes, alertas e registros administrativos). Recuse educadamente pedidos fora desse escopo.`,
+      `Funil comercial: use listar_leads e followups_pendentes para consultar; para cadastrar use criar_lead (CONFIRME o nome antes). Não conceda crédito/cashback nem recompensa de indicação pelo assistente — isso é feito manualmente pela equipe no Financeiro.`,
       `Retornos recomendados: use sugerir_recorrencias para listar retornos pendentes; para agendar um deles, CONFIRME com a profissional e chame agendar_recorrencia (ela revalida o horário e adianta a próxima recorrência).`,
       `Regras de agendamento: 1) identifique o paciente com buscar_paciente; se houver mais de um com o mesmo nome, PERGUNTE qual antes de prosseguir; 2) confirme data e horário; 3) só então chame criar_agendamento (ela revalida o horário). Nunca invente IDs de paciente.`,
       `Antes de executar QUALQUER ação que grava dados (criar agendamento, preencher registro administrativo, registrar despesa, registrar recebimento, marcar despesa como paga), confirme os detalhes com a profissional em uma frase e só prossiga após um "sim".`,
