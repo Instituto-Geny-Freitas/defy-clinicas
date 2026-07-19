@@ -4,8 +4,11 @@ import {
   deleteTreatmentPlan,
   listSnippets,
   listTreatmentPlans,
+  markPlanConsentByStaff,
+  sendTreatmentPlan,
   suggestPlanIA,
   updateTreatmentPlan,
+  type PlanStatus,
   type TextSnippet,
   type TreatmentPlan,
 } from '@/lib/treatmentPlans'
@@ -14,6 +17,17 @@ import { formatDateBR } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+
+const PLAN_STATUS: Record<PlanStatus, { label: string; cls: string }> = {
+  rascunho: { label: 'Rascunho', cls: 'bg-black/10 text-texto/60' },
+  pendente: { label: 'Aguardando ciência', cls: 'bg-amber-100 text-amber-700' },
+  consentido: { label: 'Consentido', cls: 'bg-emerald-100 text-emerald-700' },
+  cancelado: { label: 'Cancelado', cls: 'bg-rose-100 text-rose-700' },
+}
+function PlanStatusBadge({ status }: { status: PlanStatus }) {
+  const s = PLAN_STATUS[status] ?? PLAN_STATUS.rascunho
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>
+}
 
 export default function TreatmentPlansPanel({ patientId, clinicId, professionalId }: Props) {
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
@@ -30,6 +44,15 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
   // Valor do plano = soma dos orçamentos vinculados a ele.
   const valorDoPlano = (planId: string) =>
     orcamentos.filter((q) => q.treatment_plan_id === planId).reduce((s, q) => s + Number(q.valor_total), 0)
+
+  async function enviar(p: TreatmentPlan) {
+    if (!confirm('Enviar este plano ao paciente para dar ciência no portal?')) return
+    await sendTreatmentPlan(p.id); recarregar()
+  }
+  async function consentirManual(p: TreatmentPlan) {
+    if (!confirm('Registrar que o paciente consentiu este plano (ex.: presencialmente)? Fica marcado como consentido pela equipe.')) return
+    await markPlanConsentByStaff(p.id); recarregar()
+  }
 
   return (
     <div>
@@ -51,8 +74,11 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
         <div className="space-y-2">
           {planos.map((p) => (
             <div key={p.id} className="rounded-xl border border-black/5 bg-white p-4">
-              <div className="flex items-center justify-between">
-                <div className="font-medium text-texto">{p.titulo || 'Plano de tratamento'}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-texto">{p.titulo || 'Plano de tratamento'}</span>
+                  <PlanStatusBadge status={p.status} />
+                </div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
                   <button onClick={() => setEditando(p)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
@@ -66,6 +92,26 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
                 {valorDoPlano(p.id) > 0
                   ? <span className="font-medium text-texto/70">Orçamento: {brl(valorDoPlano(p.id))}</span>
                   : <span className="text-texto/40">Aguardando orçamento</span>}
+              </div>
+              {/* Envio ao paciente e ciência (espelha os Documentos) */}
+              <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-black/5 pt-2 text-xs">
+                {p.status === 'rascunho' && (
+                  <button onClick={() => enviar(p)} className="rounded-lg bg-primaria px-3 py-1.5 font-semibold text-white hover:opacity-90">Enviar ao paciente</button>
+                )}
+                {p.status === 'pendente' && (
+                  <>
+                    <span className="text-amber-700">Enviado{p.enviado_em ? ` em ${new Date(p.enviado_em).toLocaleDateString('pt-BR')}` : ''} · aguardando ciência no portal</span>
+                    <button onClick={() => consentirManual(p)} className="rounded-lg border border-primaria px-3 py-1.5 font-semibold text-primaria hover:bg-primaria/5">Registrar consentimento</button>
+                    <button onClick={() => enviar(p)} className="text-texto/50 hover:underline">Reenviar</button>
+                  </>
+                )}
+                {p.status === 'consentido' && (
+                  <span className="text-emerald-700">
+                    Consentido{p.consentido_em ? ` em ${new Date(p.consentido_em).toLocaleString('pt-BR')}` : ''}
+                    {p.consentido_via === 'staff' ? ' (registrado pela equipe)' : p.consentido_via === 'portal' ? ' (pelo paciente no portal)' : ''}
+                    {p.assinatura_hash && <span className="ml-1 break-all text-[10px] text-emerald-700/70">· autenticação {p.assinatura_hash.slice(0, 16)}…</span>}
+                  </span>
+                )}
               </div>
             </div>
           ))}

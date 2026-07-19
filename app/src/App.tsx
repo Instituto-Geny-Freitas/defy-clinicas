@@ -22,6 +22,7 @@ import Assistant from '@/pages/Assistant'
 import PatientHome from '@/pages/patient/PatientHome'
 import Anamnese from '@/pages/patient/Anamnese'
 import PatientDocuments from '@/pages/patient/PatientDocuments'
+import PatientPlans from '@/pages/patient/PatientPlans'
 import PatientAppointments from '@/pages/patient/PatientAppointments'
 import PatientFinance from '@/pages/patient/PatientFinance'
 import PatientEvolution from '@/pages/patient/PatientEvolution'
@@ -93,6 +94,7 @@ export default function App() {
             <Route index element={<PatientHome />} />
             <Route path="agendamentos" element={<PatientAppointments />} />
             <Route path="anamnese" element={<Anamnese />} />
+            <Route path="plano" element={<PatientPlans />} />
             <Route path="documentos" element={<PatientDocuments />} />
             <Route path="exames" element={<PatientLabs />} />
             <Route path="evolucao" element={<PatientEvolution />} />

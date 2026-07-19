@@ -6,6 +6,7 @@ const NAV = [
   { to: '/portal', label: 'Início', end: true },
   { to: '/portal/agendamentos', label: 'Agenda' },
   { to: '/portal/anamnese', label: 'Anamnese' },
+  { to: '/portal/plano', label: 'Plano' },
   { to: '/portal/documentos', label: 'Documentos' },
   { to: '/portal/exames', label: 'Exames' },
   { to: '/portal/evolucao', label: 'Evolução' },
