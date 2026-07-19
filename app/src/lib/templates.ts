@@ -23,6 +23,7 @@ export interface DocumentTemplate {
   id: string
   clinic_id: string
   tipo: 'termo' | 'orientacao' | 'ficha'
+  tipo_id: string | null
   nome: string
   descricao: string | null
   procedimento_rel: string | null
@@ -32,12 +33,13 @@ export interface DocumentTemplate {
   reminder_schedule: ReminderItem[]
   requer_assinatura: boolean
   ativo: boolean
+  document_types?: { rotulo: string; natureza: 'termo' | 'orientacao' } | null
 }
 
 export async function listTemplates(): Promise<DocumentTemplate[]> {
   const { data, error } = await supabase
     .from('document_templates')
-    .select('*')
+    .select('*, document_types(rotulo, natureza)')
     .order('tipo')
     .order('nome')
   if (error) throw error
@@ -46,6 +48,7 @@ export async function listTemplates(): Promise<DocumentTemplate[]> {
 
 export interface TemplateInput {
   tipo: 'termo' | 'orientacao' | 'ficha'
+  tipo_id?: string | null
   nome: string
   descricao?: string | null
   procedimento_rel?: string | null

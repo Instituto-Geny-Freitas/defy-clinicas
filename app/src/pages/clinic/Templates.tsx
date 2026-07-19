@@ -12,6 +12,7 @@ import {
   type TemplateInput,
 } from '@/lib/templates'
 import type { AutoFonte, FieldType, PreenchidoPor } from '@/forms/types'
+import { listDocumentTypes, type DocumentType } from '@/lib/documentTypes'
 
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
@@ -94,7 +95,7 @@ export default function Templates() {
               {templates.map((t) => (
                 <tr key={t.id} className="border-t border-black/5">
                   <td className="px-4 py-2 text-texto">{t.nome}</td>
-                  <td className="px-4 py-2 capitalize text-texto/70">{t.tipo}</td>
+                  <td className="px-4 py-2 text-texto/70">{t.document_types?.rotulo ?? t.tipo}</td>
                   <td className="px-4 py-2 text-texto/60">v{t.versao}</td>
                   <td className="px-4 py-2">
                     {t.ativo ? <span className="text-emerald-600">ativo</span> : <span className="text-texto/40">inativo</span>}
@@ -128,7 +129,8 @@ function Editor({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [tipo, setTipo] = useState<TemplateInput['tipo']>(template?.tipo ?? 'termo')
+  const [tipos, setTipos] = useState<DocumentType[]>([])
+  const [tipoId, setTipoId] = useState<string>('')
   const [nome, setNome] = useState(template?.nome ?? '')
   const [procedimento, setProcedimento] = useState(template?.procedimento_rel ?? '')
   const [requerAssinatura, setRequerAssinatura] = useState(template?.requer_assinatura ?? true)
@@ -138,6 +140,21 @@ function Editor({
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const corpoRef = useRef<HTMLTextAreaElement>(null)
+
+  // Tipos gerenciados (Configurações → Tipos de documento) alimentam o dropdown.
+  useEffect(() => {
+    listDocumentTypes().then((list) => {
+      setTipos(list)
+      setTipoId((prev) => {
+        if (prev) return prev
+        if (template?.tipo_id && list.some((t) => t.id === template.tipo_id)) return template.tipo_id
+        const nat = template?.tipo === 'orientacao' ? 'orientacao' : 'termo'
+        return (list.find((t) => t.natureza === nat) ?? list[0])?.id ?? ''
+      })
+    }).catch(() => {})
+  }, [])
+  const tipoSel = tipos.find((t) => t.id === tipoId) ?? null
+  const natureza: 'termo' | 'orientacao' = tipoSel?.natureza ?? (template?.tipo === 'orientacao' ? 'orientacao' : 'termo')
 
   function addCampo() {
     setCampos((c) => [...c, { key: '', label: '', type: 'text', required: false }])
@@ -179,13 +196,14 @@ function Editor({
     if (!nome.trim()) { setErro('Informe o nome.'); return }
     const camposValidos = campos.filter((c) => c.label.trim()).map((c) => ({ ...c, key: c.key || slugify(c.label) }))
     const input: TemplateInput = {
-      tipo,
+      tipo: natureza,
+      tipo_id: tipoId || null,
       nome,
       procedimento_rel: procedimento || null,
       schema: camposValidos,
       corpo,
-      reminder_schedule: tipo === 'orientacao' ? lembretes.filter((l) => l.mensagem.trim()) : [],
-      requer_assinatura: tipo === 'termo' ? requerAssinatura : false,
+      reminder_schedule: natureza === 'orientacao' ? lembretes.filter((l) => l.mensagem.trim()) : [],
+      requer_assinatura: natureza === 'termo' ? requerAssinatura : false,
     }
     setSalvando(true)
     setErro(null)
@@ -211,9 +229,9 @@ function Editor({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm text-texto/70">Tipo</label>
-              <select className={field} value={tipo} onChange={(e) => setTipo(e.target.value as TemplateInput['tipo'])}>
-                <option value="termo">Termo (consentimento)</option>
-                <option value="orientacao">Orientação (cuidados)</option>
+              <select className={field} value={tipoId} onChange={(e) => setTipoId(e.target.value)}>
+                {tipos.length === 0 && <option value="">—</option>}
+                {tipos.map((t) => <option key={t.id} value={t.id}>{t.rotulo}</option>)}
               </select>
             </div>
             <div>
@@ -224,7 +242,7 @@ function Editor({
               <label className="mb-1 block text-sm text-texto/70">Procedimento relacionado (opcional)</label>
               <input className={field} value={procedimento} onChange={(e) => setProcedimento(e.target.value)} placeholder="ex.: toxina_botulinica" />
             </div>
-            {tipo === 'termo' && (
+            {natureza === 'termo' && (
               <div className="sm:col-span-2 rounded-lg bg-black/[0.02] p-2">
                 <label className="flex items-center gap-2 text-sm text-texto/80">
                   <input type="checkbox" checked={requerAssinatura} onChange={(e) => setRequerAssinatura(e.target.checked)} />
@@ -308,7 +326,7 @@ function Editor({
           </div>
 
           {/* Lembretes (só orientação) */}
-          {tipo === 'orientacao' && (
+          {natureza === 'orientacao' && (
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="text-sm font-medium text-texto/80">Lembretes automáticos</label>
