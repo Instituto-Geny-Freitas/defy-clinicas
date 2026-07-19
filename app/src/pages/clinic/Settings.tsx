@@ -67,6 +67,7 @@ import {
   type FormulationLib,
 } from '@/lib/formulations'
 import { createExpenseType, deleteExpenseType, listExpenseTypes, updateExpenseType, type ExpenseType } from '@/lib/cashflow'
+import { createDocumentType, deleteDocumentType, listDocumentTypes, updateDocumentType, type DocTypeNatureza, type DocumentType } from '@/lib/documentTypes'
 import { FEATURES, NIVEIS_EDITAVEIS, NIVEL_LABEL as PERM_NIVEL_LABEL, defaultsMatrix, getPermissions, savePermissions, type PermMatrix } from '@/lib/permissions'
 import { usePermissions } from '@/auth/PermissionsProvider'
 import {
@@ -90,7 +91,7 @@ import { getGestaoConfig, saveGestaoConfig } from '@/lib/gestao'
 import { listResources, createResource, deleteResource, type Resource } from '@/lib/resources'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas' | 'recursos'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'tipos_doc' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas' | 'recursos'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 const ALFABETO_ATIVOS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -126,6 +127,7 @@ export default function Settings() {
           { k: 'permissoes', l: 'Permissões' },
           { k: 'integracoes', l: 'Integrações' },
           { k: 'textos', l: 'Textos-padrão' },
+          { k: 'tipos_doc', l: 'Tipos de documento' },
           { k: 'ativos', l: 'Ativos' },
           { k: 'unidades', l: 'Unidades' },
           { k: 'vias', l: 'Vias' },
@@ -163,6 +165,7 @@ export default function Settings() {
       {sec === 'permissoes' && <PermissoesSection clinicId={clinicId} />}
       {sec === 'integracoes' && <IntegracoesSection clinicId={clinicId} />}
       {sec === 'textos' && <TextosSection clinicId={clinicId} />}
+      {sec === 'tipos_doc' && <DocumentTypesSection clinicId={clinicId} />}
       {sec === 'ativos' && <AtivosSection clinicId={clinicId} />}
       {sec === 'vias' && <ViasSection clinicId={clinicId} />}
       {sec === 'fornecedores' && <FornecedoresSection clinicId={clinicId} />}
@@ -180,6 +183,70 @@ export default function Settings() {
       {sec === 'indicacao' && <IndicacaoSection clinicId={clinicId} />}
       {sec === 'fidelidade' && <FidelidadeSection clinicId={clinicId} />}
       {sec === 'metas' && <MetasSection clinicId={clinicId} />}
+    </div>
+  )
+}
+
+// --- Tipos de documento (alimentam o dropdown "Tipo" dos Modelos) -----------
+function DocumentTypesSection({ clinicId }: { clinicId: string }) {
+  const [itens, setItens] = useState<DocumentType[]>([])
+  const [rotulo, setRotulo] = useState('')
+  const [natureza, setNatureza] = useState<DocTypeNatureza>('termo')
+  const [salvando, setSalvando] = useState(false)
+
+  function recarregar() { listDocumentTypes(true).then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function salvar() {
+    if (!rotulo.trim()) return
+    setSalvando(true)
+    try { await createDocumentType(clinicId, rotulo.trim(), natureza); setRotulo(''); recarregar() } finally { setSalvando(false) }
+  }
+  async function remover(id: string) { if (confirm('Excluir este tipo? Modelos que o usam voltam a exibir o rótulo padrão da natureza.')) { await deleteDocumentType(id); recarregar() } }
+  async function mudarNatureza(id: string, n: DocTypeNatureza) { await updateDocumentType(id, { natureza: n }); recarregar() }
+  async function alternarAtivo(t: DocumentType) { await updateDocumentType(t.id, { ativo: !t.ativo }); recarregar() }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Novo tipo de documento</h3>
+        <p className="mb-3 text-xs text-texto/50">Aparecem no campo <strong>Tipo</strong> ao criar um Modelo de Documento. A <strong>natureza</strong> define o comportamento: <strong>Termo</strong> pede assinatura/leitura do paciente no portal; <strong>Orientação</strong> permite lembretes automáticos.</p>
+        <div className="flex flex-wrap gap-2">
+          <input className={`${field} min-w-[12rem] flex-1`} value={rotulo} onChange={(e) => setRotulo(e.target.value)} placeholder="Ex.: Termo de imagem, Cuidados pós-procedimento" />
+          <select className={`${field} w-52 shrink-0`} value={natureza} onChange={(e) => setNatureza(e.target.value as DocTypeNatureza)}>
+            <option value="termo">Termo (consentimento)</option>
+            <option value="orientacao">Orientação (cuidados)</option>
+          </select>
+          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        <div className="border-b border-black/5 px-4 py-2 text-xs text-texto/50">Desative para tirar do dropdown sem perder o vínculo dos modelos já criados.</div>
+        <table className="w-full text-sm">
+          <tbody>
+            {itens.map((t) => (
+              <tr key={t.id} className={`border-t border-black/5 ${t.ativo ? '' : 'opacity-50'}`}>
+                <td className="px-4 py-2 text-texto">{t.rotulo}</td>
+                <td className="px-4 py-2">
+                  <select
+                    className="rounded-lg border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria"
+                    value={t.natureza}
+                    onChange={(e) => mudarNatureza(t.id, e.target.value as DocTypeNatureza)}
+                  >
+                    <option value="termo">Termo</option>
+                    <option value="orientacao">Orientação</option>
+                  </select>
+                </td>
+                <td className="px-4 py-2 text-right whitespace-nowrap">
+                  <button onClick={() => alternarAtivo(t)} className="mr-3 text-xs font-medium text-texto/50 hover:underline">{t.ativo ? 'Desativar' : 'Ativar'}</button>
+                  <button onClick={() => remover(t.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+                </td>
+              </tr>
+            ))}
+            {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
