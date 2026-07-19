@@ -832,6 +832,33 @@ function DespesasView(props: {
   const [editando, setEditando] = useState<Expense | null>(null)
   const lista = view === 'pagas' ? pagas : naoPagas
 
+  // Filtros de pesquisa (valem para Pagas e Não pagas)
+  const [fDe, setFDe] = useState('')
+  const [fAte, setFAte] = useState('')
+  const [fTipo, setFTipo] = useState('')   // nome do tipo, '' (todos) ou '__sem__'
+  const [fDesc, setFDesc] = useState('')
+
+  // Tipos presentes nas despesas do mês (robusto a tipos desativados) + "Sem tipo"
+  const tiposDisponiveis = useMemo(() => {
+    const s = new Set<string>()
+    ;[...pagas, ...naoPagas].forEach((d) => { if (d.expense_types?.nome) s.add(d.expense_types.nome) })
+    return [...s].sort((a, b) => a.localeCompare(b))
+  }, [pagas, naoPagas])
+  const temSemTipo = useMemo(() => [...pagas, ...naoPagas].some((d) => !d.expense_types?.nome), [pagas, naoPagas])
+
+  const listaFiltrada = useMemo(() => {
+    const desc = fDesc.trim().toLowerCase()
+    return lista.filter((d) => {
+      if (fDe && (d.data ?? '') < fDe) return false
+      if (fAte && (d.data ?? '') > fAte) return false
+      if (fTipo === '__sem__') { if (d.expense_types?.nome) return false }
+      else if (fTipo && d.expense_types?.nome !== fTipo) return false
+      if (desc && !(d.descricao ?? '').toLowerCase().includes(desc)) return false
+      return true
+    })
+  }, [lista, fDe, fAte, fTipo, fDesc])
+  const filtroAtivo = !!(fDe || fAte || fTipo || fDesc)
+
   async function alternarPago(d: Expense) { await setExpensePaid(d.id, !d.pago); onChange() }
   async function remover(d: Expense) { if (confirm('Excluir esta despesa?')) { await deleteExpense(d.id); onChange() } }
 
@@ -850,6 +877,25 @@ function DespesasView(props: {
         <button onClick={() => setView('naoPagas')} className={`rounded-lg px-3 py-1.5 ${view === 'naoPagas' ? 'bg-primaria/10 font-semibold text-primaria' : 'text-texto/60'}`}>Não pagas</button>
       </div>
 
+      {/* Filtros: data, tipo e descrição (aplicam tanto a Pagas quanto a Não pagas) */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 text-sm text-texto/60">
+          <input type="date" aria-label="Data inicial" className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" value={fDe} onChange={(e) => setFDe(e.target.value)} />
+          <span className="text-texto/40">até</span>
+          <input type="date" aria-label="Data final" className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" value={fAte} onChange={(e) => setFAte(e.target.value)} />
+        </div>
+        <select className="rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" value={fTipo} onChange={(e) => setFTipo(e.target.value)}>
+          <option value="">Todos os tipos</option>
+          {tiposDisponiveis.map((n) => <option key={n} value={n}>{n}</option>)}
+          {temSemTipo && <option value="__sem__">Sem tipo</option>}
+        </select>
+        <input className="min-w-[10rem] flex-1 rounded-lg border border-black/10 px-3 py-1.5 text-sm outline-none focus:border-primaria" placeholder="Descrição…" value={fDesc} onChange={(e) => setFDesc(e.target.value)} />
+        <span className="text-xs text-texto/40">{listaFiltrada.length}{filtroAtivo ? ` de ${lista.length}` : ''}</span>
+        {filtroAtivo && (
+          <button onClick={() => { setFDe(''); setFAte(''); setFTipo(''); setFDesc('') }} className="rounded-lg border border-black/10 px-3 py-1.5 text-xs text-texto/60 hover:bg-black/5">Limpar</button>
+        )}
+      </div>
+
       <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
@@ -858,7 +904,7 @@ function DespesasView(props: {
             <th className="px-4 py-2 font-medium text-right">Ações</th>
           </tr></thead>
           <tbody>
-            {lista.map((d) => (
+            {listaFiltrada.map((d) => (
               <tr key={d.id} className="border-t border-black/5">
                 <td className="px-4 py-2 text-texto/60">
                   {formatDateBR(d.data)}
@@ -885,7 +931,7 @@ function DespesasView(props: {
                 </td>
               </tr>
             ))}
-            {lista.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">Nenhuma despesa.</td></tr>}
+            {listaFiltrada.length === 0 && <tr><td colSpan={5} className="px-4 py-3 text-texto/50">{filtroAtivo ? 'Nenhuma despesa para os filtros.' : 'Nenhuma despesa.'}</td></tr>}
           </tbody>
         </table>
       </div>
