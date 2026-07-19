@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase'
 
+export type PlanStatus = 'rascunho' | 'pendente' | 'consentido' | 'cancelado'
+
 export interface TreatmentPlan {
   id: string
   patient_id: string
@@ -11,6 +13,16 @@ export interface TreatmentPlan {
   origem_ia: boolean
   data: string
   created_at: string
+  status: PlanStatus
+  enviado_em: string | null
+  consentido_em: string | null
+  consentido_via: 'portal' | 'staff' | null
+  assinatura_hash: string | null
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 export interface TextSnippet {
@@ -92,4 +104,53 @@ export async function createTreatmentPlan(args: CreateArgs): Promise<TreatmentPl
     .single()
   if (error) throw error
   return data
+}
+
+// --- Envio ao paciente + consentimento (ciência) ----------------------------
+
+/** Envia o plano ao paciente: passa a "pendente" e registra o envio. */
+export async function sendTreatmentPlan(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('treatment_plans')
+    .update({ status: 'pendente', enviado_em: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** A equipe registra manualmente que o paciente consentiu (ex.: presencialmente). */
+export async function markPlanConsentByStaff(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('treatment_plans')
+    .update({ status: 'consentido', consentido_em: new Date().toISOString(), consentido_via: 'staff' })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Planos que o paciente pode ver no portal (enviados; nunca rascunhos). */
+export async function listPatientPlans(patientId: string): Promise<TreatmentPlan[]> {
+  const { data, error } = await supabase
+    .from('treatment_plans')
+    .select('*')
+    .eq('patient_id', patientId)
+    .neq('status', 'rascunho')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * Ciência do paciente no portal. Gera um hash de autenticidade (conteúdo do plano +
+ * identidade do paciente + instante) e grava via RPC security definer, que só altera
+ * as colunas de consentimento do próprio plano quando ele está "pendente".
+ */
+export async function acknowledgePlan(
+  plano: TreatmentPlan,
+  paciente: { nome?: string | null; cpf?: string | null },
+): Promise<void> {
+  const agora = new Date().toISOString()
+  const hash = await sha256Hex(
+    [plano.id, plano.titulo ?? '', plano.texto ?? '', paciente.nome ?? '', paciente.cpf ?? '', agora].join('|'),
+  )
+  const { error } = await supabase.rpc('plan_patient_acknowledge', { p_plan: plano.id, p_hash: hash })
+  if (error) throw error
 }
