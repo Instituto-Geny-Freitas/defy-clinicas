@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { useThemeReload } from '@/theme/ThemeProvider'
 import {
@@ -93,6 +93,14 @@ import type { Professional, UserRole } from '@/lib/types'
 type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas' | 'recursos'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
+const ALFABETO_ATIVOS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+const OPCOES_QTD_ATIVOS = [20, 50, 100]
+/** Inicial normalizada (sem acento, maiúscula) do nome — para o filtro A–Z. */
+function inicialNome(nome: string): string {
+  const c = nome.trim().normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toUpperCase()
+  return /[A-Z]/.test(c) ? c : '#'
+}
+
 export default function Settings() {
   const { profile } = useAuth()
   const [sec, setSec] = useState<Sec>('visual')
@@ -183,11 +191,42 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState<ActiveIngredient | 'novo' | null>(null)
   const [saldoInicial, setSaldoInicial] = useState(false)
+  const [letra, setLetra] = useState<string | null>(null)   // filtro por inicial
+  const [porPagina, setPorPagina] = useState(20)             // registros por página
+  const [qtdCustom, setQtdCustom] = useState('')             // valor "outro"
+  const [pagina, setPagina] = useState(0)                    // página (0-based)
 
   function recarregar() { listActiveIngredients().then(setItens).catch(() => {}) }
   useEffect(recarregar, [])
 
-  const visiveis = itens.filter((a) => (!filtro || a.categoria === filtro) && a.nome.toLowerCase().includes(busca.toLowerCase()))
+  // Iniciais que existem dentro da categoria filtrada (para desabilitar letras vazias)
+  const iniciaisExistentes = useMemo(() => {
+    const s = new Set<string>()
+    itens.forEach((a) => { if (!filtro || a.categoria === filtro) s.add(inicialNome(a.nome)) })
+    return s
+  }, [itens, filtro])
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    return itens.filter((a) => {
+      if (filtro && a.categoria !== filtro) return false
+      if (termo && !a.nome.toLowerCase().includes(termo)) return false
+      if (letra && inicialNome(a.nome) !== letra) return false
+      return true
+    })
+  }, [itens, filtro, busca, letra])
+
+  useEffect(() => { setPagina(0) }, [busca, letra, filtro, porPagina])
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina))
+  const paginaSegura = Math.min(pagina, totalPaginas - 1)
+  const inicio = paginaSegura * porPagina
+  const visiveis = filtrados.slice(inicio, inicio + porPagina)
+
+  function aplicarCustom() {
+    const n = Number(qtdCustom)
+    if (n > 0) setPorPagina(Math.floor(n))
+  }
   async function remover(id: string) { if (confirm('Excluir este ativo?')) { await deleteActiveIngredient(id); recarregar() } }
 
   return (
@@ -197,10 +236,70 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
           <option value="">Todas as categorias</option>
           {ATIVO_CATEGORIAS.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}
         </select>
-        <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm" placeholder="Buscar ativo…" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        <span className="text-xs text-texto/40">{visiveis.length}</span>
+        <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm" placeholder="Buscar por nome…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <span className="text-xs text-texto/40">{filtrados.length}</span>
         <button onClick={() => setSaldoInicial(true)} className="rounded-lg border border-primaria px-3 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5">Saldo inicial</button>
         <button onClick={() => setEditando('novo')} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo</button>
+      </div>
+
+      {/* Filtro por letra inicial */}
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          onClick={() => setLetra(null)}
+          className={`rounded-md px-2 py-1 text-xs font-semibold transition ${letra === null ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}
+        >
+          Todos
+        </button>
+        {ALFABETO_ATIVOS.map((l) => {
+          const existe = iniciaisExistentes.has(l)
+          const ativoL = letra === l
+          return (
+            <button
+              key={l}
+              disabled={!existe}
+              onClick={() => setLetra(ativoL ? null : l)}
+              className={`h-7 w-7 rounded-md text-xs font-semibold transition ${
+                ativoL ? 'bg-primaria text-white' : existe ? 'bg-black/5 text-texto/70 hover:bg-black/10' : 'cursor-default text-texto/20'
+              }`}
+            >
+              {l}
+            </button>
+          )
+        })}
+        {iniciaisExistentes.has('#') && (
+          <button
+            onClick={() => setLetra(letra === '#' ? null : '#')}
+            className={`h-7 w-7 rounded-md text-xs font-semibold transition ${letra === '#' ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}
+            title="Outros (número/símbolo)"
+          >
+            #
+          </button>
+        )}
+      </div>
+
+      {/* Registros por página */}
+      <div className="flex flex-wrap items-center gap-2 text-sm text-texto/70">
+        <span>Mostrar</span>
+        {OPCOES_QTD_ATIVOS.map((n) => (
+          <button
+            key={n}
+            onClick={() => { setPorPagina(n); setQtdCustom('') }}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${porPagina === n && qtdCustom === '' ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}
+          >
+            {n}
+          </button>
+        ))}
+        <input
+          type="number"
+          min={1}
+          value={qtdCustom}
+          onChange={(e) => setQtdCustom(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') aplicarCustom() }}
+          onBlur={aplicarCustom}
+          placeholder="outro"
+          className="w-20 rounded-md border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria"
+        />
+        <span className="text-xs text-texto/50">registros por página</span>
       </div>
 
       {editando && (
@@ -218,7 +317,7 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
             <th className="px-3 py-2 font-medium">Aquisição</th><th className="px-3 py-2 font-medium">Margem</th><th className="px-3 py-2 font-medium">Venda</th><th className="px-3 py-2"></th>
           </tr></thead>
           <tbody>
-            {visiveis.slice(0, 200).map((a) => (
+            {visiveis.map((a) => (
               <tr key={a.id} className="border-t border-black/5">
                 <td className="px-3 py-1.5 text-texto">{a.nome}</td>
                 <td className="px-3 py-1.5 text-texto/60">{ATIVO_CATEGORIAS.find((c) => c.v === a.categoria)?.l}</td>
@@ -236,6 +335,23 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
           </tbody>
         </table>
       </div>
+
+      {/* Rodapé: contagem + paginação */}
+      {filtrados.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-texto/60">
+          <span>
+            {inicio + 1}–{Math.min(inicio + porPagina, filtrados.length)} de {filtrados.length}
+            {(busca || letra || filtro) && ` (${itens.length} no total)`}
+          </span>
+          {totalPaginas > 1 && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={paginaSegura === 0} className="rounded-md bg-black/5 px-3 py-1 text-xs font-semibold text-texto/70 hover:bg-black/10 disabled:opacity-40">← Anterior</button>
+              <span className="text-xs">Página {paginaSegura + 1} de {totalPaginas}</span>
+              <button onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))} disabled={paginaSegura >= totalPaginas - 1} className="rounded-md bg-black/5 px-3 py-1 text-xs font-semibold text-texto/70 hover:bg-black/10 disabled:opacity-40">Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
