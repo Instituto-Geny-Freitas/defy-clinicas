@@ -13,15 +13,15 @@ export function Arrow({ up }: { up: boolean }) {
 }
 
 /**
- * Célula de variação: vermelho se negativo (com seta ↓), verde se positivo (seta ↑),
- * cinza se ~zero, travessão se não houver base de comparação.
+ * Célula de variação: verde se negativo (perda de peso, seta ↓), vermelho se positivo
+ * (ganho, seta ↑), cinza se ~zero, travessão se não houver base de comparação.
  */
 export function Delta({ valor, sufixo = '' }: { valor: number | null; sufixo?: string }) {
   if (valor == null) return <span className="text-texto/30">—</span>
   if (Math.abs(valor) < 0.05) return <span className="text-texto/40">0{sufixo}</span>
   const neg = valor < 0
   return (
-    <span className={`inline-flex items-center gap-1 font-medium ${neg ? 'text-red-600' : 'text-emerald-600'}`}>
+    <span className={`inline-flex items-center gap-1 font-medium ${neg ? 'text-emerald-600' : 'text-red-600'}`}>
       <Arrow up={!neg} />{fmt1(valor)}{sufixo}
     </span>
   )
@@ -58,7 +58,7 @@ export function PesoResumoHeader({ medidas }: { medidas: BodyMeasurement[] }) {
   return (
     <span
       title="Total da 1ª até a última sessão"
-      className={`ml-2 inline-flex items-center gap-1 align-middle text-xs font-semibold ${zero ? 'text-texto/40' : neg ? 'text-red-600' : 'text-emerald-600'}`}
+      className={`ml-2 inline-flex items-center gap-1 align-middle text-xs font-semibold ${zero ? 'text-texto/40' : neg ? 'text-emerald-600' : 'text-red-600'}`}
     >
       {!zero && <Arrow up={!neg} />}
       {fmt1(geralKg)} kg{geralPct != null ? ` (${neg ? '-' : '+'}${fmt1(geralPct)}%)` : ''}
