@@ -6,6 +6,7 @@ import { listLabOrders, listLabResults, uploadLabResult, type LabOrder, type Lab
 import { listProcedures, type ProcedureRecord } from '@/lib/procedures'
 import { formatDateBR } from '@/lib/format'
 import LineChart from '@/components/LineChart'
+import { Delta, calcDeltaPeso, PesoResumoHeader } from '@/components/MeasurementDelta'
 
 export default function PatientEvolution() {
   const { profile } = useAuth()
@@ -55,6 +56,35 @@ export default function PatientEvolution() {
       <section>
         <h2 className="mb-2 text-sm font-semibold text-texto/70">Medidas</h2>
         {pontosPeso.length > 1 ? <LineChart titulo="Peso (kg) por sessão" pontos={pontosPeso} /> : <p className="text-sm text-texto/40">Ainda sem medições suficientes para o gráfico.</p>}
+        {medidas.length > 0 && (
+          <div className="mt-3 overflow-x-auto rounded-xl border border-black/5 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-black/[0.02] text-left text-texto/60">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Sessão</th>
+                  <th className="px-3 py-2 font-medium">Data</th>
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">Peso<PesoResumoHeader medidas={medidas} /></th>
+                  <th className="px-3 py-2 font-medium">Dif. peso</th>
+                  <th className="px-3 py-2 font-medium">Dif. %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {medidas.map((m, i) => {
+                  const { dKg, dPct } = calcDeltaPeso(m, i > 0 ? medidas[i - 1] : null)
+                  return (
+                    <tr key={m.id} className="border-t border-black/5">
+                      <td className="px-3 py-2 text-texto">{m.sessao ?? '—'}</td>
+                      <td className="px-3 py-2 text-texto/60">{formatDateBR(m.data)}</td>
+                      <td className="px-3 py-2 text-texto/70">{m.peso_kg ?? '—'}</td>
+                      <td className="px-3 py-2"><Delta valor={dKg} /></td>
+                      <td className="px-3 py-2"><Delta valor={dPct} sufixo="%" /></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {/* Exames */}

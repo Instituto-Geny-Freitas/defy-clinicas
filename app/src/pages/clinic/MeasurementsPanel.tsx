@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createMeasurement, deleteMeasurement, listMeasurements, updateMeasurement, type BodyMeasurement, type MeasurementInput } from '@/lib/measurements'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import LineChart from '@/components/LineChart'
+import { Delta, calcDeltaPeso, PesoResumoHeader } from '@/components/MeasurementDelta'
 import { formatDateBR, localDateToday } from '@/lib/format'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
@@ -48,16 +49,23 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
             <table className="w-full text-sm">
               <thead className="bg-black/[0.02] text-left text-texto/60">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Sessão</th><th className="px-3 py-2 font-medium">Data</th><th className="px-3 py-2 font-medium">Peso</th><th className="px-3 py-2 font-medium">IMC</th>
+                  <th className="px-3 py-2 font-medium">Sessão</th><th className="px-3 py-2 font-medium">Data</th>
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">Peso<PesoResumoHeader medidas={itens} /></th>
+                  <th className="px-3 py-2 font-medium">Dif. peso</th><th className="px-3 py-2 font-medium">Dif. %</th>
+                  <th className="px-3 py-2 font-medium">IMC</th>
                   <th className="px-3 py-2 font-medium">Gord.%</th><th className="px-3 py-2 font-medium">Músc.%</th><th className="px-3 py-2 font-medium">Visceral</th><th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {itens.map((m) => (
+                {itens.map((m, i) => {
+                  const { dKg, dPct } = calcDeltaPeso(m, i > 0 ? itens[i - 1] : null)
+                  return (
                   <tr key={m.id} className="border-t border-black/5">
                     <td className="px-3 py-2 text-texto">{m.sessao ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/60">{formatDateBR(m.data)}</td>
                     <td className="px-3 py-2 text-texto/70">{m.peso_kg ?? '—'}</td>
+                    <td className="px-3 py-2"><Delta valor={dKg} /></td>
+                    <td className="px-3 py-2"><Delta valor={dPct} sufixo="%" /></td>
                     <td className="px-3 py-2 text-texto/70">{m.imc ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/70">{m.gordura_corporal_pct ?? '—'}</td>
                     <td className="px-3 py-2 text-texto/70">{m.musculo_pct ?? '—'}</td>
@@ -67,7 +75,8 @@ export default function MeasurementsPanel({ patientId, clinicId, professionalId 
                       <button onClick={() => excluir(m)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
