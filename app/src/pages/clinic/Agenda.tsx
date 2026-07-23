@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import {
@@ -55,6 +56,7 @@ export default function Agenda() {
   const { profile } = useAuth()
   const clinic = useClinic()
   const clinicId = profile?.professional?.clinic_id
+  const [searchParams, setSearchParams] = useSearchParams()
   const [appts, setAppts] = useState<Appointment[]>([])
   const [profissionais, setProfissionais] = useState<Professional[]>([])
   const [pacientes, setPacientes] = useState<Patient[]>([])
@@ -62,7 +64,12 @@ export default function Agenda() {
   const [filtroProf, setFiltroProf] = useState(profile?.professional?.id ?? '')
   const [filtroPac, setFiltroPac] = useState('')        // id do paciente selecionado
   const [buscaPac, setBuscaPac] = useState('')          // texto digitado na busca
-  const [dataFiltro, setDataFiltro] = useState<string | null>(null) // YYYY-MM-DD
+  // Aceita atalho ?data=hoje | YYYY-MM-DD (ex.: card "Consultas hoje" do Dashboard).
+  const [dataFiltro, setDataFiltro] = useState<string | null>(() => {
+    const d = searchParams.get('data')
+    if (d === 'hoje') return ymd(new Date())
+    return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null
+  }) // YYYY-MM-DD
   const [mostrarCal, setMostrarCal] = useState(false)
   const [diasComAgenda, setDiasComAgenda] = useState<Set<string>>(new Set())
   const [carregando, setCarregando] = useState(true)
@@ -92,6 +99,8 @@ export default function Agenda() {
     listAppointments(desde, filtroProf || undefined, ate, filtroPac || undefined).then(setAppts).catch(() => {}).finally(() => setCarregando(false))
   }
   useEffect(recarregar, [filtroProf, filtroPac, dataFiltro])
+  // Limpa o ?data= da URL depois de aplicado (o valor inicial já foi lido no useState).
+  useEffect(() => { if (searchParams.get('data')) setSearchParams({}, { replace: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { listProfessionals().then((p) => setProfissionais(p.filter((x) => x.ativo))).catch(() => {}) }, [])
   useEffect(() => { listPatients().then(setPacientes).catch(() => {}) }, [])
   useEffect(() => { listResources().then((rs) => setRecursos(rs.filter((r) => r.ativo))).catch(() => {}) }, [])
