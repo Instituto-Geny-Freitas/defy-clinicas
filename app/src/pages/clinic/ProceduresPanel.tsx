@@ -166,6 +166,14 @@ function RegistrarModal({
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
   }, [patientId])
 
+  // Ao editar um procedimento já vinculado, mostra o plano do orçamento vinculado (quando os orçamentos carregam).
+  useEffect(() => {
+    if (quoteId && !planoId) {
+      const q = orcamentos.find((x) => x.id === quoteId)
+      if (q?.treatment_plan_id) setPlanoId(q.treatment_plan_id)
+    }
+  }, [orcamentos]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const orcamentosDoPlano = planoId ? orcamentos.filter((q) => q.treatment_plan_id === planoId) : orcamentos
   const avulso = !quoteId
 
@@ -208,7 +216,7 @@ function RegistrarModal({
       if (proc) {
         await updateProcedure({
           clinicId, anterior: proc, procedimento, data,
-          regiao, observacoes: obs, valorCobrado: valor, produtos: prods,
+          regiao, observacoes: obs, valorCobrado: valor, produtos: prods, quoteId: quoteId || null,
         })
       } else {
         const novo = await createProcedure({
@@ -267,7 +275,7 @@ function RegistrarModal({
               </div>
               <div>
                 <label className="mb-1 block text-sm text-texto/70">Orçamento</label>
-                <select className={field} value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>
+                <select className={field} value={quoteId} onChange={(e) => { const v = e.target.value; setQuoteId(v); setPlanoId(orcamentos.find((x) => x.id === v)?.treatment_plan_id ?? '') }}>
                   <option value="">— Sem orçamento (avulso) —</option>
                   {orcamentosDoPlano.map((q) => (
                     <option key={q.id} value={q.id}>{new Date(q.created_at).toLocaleDateString('pt-BR')} · {brl(q.valor_total)}</option>
