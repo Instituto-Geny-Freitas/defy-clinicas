@@ -216,6 +216,9 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
             const pago = totalLiquidado(pagamentos, q.id)
             const saldo = q.valor_total - pago
             const produtos = produtosDoOrcamento(procedimentos, q.id)
+            // Procedimentos vinculados a este orçamento que NÃO são itens cobráveis (vínculo sem valor).
+            const itemRefs = new Set(q.itens.filter((it) => it.origem === 'procedimento' && it.ref_id).map((it) => it.ref_id))
+            const vinculadosSemValor = procedimentos.filter((p) => p.quote_id === q.id && !itemRefs.has(p.id))
             return (
               <div key={q.id} className="rounded-xl border border-black/5 bg-white p-4">
                 <div className="flex items-start justify-between">
@@ -226,6 +229,12 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                         <div key={i} className="flex flex-wrap items-center gap-1.5">
                           <span>{it.qtd}× {it.descricao} — {brl(it.total)}</span>
                           {it.origem && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${ORIGEM_CHIP[it.origem] ?? 'bg-black/5 text-texto/60'}`}>{ORIGEM_LABEL[it.origem]}</span>}
+                        </div>
+                      ))}
+                      {vinculadosSemValor.map((p) => (
+                        <div key={p.id} className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-texto/70">{p.procedimento}{p.regiao ? ` · ${p.regiao}` : ''}</span>
+                          <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-texto/60">Procedimento · vinculado (sem valor)</span>
                         </div>
                       ))}
                     </div>
