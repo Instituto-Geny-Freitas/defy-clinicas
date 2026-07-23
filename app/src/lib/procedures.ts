@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabase'
 
+/** Texto-padrão da regra de vínculo procedimento↔orçamento (usado nos dois modais:
+ *  Editar procedimento e Editar itens do orçamento). Fonte única para não divergir. */
+export const VINCULO_HELP =
+  'Vincular um procedimento a um orçamento não cobra valor à parte — a cobrança é a do próprio orçamento. Para cobrar um valor extra, crie um novo orçamento (pode usar o mesmo plano).'
+
 export interface UsedProduct {
   inventory_id: string
   produto: string

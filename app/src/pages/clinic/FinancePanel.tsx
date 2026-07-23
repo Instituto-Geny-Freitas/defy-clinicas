@@ -22,7 +22,7 @@ import {
   type Quote,
   type QuoteItem,
 } from '@/lib/finance'
-import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
+import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, VINCULO_HELP, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listUnpaidSupplementations, listSupplementations, setSupplementationPaid } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
@@ -708,9 +708,9 @@ function EditarItensModal({ quote, pago = 0, onClose, onSaved }: { quote: Quote;
               <button onClick={stageVincular} disabled={!vincularSel} className="shrink-0 rounded-lg border border-primaria px-3 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-40">Vincular</button>
             </div>
           )}
-          {orcamentoPago && (
-            <p className="mt-1 text-[11px] text-amber-700">Orçamento já pago: vincular aqui <strong>não cobra</strong> valor extra. Para cobrar um procedimento à parte, crie um <strong>novo orçamento</strong> (pode usar o mesmo plano).</p>
-          )}
+          <p className={`mt-1 text-[11px] ${orcamentoPago ? 'text-amber-700' : 'text-texto/50'}`}>
+            {VINCULO_HELP}{orcamentoPago ? ' (este orçamento já está pago)' : ''}
+          </p>
         </div>
 
         {aviso && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{aviso}</p>}
