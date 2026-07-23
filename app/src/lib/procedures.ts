@@ -160,6 +160,8 @@ interface UpdateArgs {
   observacoes?: string | null
   valorCobrado?: number
   produtos: UsedProduct[]
+  /** Se a chave for informada, atualiza o vínculo com o orçamento (null = avulso). */
+  quoteId?: string | null
 }
 
 /** Edita um procedimento; reconcilia o estoque (estorna os produtos antigos e aplica os novos). */
@@ -168,17 +170,16 @@ export async function updateProcedure(args: UpdateArgs): Promise<void> {
   // Reconcilia estoque: devolve os antigos e dá baixa nos novos.
   await estornarSaidas(args.clinicId, args.anterior)
   await aplicarSaidas(args.clinicId, args.anterior.id, args.anterior.patient_id, args.anterior.professional_id, novos)
-  const { error } = await supabase
-    .from('procedures_log')
-    .update({
-      procedimento: args.procedimento,
-      data: args.data,
-      regiao: args.regiao ?? null,
-      observacoes: args.observacoes ?? null,
-      valor_cobrado: args.valorCobrado ?? 0,
-      produtos_usados: novos,
-    })
-    .eq('id', args.anterior.id)
+  const patch: Record<string, unknown> = {
+    procedimento: args.procedimento,
+    data: args.data,
+    regiao: args.regiao ?? null,
+    observacoes: args.observacoes ?? null,
+    valor_cobrado: args.valorCobrado ?? 0,
+    produtos_usados: novos,
+  }
+  if ('quoteId' in args) patch.quote_id = args.quoteId ?? null
+  const { error } = await supabase.from('procedures_log').update(patch).eq('id', args.anterior.id)
   if (error) throw error
 }
 
