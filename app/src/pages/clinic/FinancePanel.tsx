@@ -504,19 +504,47 @@ function EditarItensModal({ quote, pago = 0, onClose, onSaved }: { quote: Quote;
   const [aviso, setAviso] = useState<string | null>(null)
   const [produtosUsados, setProdutosUsados] = useState<UsedProduct[]>([])
   const [procImportados, setProcImportados] = useState<string[]>([])
+  // Vínculo com plano + procedimentos vinculados "sem valor" (não somam ao total).
+  const [planos, setPlanos] = useState<TreatmentPlan[]>([])
+  const [planoId, setPlanoId] = useState<string>(quote.treatment_plan_id ?? '')
+  const [procsPaciente, setProcsPaciente] = useState<ProcedureRecord[]>([])
+  const [vincularSel, setVincularSel] = useState('')
+  const [linkStaged, setLinkStaged] = useState<string[]>([])
+  const [unlinkStaged, setUnlinkStaged] = useState<string[]>([])
+  const orcamentoPago = pago > 0.005
 
-  // Produtos utilizados nos procedimentos vinculados a este orçamento (para poder importar como itens).
+  // Procedimentos do paciente (listar vinculados + permitir vincular novos) e produtos importáveis.
   useEffect(() => {
     listProcedures(quote.patient_id)
-      .then((all) => setProdutosUsados(produtosDoOrcamento(all, quote.id)))
+      .then((all) => { setProcsPaciente(all); setProdutosUsados(produtosDoOrcamento(all, quote.id)) })
       .catch(() => {})
   }, [quote.id, quote.patient_id])
+  useEffect(() => { listTreatmentPlans(quote.patient_id).then(setPlanos).catch(() => {}) }, [quote.patient_id])
 
   const MSG_TRAVADO = 'Estes valores só podem ser ajustados nos respectivos painéis (Procedimentos ou Suplementação).'
   const bruto = calcItensTotal(itens)
   const total = Math.max(0, bruto - desconto)
   function setItem(idx: number, patch: Partial<QuoteItem>) {
     setItens((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+  }
+
+  // Procedimentos vinculados "sem valor": com quote_id deste orçamento e que NÃO são itens cobráveis.
+  const itemRefIds = new Set(itens.filter((i) => i.origem === 'procedimento' && i.ref_id).map((i) => i.ref_id as string))
+  const vinculados = [
+    ...procsPaciente.filter((p) => p.quote_id === quote.id && !itemRefIds.has(p.id) && !unlinkStaged.includes(p.id)),
+    ...procsPaciente.filter((p) => linkStaged.includes(p.id)),
+  ]
+  const avulsosDisponiveis = procsPaciente.filter((p) => p.quote_id == null && !linkStaged.includes(p.id))
+  function stageVincular() {
+    if (!vincularSel) return
+    setLinkStaged((s) => [...new Set([...s, vincularSel])])
+    setVincularSel('')
+  }
+  function stageDesvincular(procId: string) {
+    setLinkStaged((s) => s.filter((id) => id !== procId))
+    if (procsPaciente.some((p) => p.id === procId && p.quote_id === quote.id)) {
+      setUnlinkStaged((s) => [...new Set([...s, procId])])
+    }
   }
 
   // Adiciona os produtos utilizados (com preço de venda) que ainda não estão no orçamento.
@@ -565,10 +593,17 @@ function EditarItensModal({ quote, pago = 0, onClose, onSaved }: { quote: Quote;
       const credito = Math.round((pago - total) * 100) / 100
       if (!confirm(`Atenção: o total do orçamento (${brl(total)}) ficou abaixo do que já foi pago (${brl(pago)}). A diferença de ${brl(credito)} vira CRÉDITO do paciente. Deseja continuar?`)) return
     }
+    // Guarda: orçamento já pago cujo total AUMENTOU → reabre saldo a receber.
+    if (orcamentoPago && total > pago + 0.005) {
+      const aReceber = Math.round((total - pago) * 100) / 100
+      if (!confirm(`Este orçamento já tinha ${brl(pago)} pago e o novo total é ${brl(total)} — isso REABRE um saldo a receber de ${brl(aReceber)}. Para cobrar procedimentos/itens extras, o ideal é criar um NOVO orçamento (pode usar o mesmo plano). Deseja continuar mesmo assim?`)) return
+    }
     setSalvando(true)
     try {
-      await updateQuote(quote.id, { itens: validos, desconto })
+      await updateQuote(quote.id, { itens: validos, desconto, treatmentPlanId: planoId || null })
       if (procImportados.length > 0) await linkProceduresToQuote(quote.id, procImportados)
+      if (linkStaged.length > 0) await linkProceduresToQuote(quote.id, linkStaged)
+      for (const id of unlinkStaged) await unlinkProcedureFromQuote(id)
       onSaved()
     } catch { setSalvando(false); alert('Não foi possível salvar.') }
   }
@@ -579,6 +614,14 @@ function EditarItensModal({ quote, pago = 0, onClose, onSaved }: { quote: Quote;
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-texto">Editar itens do orçamento</h2>
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+
+        <div className="mb-3">
+          <label className="mb-1 block text-sm text-texto/70">Plano de tratamento (vínculo)</label>
+          <select className={field} value={planoId} onChange={(e) => setPlanoId(e.target.value)}>
+            <option value="">— Sem vínculo —</option>
+            {planos.map((p) => <option key={p.id} value={p.id}>{p.titulo || 'Plano'} · {formatDateBR(p.data)}</option>)}
+          </select>
         </div>
 
         <div className="space-y-2">
@@ -627,6 +670,38 @@ function EditarItensModal({ quote, pago = 0, onClose, onSaved }: { quote: Quote;
               </button>
             )}
           </div>
+        </div>
+
+        {/* Procedimentos vinculados SEM valor (só histórico — não somam ao total). */}
+        <div className="mt-4 border-t border-black/5 pt-3">
+          <div className="text-sm font-medium text-texto/80">Procedimentos vinculados (sem valor)</div>
+          <p className="mb-2 text-[11px] text-texto/50">Associados a este orçamento apenas para histórico — <strong>não somam ao total</strong> (o valor cobrado é o do orçamento).</p>
+          {vinculados.length === 0 ? (
+            <p className="text-xs text-texto/40">Nenhum procedimento vinculado sem valor.</p>
+          ) : (
+            <div className="space-y-1">
+              {vinculados.map((p) => (
+                <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-black/[0.02] px-3 py-1.5 text-sm">
+                  <span className="min-w-0 flex-1 truncate text-texto/80">{p.procedimento}<span className="text-texto/40"> · {formatDateBR(p.data)}{p.regiao ? ` · ${p.regiao}` : ''}</span></span>
+                  <button onClick={() => stageDesvincular(p.id)} className="shrink-0 text-xs font-medium text-secundaria hover:underline">Desvincular</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {avulsosDisponiveis.length > 0 && (
+            <div className="mt-2 flex gap-2">
+              <select className={field} value={vincularSel} onChange={(e) => setVincularSel(e.target.value)}>
+                <option value="">Vincular procedimento existente…</option>
+                {avulsosDisponiveis.map((p) => (
+                  <option key={p.id} value={p.id}>{p.procedimento} · {formatDateBR(p.data)}{Number(p.valor_cobrado) > 0 ? ` · (avulso ${brl(Number(p.valor_cobrado))})` : ''}</option>
+                ))}
+              </select>
+              <button onClick={stageVincular} disabled={!vincularSel} className="shrink-0 rounded-lg border border-primaria px-3 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-40">Vincular</button>
+            </div>
+          )}
+          {orcamentoPago && (
+            <p className="mt-1 text-[11px] text-amber-700">Orçamento já pago: vincular aqui <strong>não cobra</strong> valor extra. Para cobrar um procedimento à parte, crie um <strong>novo orçamento</strong> (pode usar o mesmo plano).</p>
+          )}
         </div>
 
         {aviso && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{aviso}</p>}

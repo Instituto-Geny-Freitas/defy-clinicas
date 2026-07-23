@@ -110,15 +110,15 @@ export async function updateQuoteStatus(id: string, status: QuoteStatus): Promis
   if (error) throw error
 }
 
-/** Atualiza os itens/desconto de um orçamento, recalculando os totais. */
-export async function updateQuote(id: string, args: { itens: QuoteItem[]; desconto: number }): Promise<void> {
+/** Atualiza os itens/desconto de um orçamento, recalculando os totais.
+ *  Se `treatmentPlanId` for informado (chave presente), atualiza também o vínculo com o plano. */
+export async function updateQuote(id: string, args: { itens: QuoteItem[]; desconto: number; treatmentPlanId?: string | null }): Promise<void> {
   const itens = args.itens.map((i) => ({ ...i, total: (i.qtd || 0) * (i.valor_unit || 0) }))
   const valor_bruto = calcItensTotal(itens)
   const valor_total = Math.max(0, valor_bruto - (args.desconto || 0))
-  const { error } = await supabase
-    .from('quotes')
-    .update({ itens, valor_bruto, desconto: args.desconto || 0, valor_total })
-    .eq('id', id)
+  const patch: Record<string, unknown> = { itens, valor_bruto, desconto: args.desconto || 0, valor_total }
+  if ('treatmentPlanId' in args) patch.treatment_plan_id = args.treatmentPlanId ?? null
+  const { error } = await supabase.from('quotes').update(patch).eq('id', id)
   if (error) throw error
 }
 
