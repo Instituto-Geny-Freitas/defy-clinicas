@@ -109,7 +109,7 @@ export default function Dashboard() {
 
   const cards = [
     { label: 'Pacientes', valor: pacientes ?? '—', to: '/clinica/pacientes' },
-    { label: 'Consultas hoje', valor: carregando ? '—' : hoje.length, to: '/clinica/agenda' },
+    { label: 'Consultas hoje', valor: carregando ? '—' : hoje.length, to: '/clinica/agenda?data=hoje' },
     { label: 'Documentos pendentes', valor: docsPendentes ?? '—', to: '/clinica/pacientes' },
     { label: 'A receber', valor: aReceber == null ? '—' : brl(aReceber), to: '/clinica/financeiro' },
   ]
