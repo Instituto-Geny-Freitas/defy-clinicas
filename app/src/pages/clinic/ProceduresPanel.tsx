@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { localDateToday } from '@/lib/format'
-import { createProcedure, deleteProcedure, listProcedures, updateProcedure, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
+import { createProcedure, deleteProcedure, listProcedures, updateProcedure, VINCULO_HELP, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot } from '@/lib/inventory'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
@@ -301,7 +301,7 @@ function RegistrarModal({
             )}
             {!avulso && (
               <p className="mt-2 text-xs text-texto/70">
-                A cobrança vem do <strong>orçamento selecionado</strong> — o valor precisa estar como item do orçamento.
+                {VINCULO_HELP}
                 {parseMoneyBR(valorCobrado) > 0 && (
                   <span className="mt-1 block text-amber-700">Atenção: o “valor a cobrar” avulso ({brl(parseMoneyBR(valorCobrado))}) não será usado enquanto houver orçamento vinculado.</span>
                 )}
