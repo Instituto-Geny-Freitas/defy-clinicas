@@ -53,6 +53,19 @@ export async function listSnippets(categoria = 'plano'): Promise<TextSnippet[]> 
   return data ?? []
 }
 
+/** Textos-padrão ativos de uma ou mais categorias (ex.: ['orientacao','outro']). */
+export async function listSnippetsByCategorias(categorias: string[]): Promise<TextSnippet[]> {
+  if (categorias.length === 0) return []
+  const { data, error } = await supabase
+    .from('treatment_text_snippets')
+    .select('id, categoria, titulo, conteudo')
+    .eq('ativo', true)
+    .in('categoria', categorias)
+    .order('titulo')
+  if (error) throw error
+  return data ?? []
+}
+
 interface CreateArgs {
   clinicId: string
   patientId: string
