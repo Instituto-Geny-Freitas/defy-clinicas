@@ -1393,7 +1393,7 @@ function TextosSection({ clinicId }: { clinicId: string }) {
     <div className="max-w-2xl space-y-5">
       <div className="rounded-xl border border-black/5 bg-white p-5">
         <h3 className="mb-1 font-semibold text-texto">Novo texto-padrão</h3>
-        <p className="mb-3 text-xs text-texto/50">Usados como base no Plano de Tratamento e em outras telas (por categoria).</p>
+        <p className="mb-3 text-xs text-texto/50">Blocos de texto reutilizáveis: você escolhe um pelo título e o conteúdo é inserido no campo (pode editar depois). Onde cada categoria aparece: <strong>Plano de tratamento</strong> → aba Plano; <strong>Orientação</strong> → Observações do procedimento; <strong>Exames</strong> → Observações da requisição de exames; <strong>Outro</strong> → nos dois campos de observações acima.</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
             <label className="mb-1 block text-sm text-texto/70">Categoria</label>

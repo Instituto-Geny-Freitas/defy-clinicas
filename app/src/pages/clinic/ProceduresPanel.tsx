@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
+import SnippetPicker from '@/components/SnippetPicker'
 import { createRecurrence, PERIOD_LABEL, type Periodicidade } from '@/lib/recurrence'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 
@@ -328,7 +329,11 @@ function RegistrarModal({
             </div>
           )}
 
-          <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Observações</label>
+            <textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} />
+            <SnippetPicker categorias={['orientacao', 'outro']} onInsert={(t) => setObs((v) => (v ? v + '\n' : '') + t)} />
+          </div>
 
           <div>
             <div className="mb-1 flex items-center justify-between">

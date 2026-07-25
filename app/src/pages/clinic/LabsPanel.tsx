@@ -14,6 +14,7 @@ import { buildExamesPdf } from '@/lib/examesPdf'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import { Shell, Footer } from './TreatmentPlansPanel'
+import SnippetPicker from '@/components/SnippetPicker'
 import { formatDateBR } from '@/lib/format'
 import type { Patient } from '@/lib/types'
 
@@ -200,7 +201,11 @@ function Modal(props: {
           ))}
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Outros exames (separados por vírgula)</label><input className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" value={extra} onChange={(e) => setExtra(e.target.value)} /></div>
-        <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" value={obs} onChange={(e) => setObs(e.target.value)} /></div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Observações</label>
+          <textarea rows={2} className="w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria" value={obs} onChange={(e) => setObs(e.target.value)} />
+          <SnippetPicker categorias={['exames_lab', 'outro']} onInsert={(t) => setObs((v) => (v ? v + '\n' : '') + t)} />
+        </div>
         <div className="flex items-center justify-between">
           <button onClick={gerarPdf} disabled={totalSel === 0} className="rounded-lg border border-primaria px-4 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-40">
             Gerar PDF / Imprimir
