@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 import {
@@ -56,7 +57,14 @@ export default function Finance() {
   const hoje = new Date()
   const [ano, setAno] = useState(hoje.getFullYear())
   const [mes, setMes] = useState(hoje.getMonth())
-  const [tab, setTab] = useState<Tab>('consolidado')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Aceita atalho ?tab=indicacoes|receitas|… (ex.: alerta do Dashboard) ao abrir.
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = searchParams.get('tab')
+    const validas: Tab[] = ['consolidado', 'receitas', 'despesas', 'caixa', 'relatorio', 'indicacoes', 'fidelidade']
+    return t && (validas as string[]).includes(t) ? (t as Tab) : 'consolidado'
+  })
+  useEffect(() => { if (searchParams.get('tab')) setSearchParams({}, { replace: true }) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [pagamentos, setPagamentos] = useState<PaymentRow[]>([])
   const [despesas, setDespesas] = useState<Expense[]>([])

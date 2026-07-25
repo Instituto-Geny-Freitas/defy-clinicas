@@ -7,6 +7,7 @@ import { listActiveIngredients, listAtivoLotes } from '@/lib/domains'
 import { listRecords } from '@/lib/admin'
 import { advanceRecurrence, dismissRecurrence, listDueRecurrences, PERIOD_LABEL, type RecurrenceRec } from '@/lib/recurrence'
 import { listOpenLeads, ETAPAS, type Lead } from '@/lib/crm'
+import { listReferrals, getReferralConfig, type ReferralRow } from '@/lib/referral'
 import { brl } from '@/lib/finance'
 import { formatDateBR, localDateToday } from '@/lib/format'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
@@ -27,6 +28,8 @@ export default function Dashboard() {
   const [alertasManutencao, setAlertasManutencao] = useState<ManutencaoAlerta[]>([])
   const [retornos, setRetornos] = useState<RecurrenceRec[]>([])
   const [leadsAbertos, setLeadsAbertos] = useState<Lead[]>([])
+  const [refElegiveis, setRefElegiveis] = useState<ReferralRow[]>([])
+  const [refAtivo, setRefAtivo] = useState(false)
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -91,6 +94,12 @@ export default function Dashboard() {
     load().catch(() => {}).finally(() => setCarregando(false))
   }, [])
 
+  // Indicações elegíveis a recompensa (converteu e ainda não recompensado) — só se o programa está ativo.
+  useEffect(() => {
+    getReferralConfig().then((c) => setRefAtivo(!!c.ativo)).catch(() => {})
+    listReferrals().then((rows) => setRefElegiveis(rows.filter((r) => r.convertido && !r.recompensado))).catch(() => {})
+  }, [])
+
   const hojeYmd2 = localDateToday()
   async function agendarRetorno(rec: RecurrenceRec) {
     if (!confirm(`Agendar retorno de ${rec.patients?.nome ?? 'paciente'} para "${rec.descricao}" em ${formatDateBR(rec.proxima_data)} às 09:00? Você poderá remarcar depois na Agenda.`)) return
@@ -132,6 +141,28 @@ export default function Dashboard() {
           </Link>
         ))}
       </div>
+
+      {/* Alerta: indicações elegíveis a recompensa (para a equipe não esquecer) */}
+      {refAtivo && refElegiveis.length > 0 && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-amber-800">
+              🎁 {refElegiveis.length} indicação(ões) elegível(is) a recompensa
+            </div>
+            <Link to="/clinica/financeiro?tab=indicacoes" className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+              Conceder recompensas →
+            </Link>
+          </div>
+          <ul className="mt-2 space-y-1 text-sm text-amber-800/90">
+            {refElegiveis.slice(0, 5).map((r) => (
+              <li key={r.indicadoId} className="truncate">
+                <span className="font-medium">{r.indicadorNome}</span> indicou <span className="font-medium">{r.indicadoNome}</span>
+              </li>
+            ))}
+            {refElegiveis.length > 5 && <li className="text-amber-700/70">e mais {refElegiveis.length - 5}…</li>}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Consultas de hoje */}
