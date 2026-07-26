@@ -24,6 +24,7 @@ import {
 } from '@/lib/finance'
 import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, VINCULO_HELP, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
+import { listPackages, updatePackage, type TreatmentPackage } from '@/lib/packages'
 import { listUnpaidSupplementations, listSupplementations, setSupplementationPaid } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
 import { buildOrcamentoPdf } from '@/lib/orcamentoPdf'
@@ -363,8 +364,8 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
 
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
-const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto' }
-const ORIGEM_CHIP: Record<string, string> = { procedimento: 'bg-violet-100 text-violet-700', suplementacao: 'bg-amber-100 text-amber-700', produto: 'bg-sky-100 text-sky-700' }
+const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto', pacote: 'Pacote' }
+const ORIGEM_CHIP: Record<string, string> = { procedimento: 'bg-violet-100 text-violet-700', suplementacao: 'bg-amber-100 text-amber-700', produto: 'bg-sky-100 text-sky-700', pacote: 'bg-emerald-100 text-emerald-700' }
 
 /** Cria um item cobrável do orçamento a partir de um produto utilizado (usa o preço de venda do estoque). */
 function produtoParaItem(u: UsedProduct, refId: string): QuoteItem {
@@ -377,20 +378,28 @@ function produtoParaItem(u: UsedProduct, refId: string): QuoteItem {
 function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved }: {
   clinicId: string; patientId: string; professionalId?: string | null; onClose: () => void; onSaved: () => void
 }) {
+  const [modo, setModo] = useState<'plano' | 'pacote'>('plano')
   const [itens, setItens] = useState<QuoteItem[]>([{ descricao: '', qtd: 1, valor_unit: 0, total: 0 }])
   const [desconto, setDesconto] = useState(0)
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [planoId, setPlanoId] = useState('')
+  const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
+  const [pacoteId, setPacoteId] = useState('')
   const [procImportados, setProcImportados] = useState<string[]>([])
   const [avisoNovo, setAvisoNovo] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
 
   useEffect(() => {
     listTreatmentPlans(patientId).then((ps) => { setPlanos(ps); if (ps.length) setPlanoId(ps[0].id) }).catch(() => {})
+    // Pacotes ativos ainda SEM orçamento vinculado (só estes podem gerar um orçamento de pacote).
+    listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => !p.quote_id))).catch(() => {})
   }, [patientId])
 
   const bruto = calcItensTotal(itens)
   const total = Math.max(0, bruto - desconto)
+  // Pacote selecionado (modo pacote): o orçamento carrega só o total negociado (pré-pago).
+  const pacoteSel = pacotes.find((p) => p.id === pacoteId) ?? null
+  const pacoteSubtotal = pacoteSel ? Number(pacoteSel.valor_total) + Number(pacoteSel.desconto) : 0
 
   // Remove um item; se for procedimento importado, tira-o da fila de vínculo.
   function removerItem(idx: number) {
@@ -429,6 +438,21 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
   }
 
   async function salvar() {
+    // Modo pacote: orçamento de 1 linha com o total negociado do pacote (pré-pago) + vincula o pacote.
+    if (modo === 'pacote') {
+      if (!pacoteSel) return
+      setSalvando(true)
+      try {
+        const item: QuoteItem = {
+          descricao: `Pacote: ${pacoteSel.procedimento} · ${pacoteSel.sessoes_compradas} sessões`,
+          qtd: 1, valor_unit: pacoteSubtotal, total: pacoteSubtotal, origem: 'pacote', ref_id: pacoteSel.id,
+        }
+        const quote = await createQuote({ clinicId, patientId, professionalId, treatmentPlanId: pacoteSel.treatment_plan_id ?? null, itens: [item], desconto: Number(pacoteSel.desconto) || 0 })
+        await updatePackage(pacoteSel.id, { quote_id: quote.id })
+        onSaved()
+      } catch { setSalvando(false) }
+      return
+    }
     const validos = itens.filter((i) => i.descricao.trim())
     if (validos.length === 0) return
     setSalvando(true)
@@ -449,6 +473,39 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
           <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
         </div>
 
+        <div className="mb-3">
+          <label className="mb-1 block text-sm text-texto/70">Tipo de orçamento</label>
+          <div className="flex gap-2">
+            {(['plano', 'pacote'] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setModo(m)} className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${modo === m ? 'border-primaria bg-primaria/10 text-primaria' : 'border-black/10 text-texto/60'}`}>
+                {m === 'plano' ? 'Plano / avulso' : 'Pacote (pré-pago)'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {modo === 'pacote' && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-sm text-texto/70">Pacote a cobrar</label>
+              <select className={field} value={pacoteId} onChange={(e) => setPacoteId(e.target.value)}>
+                <option value="">— Selecione um pacote —</option>
+                {pacotes.map((p) => <option key={p.id} value={p.id}>{p.procedimento} · {p.sessoes_compradas} sessões · {brl(Number(p.valor_total))}</option>)}
+              </select>
+              {pacotes.length === 0 && <p className="mt-1 text-xs text-texto/40">Nenhum pacote sem orçamento. Crie um na aba “Pacotes” (pacotes que já têm orçamento não aparecem aqui).</p>}
+            </div>
+            {pacoteSel && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
+                <div className="flex justify-between text-texto/60"><span>Subtotal ({pacoteSel.sessoes_compradas} sessões)</span><span>{brl(pacoteSubtotal)}</span></div>
+                {Number(pacoteSel.desconto) > 0 && <div className="flex justify-between text-texto/60"><span>Desconto</span><span>− {brl(Number(pacoteSel.desconto))}</span></div>}
+                <div className="mt-1 flex justify-between border-t border-emerald-200 pt-1 text-base font-semibold text-texto"><span>Total do pacote</span><span>{brl(Number(pacoteSel.valor_total))}</span></div>
+                <p className="mt-2 text-xs text-emerald-800">O orçamento entra com o <strong>total negociado</strong> (pré-pago). Os itens do pacote não são cobrados por linha; as sessões são baixadas e listadas conforme forem realizadas.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {modo === 'plano' && (<>
         <div className="mb-3">
           <label className="mb-1 block text-sm text-texto/70">Plano de tratamento (vínculo)</label>
           <select className={field} value={planoId} onChange={(e) => setPlanoId(e.target.value)}>
@@ -492,10 +549,11 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
           <input type="number" step="0.01" className="w-28 rounded-lg border border-black/10 px-2 py-1.5" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
         </div>
         <div className="mt-2 text-right text-lg font-semibold text-texto">Total: {brl(total)}</div>
+        </>)}
 
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
-          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+          <button onClick={salvar} disabled={salvando || (modo === 'pacote' && !pacoteSel)} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
             {salvando ? 'Salvando…' : 'Salvar orçamento'}
           </button>
         </div>
