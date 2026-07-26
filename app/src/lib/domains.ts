@@ -239,12 +239,81 @@ export async function listProcedureTypes(): Promise<ProcedureType[]> {
   return data ?? []
 }
 
-export async function createProcedureType(clinicId: string, nome: string): Promise<void> {
-  const { error } = await supabase.from('procedure_types').insert({ clinic_id: clinicId, nome })
+export async function createProcedureType(
+  clinicId: string,
+  nome: string,
+  opts?: { valor?: number | null; vigenciaInicio?: string; createdBy?: string | null },
+): Promise<string> {
+  const { data, error } = await supabase.from('procedure_types').insert({ clinic_id: clinicId, nome }).select('id').single()
   if (error) throw error
+  const id = data.id as string
+  if (opts?.valor != null && opts.valor > 0) {
+    await setProcedureTypePrice({ clinicId, procedureTypeId: id, valor: opts.valor, vigenciaInicio: opts.vigenciaInicio, createdBy: opts.createdBy ?? null })
+  }
+  return id
 }
 
 export async function deleteProcedureType(id: string): Promise<void> {
   const { error } = await supabase.from('procedure_types').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ---- Preço do procedimento (histórico por vigência) ------------------------
+export interface ProcedureTypePrice {
+  id: string
+  procedure_type_id: string
+  valor: number
+  vigencia_inicio: string
+  reajuste_pct: number | null
+  valor_anterior: number | null
+  created_at: string
+  professionals?: { nome: string } | null
+}
+
+/** Mapa procedure_type_id -> preço vigente hoje (valor + desde quando). */
+export async function currentProcedurePrices(): Promise<Record<string, { valor: number; vigencia_inicio: string }>> {
+  const { data, error } = await supabase
+    .from('v_procedure_type_current_price')
+    .select('procedure_type_id, valor, vigencia_inicio')
+  if (error) throw error
+  const map: Record<string, { valor: number; vigencia_inicio: string }> = {}
+  for (const r of data ?? []) map[r.procedure_type_id as string] = { valor: Number(r.valor), vigencia_inicio: r.vigencia_inicio as string }
+  return map
+}
+
+/** Histórico de preços de um tipo (mais recente primeiro), com quem ajustou. */
+export async function listProcedureTypePrices(procedureTypeId: string): Promise<ProcedureTypePrice[]> {
+  const { data, error } = await supabase
+    .from('procedure_type_prices')
+    .select('id, procedure_type_id, valor, vigencia_inicio, reajuste_pct, valor_anterior, created_at, professionals(nome)')
+    .eq('procedure_type_id', procedureTypeId)
+    .order('vigencia_inicio', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    ...r,
+    professionals: Array.isArray(r.professionals) ? (r.professionals[0] ?? null) : r.professionals,
+  })) as ProcedureTypePrice[]
+}
+
+/** Registra um novo preço vigente (preserva o histórico). */
+export async function setProcedureTypePrice(args: {
+  clinicId: string
+  procedureTypeId: string
+  valor: number
+  vigenciaInicio?: string
+  reajustePct?: number | null
+  valorAnterior?: number | null
+  createdBy?: string | null
+}): Promise<void> {
+  const { error } = await supabase.from('procedure_type_prices').insert({
+    clinic_id: args.clinicId,
+    procedure_type_id: args.procedureTypeId,
+    valor: args.valor,
+    vigencia_inicio: args.vigenciaInicio ?? undefined,
+    reajuste_pct: args.reajustePct ?? null,
+    valor_anterior: args.valorAnterior ?? null,
+    created_by: args.createdBy ?? null,
+  })
   if (error) throw error
 }
