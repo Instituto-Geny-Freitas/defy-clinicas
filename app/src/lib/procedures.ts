@@ -22,6 +22,7 @@ export interface ProcedureRecord {
   professional_id: string | null
   quote_id: string | null
   treatment_plan_item_id: string | null
+  treatment_package_item_id: string | null
   procedimento: string
   data: string
   regiao: string | null
@@ -94,6 +95,7 @@ interface CreateArgs {
   professionalId?: string | null
   quoteId?: string | null
   treatmentPlanItemId?: string | null
+  treatmentPackageItemId?: string | null
   procedimento: string
   data: string
   regiao?: string | null
@@ -115,6 +117,7 @@ export async function createProcedure(args: CreateArgs): Promise<ProcedureRecord
       professional_id: args.professionalId ?? null,
       quote_id: args.quoteId ?? null,
       treatment_plan_item_id: args.treatmentPlanItemId ?? null,
+      treatment_package_item_id: args.treatmentPackageItemId ?? null,
       procedimento: args.procedimento,
       data: args.data,
       regiao: args.regiao ?? null,
@@ -172,6 +175,8 @@ interface UpdateArgs {
   quoteId?: string | null
   /** Se a chave for informada, atualiza o item do plano consumido (null = nenhum). */
   treatmentPlanItemId?: string | null
+  /** Se a chave for informada, atualiza o item do pacote consumido (null = nenhum). */
+  treatmentPackageItemId?: string | null
 }
 
 /** Edita um procedimento; reconcilia o estoque (estorna os produtos antigos e aplica os novos). */
@@ -190,6 +195,7 @@ export async function updateProcedure(args: UpdateArgs): Promise<void> {
   }
   if ('quoteId' in args) patch.quote_id = args.quoteId ?? null
   if ('treatmentPlanItemId' in args) patch.treatment_plan_item_id = args.treatmentPlanItemId ?? null
+  if ('treatmentPackageItemId' in args) patch.treatment_package_item_id = args.treatmentPackageItemId ?? null
   const { error } = await supabase.from('procedures_log').update(patch).eq('id', args.anterior.id)
   if (error) throw error
 }

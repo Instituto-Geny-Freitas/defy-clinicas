@@ -5,6 +5,7 @@ import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot
 import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
+import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import SnippetPicker from '@/components/SnippetPicker'
@@ -163,6 +164,10 @@ function RegistrarModal({
   const [quoteId, setQuoteId] = useState(proc?.quote_id ?? '')
   const [planItens, setPlanItens] = useState<(PlanItem & { saldo: number; realizadas: number })[]>([])
   const [planItemId, setPlanItemId] = useState(proc?.treatment_plan_item_id ?? '')
+  const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
+  const [pacoteId, setPacoteId] = useState('')
+  const [pkgItens, setPkgItens] = useState<(PackageItem & { saldo: number; realizadas: number })[]>([])
+  const [packageItemId, setPackageItemId] = useState(proc?.treatment_package_item_id ?? '')
   const [procSelect, setProcSelect] = useState('')
   const [procedimento, setProcedimento] = useState(proc?.procedimento ?? '')
   const [data, setData] = useState(proc?.data ? proc.data.slice(0, 10) : localDateToday())
@@ -183,6 +188,7 @@ function RegistrarModal({
     listProcedureTypes().then(setTipos).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
+    listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => p.tipo === 'procedimento'))).catch(() => {})
   }, [patientId])
 
   // Ao editar um procedimento já vinculado, mostra o plano do orçamento vinculado (quando os orçamentos carregam).
@@ -193,9 +199,10 @@ function RegistrarModal({
     }
   }, [orcamentos]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ao editar um procedimento que consome item de plano, pré-seleciona o plano do item.
+  // Ao editar um procedimento que consome item de plano/pacote, pré-seleciona o plano/pacote do item.
   useEffect(() => {
     if (proc?.treatment_plan_item_id) getPlanItem(proc.treatment_plan_item_id).then((it) => { if (it) setPlanoId(it.treatment_plan_id) }).catch(() => {})
+    if (proc?.treatment_package_item_id) getPackageItem(proc.treatment_package_item_id).then((it) => { if (it) setPacoteId(it.package_id) }).catch(() => {})
   }, [])
 
   // Itens (procedimento) do plano selecionado, com saldo de sessões.
@@ -207,6 +214,17 @@ function RegistrarModal({
       setPlanItemId((cur) => (cur && procItems.some((i) => i.id === cur) ? cur : ''))
     }).catch(() => {})
   }, [planoId])
+
+  // Itens do pacote selecionado, com saldo (sessoes_compradas − realizadas).
+  useEffect(() => {
+    if (!pacoteId) { setPkgItens([]); return }
+    const pkg = pacotes.find((p) => p.id === pacoteId)
+    if (!pkg) return
+    listPackageItemsComSaldo(pacoteId, pkg.sessoes_compradas).then((its) => {
+      setPkgItens(its)
+      setPackageItemId((cur) => (cur && its.some((i) => i.id === cur) ? cur : ''))
+    }).catch(() => {})
+  }, [pacoteId, pacotes])
 
   const orcamentosDoPlano = planoId ? orcamentos.filter((q) => q.treatment_plan_id === planoId) : orcamentos
   const avulso = !quoteId
@@ -248,17 +266,21 @@ function RegistrarModal({
       const it = planItens.find((i) => i.id === planItemId)
       if (it && it.saldo <= 0) { setErro(`O item "${it.nome}" do plano está esgotado (${it.realizadas}/${it.sessoes} sessões). Crie um novo orçamento (avulso) para este procedimento.`); return }
     }
+    if (packageItemId && !editar) {
+      const it = pkgItens.find((i) => i.id === packageItemId)
+      if (it && it.saldo <= 0) { setErro(`O item "${it.nome}" do pacote está esgotado. Crie um novo orçamento (avulso) para este procedimento.`); return }
+    }
     setSalvando(true)
     try {
       const valor = avulso ? parseMoneyBR(valorCobrado) : 0
       if (proc) {
         await updateProcedure({
           clinicId, anterior: proc, procedimento, data,
-          regiao, observacoes: obs, valorCobrado: valor, produtos: prods, quoteId: quoteId || null, treatmentPlanItemId: planItemId || null,
+          regiao, observacoes: obs, valorCobrado: valor, produtos: prods, quoteId: quoteId || null, treatmentPlanItemId: planItemId || null, treatmentPackageItemId: packageItemId || null,
         })
       } else {
         const novo = await createProcedure({
-          clinicId, patientId, professionalId, quoteId: quoteId || null, treatmentPlanItemId: planItemId || null, procedimento,
+          clinicId, patientId, professionalId, quoteId: quoteId || null, treatmentPlanItemId: planItemId || null, treatmentPackageItemId: packageItemId || null, procedimento,
           data, regiao, observacoes: obs,
           valorCobrado: valor, produtos: prods,
         })
@@ -324,7 +346,7 @@ function RegistrarModal({
             {planoId && planItens.length > 0 && (
               <div className="mt-2">
                 <label className="mb-1 block text-sm text-texto/70">Item do plano (consome uma sessão)</label>
-                <select className={field} value={planItemId} onChange={(e) => setPlanItemId(e.target.value)}>
+                <select className={field} value={planItemId} onChange={(e) => { setPlanItemId(e.target.value); if (e.target.value) setPackageItemId('') }}>
                   <option value="">— Não consumir sessão —</option>
                   {planItens.map((it) => {
                     const esgotado = it.saldo <= 0 && it.id !== (proc?.treatment_plan_item_id ?? '')
@@ -332,6 +354,25 @@ function RegistrarModal({
                   })}
                 </select>
                 <p className="mt-1 text-[11px] text-texto/50">Baixa uma sessão do item ao salvar. Itens esgotados não podem ser vinculados — crie um novo orçamento (avulso).</p>
+              </div>
+            )}
+            {pacotes.length > 0 && (
+              <div className="mt-2">
+                <label className="mb-1 block text-sm text-texto/70">Pacote (consome sessão)</label>
+                <select className={field} value={pacoteId} onChange={(e) => setPacoteId(e.target.value)}>
+                  <option value="">— Sem pacote —</option>
+                  {pacotes.map((p) => <option key={p.id} value={p.id}>{p.procedimento} · {p.sessoes_compradas} sessões</option>)}
+                </select>
+                {pacoteId && pkgItens.length > 0 && (
+                  <select className={`${field} mt-2`} value={packageItemId} onChange={(e) => { setPackageItemId(e.target.value); if (e.target.value) setPlanItemId('') }}>
+                    <option value="">— Não consumir sessão —</option>
+                    {pkgItens.map((it) => {
+                      const esgotado = it.saldo <= 0 && it.id !== (proc?.treatment_package_item_id ?? '')
+                      return <option key={it.id} value={it.id} disabled={esgotado}>{it.nome} · {it.realizadas}/{it.realizadas + it.saldo}{esgotado ? ' (esgotado)' : ''}</option>
+                    })}
+                  </select>
+                )}
+                {pacoteId && pkgItens.length > 0 && <p className="mt-1 text-[11px] text-texto/50">Baixa uma sessão do item do pacote. Esgotados não podem ser vinculados — crie um novo orçamento (avulso).</p>}
               </div>
             )}
             {avulso && (

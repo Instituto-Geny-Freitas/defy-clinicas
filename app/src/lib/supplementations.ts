@@ -16,6 +16,7 @@ export interface Supplementation {
   ativo_lote_id: string | null
   quantidade: number
   treatment_plan_item_id: string | null
+  treatment_package_item_id: string | null
 }
 
 export async function listSupplementations(patientId: string): Promise<Supplementation[]> {
@@ -65,6 +66,7 @@ export async function updateSupplementation(id: string, patch: {
   ativo_lote_id?: string | null
   quantidade?: number
   treatment_plan_item_id?: string | null
+  treatment_package_item_id?: string | null
 }): Promise<void> {
   // Reconcilia estoque do ativo se o lote/quantidade mudou.
   if (patch.ativo_lote_id !== undefined || patch.quantidade !== undefined) {
@@ -105,6 +107,7 @@ interface CreateArgs {
   ativoLoteId?: string | null
   quantidade?: number
   treatmentPlanItemId?: string | null
+  treatmentPackageItemId?: string | null
 }
 
 export async function createSupplementation(args: CreateArgs): Promise<string> {
@@ -123,6 +126,7 @@ export async function createSupplementation(args: CreateArgs): Promise<string> {
     ativo_lote_id: args.ativoLoteId ?? null,
     quantidade: qtd,
     treatment_plan_item_id: args.treatmentPlanItemId ?? null,
+    treatment_package_item_id: args.treatmentPackageItemId ?? null,
   }).select('id').single()
   if (error) throw error
   // Baixa no estoque do ativo (lote escolhido).
