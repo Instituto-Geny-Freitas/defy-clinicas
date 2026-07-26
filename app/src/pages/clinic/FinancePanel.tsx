@@ -23,7 +23,7 @@ import {
   type QuoteItem,
 } from '@/lib/finance'
 import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, VINCULO_HELP, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
-import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
+import { listTreatmentPlans, listPlanItems, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
 import { listPackages, updatePackage, listPackageRealizacoes, type TreatmentPackage, type PackageRealizacao } from '@/lib/packages'
 import { listUnpaidSupplementations, listSupplementations, setSupplementationPaid } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
@@ -398,8 +398,16 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
 
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
-const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto', pacote: 'Pacote' }
-const ORIGEM_CHIP: Record<string, string> = { procedimento: 'bg-violet-100 text-violet-700', suplementacao: 'bg-amber-100 text-amber-700', produto: 'bg-sky-100 text-sky-700', pacote: 'bg-emerald-100 text-emerald-700' }
+const ORIGEM_LABEL: Record<string, string> = { procedimento: 'Procedimento', suplementacao: 'Suplementação', produto: 'Produto', pacote: 'Pacote', plano: 'Plano' }
+const ORIGEM_CHIP: Record<string, string> = { procedimento: 'bg-violet-100 text-violet-700', suplementacao: 'bg-amber-100 text-amber-700', produto: 'bg-sky-100 text-sky-700', pacote: 'bg-emerald-100 text-emerald-700', plano: 'bg-indigo-100 text-indigo-700' }
+
+/** Converte um item do plano numa linha cobrável do orçamento (valor travado = preço snapshot do plano × sessões). */
+function planoItemParaLinha(it: PlanItem): QuoteItem {
+  const qtd = it.sessoes || 1
+  const pv = Number(it.preco_unit) || 0
+  const tipoLabel = it.tipo === 'procedimento' ? 'Procedimento' : 'Suplementação'
+  return { descricao: `${tipoLabel}: ${it.nome}`, qtd, valor_unit: pv, total: pv * qtd, origem: 'plano', ref_id: it.id }
+}
 
 /** Cria um item cobrável do orçamento a partir de um produto utilizado (usa o preço de venda do estoque). */
 function produtoParaItem(u: UsedProduct, refId: string): QuoteItem {
@@ -428,6 +436,21 @@ function OrcamentoModal({ clinicId, patientId, professionalId, onClose, onSaved 
     // Pacotes ativos ainda SEM orçamento vinculado (só estes podem gerar um orçamento de pacote).
     listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => !p.quote_id))).catch(() => {})
   }, [patientId])
+
+  // Modo plano: ao selecionar um plano, preenche o orçamento com os itens do plano (valor travado),
+  // para o paciente poder pagar o plano antecipado. Preserva itens manuais/importados (não-plano).
+  useEffect(() => {
+    if (modo !== 'plano') return
+    const semPlano = (arr: QuoteItem[]) => arr.filter((i) => i.origem !== 'plano' && i.descricao.trim())
+    if (!planoId) {
+      setItens((arr) => { const o = semPlano(arr); return o.length ? o : [{ descricao: '', qtd: 1, valor_unit: 0, total: 0 }] })
+      return
+    }
+    listPlanItems(planoId).then((its) => {
+      const linhas = its.map(planoItemParaLinha)
+      setItens((arr) => { const combinado = [...linhas, ...semPlano(arr)]; return combinado.length ? combinado : [{ descricao: '', qtd: 1, valor_unit: 0, total: 0 }] })
+    }).catch(() => {})
+  }, [planoId, modo])
 
   const bruto = calcItensTotal(itens)
   const total = Math.max(0, bruto - desconto)
