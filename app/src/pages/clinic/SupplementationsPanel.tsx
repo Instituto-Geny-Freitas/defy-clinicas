@@ -3,7 +3,8 @@ import { createSupplementation, deleteSupplementation, listSupplementations, set
 import { listActiveIngredients, listAtivoLotes, listRoutes, type ActiveIngredient, type AtivoLote, type DomainItem } from '@/lib/domains'
 import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, type Payment } from '@/lib/finance'
 import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
-import { createRecurrence, PERIOD_LABEL, type Periodicidade } from '@/lib/recurrence'
+import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
+import RecurrenceEditModal from '@/components/RecurrenceEditModal'
 import { Shell, Footer } from './TreatmentPlansPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
@@ -19,12 +20,15 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<Supplementation | null>(null)
+  const [recorrencias, setRecorrencias] = useState<RecurrenceRec[]>([])
+  const [editRec, setEditRec] = useState<RecurrenceRec | null>(null)
 
   function recarregar() {
     Promise.all([listSupplementations(patientId), listQuotes(patientId), listPaymentsByPatient(patientId)])
       .then(([s, q, p]) => { setItens(s); setQuotes(q); setPagamentos(p) })
       .catch(() => {})
       .finally(() => setCarregando(false))
+    listRecurrences(patientId).then(setRecorrencias).catch(() => {})
   }
   useEffect(recarregar, [patientId])
 
@@ -64,6 +68,10 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
     recarregar()
   }
 
+  const recPorSupl = new Map(
+    recorrencias.filter((r) => r.tipo === 'suplementacao' && r.status === 'ativa' && r.supplementation_id).map((r) => [r.supplementation_id as string, r]),
+  )
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -78,7 +86,7 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
         <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-black/[0.02] text-left text-texto/60">
-              <tr><th className="px-4 py-2 font-medium">Medicação</th><th className="px-4 py-2 font-medium">Via/Local</th><th className="px-4 py-2 font-medium">Validade</th><th className="px-4 py-2 font-medium">Lote</th><th className="px-4 py-2 font-medium">Valor</th><th className="px-4 py-2 font-medium">Data</th><th className="px-4 py-2 font-medium">Pagamento</th><th className="px-4 py-2"></th></tr>
+              <tr><th className="px-4 py-2 font-medium">Medicação</th><th className="px-4 py-2 font-medium">Via/Local</th><th className="px-4 py-2 font-medium">Validade</th><th className="px-4 py-2 font-medium">Lote</th><th className="px-4 py-2 font-medium">Valor</th><th className="px-4 py-2 font-medium">Data</th><th className="px-4 py-2 font-medium">Pagamento</th><th className="px-4 py-2 font-medium">Recorrência</th><th className="px-4 py-2"></th></tr>
             </thead>
             <tbody>
               {itens.map((s) => (
@@ -111,6 +119,13 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
                       )
                     })()}
                   </td>
+                  <td className="px-4 py-2 text-xs">
+                    {(() => { const r = recPorSupl.get(s.id); return r ? (
+                      <button onClick={() => setEditRec(r)} title="Editar recorrência" className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-700 hover:bg-sky-200">
+                        🔁 {PERIOD_LABEL[r.periodicidade]}{r.data_limite ? ` · até ${formatDateBR(r.data_limite)}` : ''}
+                      </button>
+                    ) : <span className="text-texto/30">—</span> })()}
+                  </td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
                     <button onClick={() => setEditando(s)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
                     <button onClick={() => excluir(s)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
@@ -121,6 +136,7 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
           </table>
         </div>
       )}
+      {editRec && <RecurrenceEditModal rec={editRec} onClose={() => setEditRec(null)} onSaved={() => { setEditRec(null); recarregar() }} />}
     </div>
   )
 }
@@ -142,6 +158,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
   const [obs, setObs] = useState(supl?.observacoes ?? '')
   const [recPeriodo, setRecPeriodo] = useState<'' | Periodicidade>('')
   const [recAntecedencia, setRecAntecedencia] = useState('7')
+  const [recLimite, setRecLimite] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -204,7 +221,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
         if (recPeriodo) {
           await createRecurrence({
             clinicId, patientId, professionalId, tipo: 'suplementacao', supplementationId: novoId,
-            descricao: medicacao, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: localDateToday(),
+            descricao: medicacao, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: localDateToday(), dataLimite: recLimite || null,
           }).catch(() => {})
         }
       }
@@ -280,6 +297,12 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
                 <div className="flex items-center gap-2">
                   <input type="number" min={0} max={365} className={field} value={recAntecedencia} onChange={(e) => setRecAntecedencia(e.target.value)} />
                   <span className="whitespace-nowrap text-xs text-texto/60">dias de antecedência</span>
+                </div>
+              )}
+              {recPeriodo && (
+                <div>
+                  <input type="date" className={field} value={recLimite} onChange={(e) => setRecLimite(e.target.value)} />
+                  <span className="mt-0.5 block text-[11px] text-texto/50">Alertar até (opcional — em branco = permanente)</span>
                 </div>
               )}
             </div>

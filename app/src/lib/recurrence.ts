@@ -24,11 +24,14 @@ export interface RecurrenceRec {
   patient_id: string
   professional_id: string | null
   tipo: 'procedimento' | 'suplementacao'
+  procedure_id: string | null
+  supplementation_id: string | null
   descricao: string
   periodicidade: Periodicidade
   dias_antecedencia: number
   data_base: string
   proxima_data: string
+  data_limite: string | null
   status: 'ativa' | 'encerrada'
   patients?: { nome: string } | null
 }
@@ -45,6 +48,7 @@ export async function createRecurrence(args: {
   periodicidade: Periodicidade
   diasAntecedencia: number
   dataBase: string
+  dataLimite?: string | null
 }): Promise<void> {
   const proxima = addMonthsYmd(args.dataBase, PERIOD_MESES[args.periodicidade])
   const patch = {
@@ -52,6 +56,7 @@ export async function createRecurrence(args: {
     dias_antecedencia: args.diasAntecedencia,
     data_base: args.dataBase.slice(0, 10),
     proxima_data: proxima,
+    data_limite: args.dataLimite ?? null,
     status: 'ativa' as const,
   }
   // Evita recomendações ativas duplicadas para o mesmo paciente/tipo/descrição.
@@ -87,9 +92,12 @@ function normalize(rows: unknown[]): RecurrenceRec[] {
     patients: Array.isArray(r.patients) ? (r.patients[0] ?? null) : r.patients,
   })) as RecurrenceRec[]
 }
-/** Uma recomendação está "vencendo" quando hoje já entrou na janela de antecedência. */
+/** Uma recomendação está "vencendo" quando hoje já entrou na janela de antecedência
+ *  e ainda não passou da data-limite (se houver). */
 function noPrazo(r: RecurrenceRec): boolean {
-  return r.proxima_data <= addDaysYmd(localDateToday(), r.dias_antecedencia)
+  const hoje = localDateToday()
+  if (r.data_limite && r.data_limite < hoje) return false // passou da data-limite → não alerta mais
+  return r.proxima_data <= addDaysYmd(hoje, r.dias_antecedencia)
 }
 
 /** Retornos recomendados (equipe) já dentro da janela de alerta e não agendados. */
@@ -125,5 +133,38 @@ export async function advanceRecurrence(rec: Pick<RecurrenceRec, 'id' | 'proxima
 /** Encerra a recomendação (não gera mais alertas). */
 export async function dismissRecurrence(id: string): Promise<void> {
   const { error } = await supabase.from('recurrence_recommendations').update({ status: 'encerrada' }).eq('id', id)
+  if (error) throw error
+}
+
+/** Todas as recorrências de um paciente (ativas e encerradas) — para exibir/editar nos painéis. */
+export async function listRecurrences(patientId: string): Promise<RecurrenceRec[]> {
+  const { data, error } = await supabase
+    .from('recurrence_recommendations')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return normalize(data ?? [])
+}
+
+/** Edita uma recorrência já registrada (periodicidade, antecedência, data-limite, status).
+ *  Se a periodicidade mudar, recalcula a próxima data a partir da data-base. */
+export async function updateRecurrence(id: string, patch: {
+  periodicidade?: Periodicidade
+  diasAntecedencia?: number
+  dataLimite?: string | null
+  status?: 'ativa' | 'encerrada'
+  dataBase?: string
+}): Promise<void> {
+  const upd: Record<string, unknown> = {}
+  if (patch.periodicidade !== undefined) upd.periodicidade = patch.periodicidade
+  if (patch.diasAntecedencia !== undefined) upd.dias_antecedencia = patch.diasAntecedencia
+  if ('dataLimite' in patch) upd.data_limite = patch.dataLimite ?? null
+  if (patch.status !== undefined) upd.status = patch.status
+  // Recalcula próxima data se a periodicidade mudou e temos a data-base de referência.
+  if (patch.periodicidade !== undefined && patch.dataBase) {
+    upd.proxima_data = addMonthsYmd(patch.dataBase.slice(0, 10), PERIOD_MESES[patch.periodicidade])
+  }
+  const { error } = await supabase.from('recurrence_recommendations').update(upd).eq('id', id)
   if (error) throw error
 }
