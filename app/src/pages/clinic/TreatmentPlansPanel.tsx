@@ -2,18 +2,28 @@ import { useEffect, useState } from 'react'
 import {
   createTreatmentPlan,
   deleteTreatmentPlan,
+  listPlanItems,
+  listPlanItemsForPlans,
   listSnippets,
   listTreatmentPlans,
   markPlanConsentByStaff,
+  planItemsRealizadas,
+  savePlanItems,
   sendTreatmentPlan,
   suggestPlanIA,
   updateTreatmentPlan,
+  type PlanItem,
+  type PlanItemInput,
   type PlanStatus,
   type TextSnippet,
   type TreatmentPlan,
 } from '@/lib/treatmentPlans'
 import { brl, listQuotes, type Quote } from '@/lib/finance'
+import { currentProcedurePrices, listActiveIngredients, listProcedureTypes } from '@/lib/domains'
 import { formatDateBR } from '@/lib/format'
+
+interface CatalogoOpt { id: string; nome: string; preco: number }
+interface ItemDraft { id?: string; tipo: 'procedimento' | 'suplementacao'; refId: string; nome: string; preco_unit: number; sessoes: number; frequencia: string }
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -34,9 +44,19 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
   const [carregando, setCarregando] = useState(true)
   const [editando, setEditando] = useState<TreatmentPlan | 'novo' | null>(null)
+  const [itensPorPlano, setItensPorPlano] = useState<Record<string, PlanItem[]>>({})
+  const [realizadas, setRealizadas] = useState<Record<string, number>>({})
 
   function recarregar() {
-    listTreatmentPlans(patientId).then(setPlanos).catch(() => {}).finally(() => setCarregando(false))
+    listTreatmentPlans(patientId).then((ps) => {
+      setPlanos(ps)
+      listPlanItemsForPlans(ps.map((p) => p.id)).then((its) => {
+        const grp: Record<string, PlanItem[]> = {}
+        for (const it of its) (grp[it.treatment_plan_id] ??= []).push(it)
+        setItensPorPlano(grp)
+        planItemsRealizadas(its.map((i) => i.id)).then(setRealizadas).catch(() => {})
+      }).catch(() => {})
+    }).catch(() => {}).finally(() => setCarregando(false))
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
   }
   useEffect(recarregar, [patientId])
@@ -93,6 +113,24 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
                   ? <span className="font-medium text-texto/70">Orçamento: {brl(valorDoPlano(p.id))}</span>
                   : <span className="text-texto/40">Aguardando orçamento</span>}
               </div>
+              {(itensPorPlano[p.id]?.length ?? 0) > 0 && (
+                <div className="mt-2 rounded-lg bg-black/[0.02] p-2">
+                  <div className="mb-1 text-[11px] font-medium text-texto/60">Itens do plano · total {brl((itensPorPlano[p.id] ?? []).reduce((s, it) => s + Number(it.preco_unit) * it.sessoes, 0))}</div>
+                  <div className="space-y-0.5">
+                    {(itensPorPlano[p.id] ?? []).map((it) => {
+                      const feitas = realizadas[it.id] ?? 0
+                      const done = feitas >= it.sessoes
+                      return (
+                        <div key={it.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="min-w-0 flex-1 truncate text-texto/70">{it.nome}{it.frequencia ? ` · ${it.frequencia}` : ''}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{feitas}/{it.sessoes} sessões</span>
+                          <span className="shrink-0 text-texto/50">{brl(Number(it.preco_unit) * it.sessoes)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               {/* Envio ao paciente e ciência (espelha os Documentos) */}
               <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-black/5 pt-2 text-xs">
                 {p.status === 'rascunho' && (
@@ -132,8 +170,23 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
   const [iaInstrucao, setIaInstrucao] = useState('')
   const [iaCarregando, setIaCarregando] = useState(false)
   const [iaErro, setIaErro] = useState<string | null>(null)
+  const [procOpts, setProcOpts] = useState<CatalogoOpt[]>([])
+  const [suplOpts, setSuplOpts] = useState<CatalogoOpt[]>([])
+  const [items, setItems] = useState<ItemDraft[]>([])
+  const [erroItens, setErroItens] = useState<string | null>(null)
 
   useEffect(() => { listSnippets('plano').then(setSnippets).catch(() => {}) }, [])
+  useEffect(() => {
+    Promise.all([listProcedureTypes(), currentProcedurePrices(), listActiveIngredients()])
+      .then(([tipos, precos, ativos]) => {
+        setProcOpts(tipos.map((t) => ({ id: t.id, nome: t.nome, preco: precos[t.id]?.valor ?? 0 })))
+        setSuplOpts(ativos.map((a) => ({ id: a.id, nome: a.nome, preco: Number(a.preco_venda) || 0 })))
+      }).catch(() => {})
+    if (plano) listPlanItems(plano.id).then((its) => setItems(its.map((i) => ({
+      id: i.id, tipo: i.tipo, refId: (i.tipo === 'procedimento' ? i.procedure_type_id : i.active_ingredient_id) ?? '',
+      nome: i.nome, preco_unit: Number(i.preco_unit), sessoes: i.sessoes, frequencia: i.frequencia ?? '',
+    })))).catch(() => {})
+  }, [])
 
   function inserirSnippet(id: string) {
     const s = snippets.find((x) => x.id === id)
@@ -153,18 +206,34 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
     }
   }
 
+  function addProc() { setItems((a) => [...a, { tipo: 'procedimento', refId: '', nome: '', preco_unit: 0, sessoes: 1, frequencia: '' }]) }
+  function addSupl() { setItems((a) => [...a, { tipo: 'suplementacao', refId: '', nome: '', preco_unit: 0, sessoes: 1, frequencia: '' }]) }
+  function setItemField(i: number, patch: Partial<ItemDraft>) { setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it))) }
+  function escolherRef(i: number, refId: string, tipo: 'procedimento' | 'suplementacao') {
+    const opt = (tipo === 'procedimento' ? procOpts : suplOpts).find((o) => o.id === refId)
+    setItemField(i, { refId, nome: opt?.nome ?? '', preco_unit: opt?.preco ?? 0 })
+  }
+  function removeItem(i: number) { setItems((arr) => arr.filter((_, idx) => idx !== i)) }
+  const totalItens = items.reduce((s, it) => s + (it.preco_unit || 0) * (it.sessoes || 0), 0)
+
   async function salvar() {
     if (!texto.trim()) return
-    setSalvando(true)
-    const dados = {
-      titulo: titulo || null, texto,
-      num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null,
-    }
+    const itensValidos = items.filter((i) => i.refId)
+    if (itensValidos.some((i) => !(i.sessoes > 0))) { setErroItens('Informe as sessões (maior que zero) de cada item.'); return }
+    setSalvando(true); setErroItens(null)
+    const dados = { titulo: titulo || null, texto, num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null }
     try {
-      if (editando && plano) await updateTreatmentPlan(plano.id, dados)
-      else await createTreatmentPlan({ clinicId, patientId, professionalId, ...dados, texto })
+      const planId = editando && plano
+        ? (await updateTreatmentPlan(plano.id, dados), plano.id)
+        : (await createTreatmentPlan({ clinicId, patientId, professionalId, ...dados, texto })).id
+      await savePlanItems(clinicId, planId, itensValidos.map<PlanItemInput>((i) => ({
+        id: i.id, tipo: i.tipo,
+        procedure_type_id: i.tipo === 'procedimento' ? i.refId : null,
+        active_ingredient_id: i.tipo === 'suplementacao' ? i.refId : null,
+        nome: i.nome, preco_unit: i.preco_unit, sessoes: i.sessoes, frequencia: i.frequencia || null,
+      })))
       onSaved()
-    } catch { setSalvando(false) }
+    } catch (e) { setErroItens((e as Error)?.message ?? 'Não foi possível salvar.'); setSalvando(false) }
   }
 
   return (
@@ -192,6 +261,42 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
           <p className="mt-1 text-xs text-texto/50">Usa anamnese e última avaliação do paciente. Revise antes de salvar.</p>
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Conteúdo *</label><textarea rows={6} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} /></div>
+
+        <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">
+          <div className="mb-1 flex items-center justify-between">
+            <label className="text-sm font-medium text-texto/80">Itens do plano (procedimentos / suplementações)</label>
+            <div className="flex gap-2 text-xs">
+              <button type="button" onClick={addProc} className="font-medium text-primaria hover:underline">+ Procedimento</button>
+              <button type="button" onClick={addSupl} className="font-medium text-primaria hover:underline">+ Suplementação</button>
+            </div>
+          </div>
+          {items.length === 0 ? (
+            <p className="text-xs text-texto/40">Opcional. Cada item tem preço (do cadastro), sessões e frequência próprias.</p>
+          ) : (
+            <div className="space-y-2">
+              {items.map((it, i) => (
+                <div key={i} className="rounded-lg border border-black/5 bg-white p-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${it.tipo === 'procedimento' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>{it.tipo === 'procedimento' ? 'Proc.' : 'Supl.'}</span>
+                    <select className="min-w-0 flex-1 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={it.refId} onChange={(e) => escolherRef(i, e.target.value, it.tipo)}>
+                      <option value="">{it.tipo === 'procedimento' ? 'Selecione o procedimento…' : 'Selecione o ativo…'}</option>
+                      {(it.tipo === 'procedimento' ? procOpts : suplOpts).map((o) => <option key={o.id} value={o.id}>{o.nome}{o.preco > 0 ? ` · ${brl(o.preco)}` : ''}</option>)}
+                    </select>
+                    <button type="button" onClick={() => removeItem(i)} className="px-1 text-texto/40 hover:text-secundaria">✕</button>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-texto/60">
+                    <label className="flex items-center gap-1">Sessões <input type="number" min={1} className="w-16 rounded border border-black/10 px-1.5 py-1" value={it.sessoes} onChange={(e) => setItemField(i, { sessoes: Number(e.target.value) })} /></label>
+                    <label className="flex items-center gap-1">Freq. <input className="w-24 rounded border border-black/10 px-1.5 py-1" placeholder="mensal…" value={it.frequencia} onChange={(e) => setItemField(i, { frequencia: e.target.value })} /></label>
+                    <span className="ml-auto font-medium text-texto/70">{brl((it.preco_unit || 0) * (it.sessoes || 0))}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="text-right text-sm font-semibold text-texto">Total dos itens: {brl(totalItens)}</div>
+            </div>
+          )}
+          {erroItens && <p className="mt-1 text-xs text-secundaria">{erroItens}</p>}
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <div><label className="mb-1 block text-sm text-texto/70">Sessões</label><input type="number" className={field} value={sessoes} onChange={(e) => setSessoes(e.target.value)} /></div>
           <div><label className="mb-1 block text-sm text-texto/70">Frequência</label><input className={field} value={freq} onChange={(e) => setFreq(e.target.value)} /></div>
