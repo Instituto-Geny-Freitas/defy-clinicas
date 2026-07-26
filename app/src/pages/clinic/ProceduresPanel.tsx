@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { localDateToday } from '@/lib/format'
 import { createProcedure, deleteProcedure, listProcedures, updateProcedure, VINCULO_HELP, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listInventory, listInventoryLots, type InventoryItem, type InventoryLot } from '@/lib/inventory'
-import { listQuotes, brl, type Quote } from '@/lib/finance'
+import { listQuotes, listPaymentsByPatient, totalLiquidado, createQuote, brl, type Quote, type Payment, type QuoteItem } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
 import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
@@ -158,6 +158,7 @@ function RegistrarModal({
   const [estoque, setEstoque] = useState<InventoryItem[]>([])
   const [lotes, setLotes] = useState<InventoryLot[]>([])
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
+  const [pagamentos, setPagamentos] = useState<Payment[]>([])
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [tipos, setTipos] = useState<ProcedureType[]>([])
   const [precos, setPrecos] = useState<Record<string, { valor: number; vigencia_inicio: string }>>({})
@@ -182,6 +183,10 @@ function RegistrarModal({
   const [recLimite, setRecLimite] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  // Fase 7: produtos usados x orçamento/pacote pago → propor orçamento complementar (rascunho).
+  const [produtosPrevistos, setProdutosPrevistos] = useState(true)
+  const [proporProdutos, setProporProdutos] = useState<UsedProduct[] | null>(null)
+  const [criandoComplementar, setCriandoComplementar] = useState(false)
 
   useEffect(() => {
     listInventory().then(setEstoque).catch(() => {})
@@ -190,6 +195,7 @@ function RegistrarModal({
     currentProcedurePrices().then(setPrecos).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
+    listPaymentsByPatient(patientId).then(setPagamentos).catch(() => {})
     listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => p.tipo === 'procedimento'))).catch(() => {})
   }, [patientId])
 
@@ -238,6 +244,16 @@ function RegistrarModal({
     return tipo ? Number(precos[tipo.id]?.valor ?? 0) : 0
   }
   const fmtMoedaBR = (v: number) => String(v.toFixed(2)).replace('.', ',')
+
+  // Fase 7: orçamento vinculado (direto ou via pacote) e se já está pago (liquidado pelo paciente).
+  const pacoteVinc = pacotes.find((p) => p.id === pacoteId) ?? null
+  const orcVinculadoId = quoteId || pacoteVinc?.quote_id || ''
+  const orcVinculado = orcamentos.find((q) => q.id === orcVinculadoId) ?? null
+  const orcPago = !!orcVinculado && totalLiquidado(pagamentos, orcVinculado.id) >= Number(orcVinculado.valor_total) - 0.005
+  const produtosComValor = produtos.filter((p) => p.inventory_id && Number(p.preco_venda) > 0)
+  const totalProdutosComValor = produtosComValor.reduce((s, p) => s + Number(p.preco_venda) * p.qtd, 0)
+  // Só perguntamos/propomos quando há produtos cobráveis e o orçamento vinculado já está pago.
+  const podeProporComplementar = orcPago && produtosComValor.length > 0
 
   const nomeProduto = (invId: string) => estoque.find((i) => i.id === invId)?.produto ?? ''
   const lotesComSaldo = lotes.filter((l) => Number(l.qtd_atual) > 0)
@@ -301,8 +317,34 @@ function RegistrarModal({
           }).catch(() => {})
         }
       }
+      // Fase 7: produtos não previstos em orçamento/pacote já pago → propõe orçamento complementar (rascunho).
+      if (podeProporComplementar && !produtosPrevistos) {
+        setProporProdutos(produtosComValor)
+        setSalvando(false)
+        return
+      }
       onSaved()
     } catch (e) { setErro((e as Error)?.message || 'Não foi possível salvar o procedimento.'); setSalvando(false) }
+  }
+
+  // Fase 7: cria o orçamento complementar (rascunho) com os produtos não previstos, para a equipe revisar/enviar.
+  async function criarComplementar() {
+    if (!proporProdutos) return
+    setCriandoComplementar(true)
+    try {
+      const itensComplementar: QuoteItem[] = proporProdutos.map((u) => {
+        const qtd = Number(u.qtd) || 1
+        const pv = Number(u.preco_venda) || 0
+        const det = [u.lote ? `lote ${u.lote}` : '', u.validade ? `val ${formatDateBR(u.validade)}` : ''].filter(Boolean).join(' · ')
+        return { descricao: `Produto: ${u.produto}${det ? ` (${det})` : ''}`, qtd, valor_unit: pv, total: pv * qtd, origem: 'produto' as const, ref_id: '' }
+      })
+      await createQuote({
+        clinicId, patientId, professionalId,
+        treatmentPlanId: (orcVinculado?.treatment_plan_id ?? planoId) || null,
+        itens: itensComplementar, desconto: 0, status: 'rascunho',
+      })
+      onSaved()
+    } catch (e) { setErro((e as Error)?.message || 'Não foi possível criar o orçamento complementar.'); setCriandoComplementar(false) }
   }
 
   const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -503,6 +545,18 @@ function RegistrarModal({
             {editar && produtos.length > 0 && <p className="mt-1 text-xs text-texto/40">Ao salvar, o estoque é reconciliado (devolve os antigos e baixa os novos).</p>}
           </div>
 
+          {podeProporComplementar && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <label className="flex items-start gap-2 text-sm text-amber-800">
+                <input type="checkbox" className="mt-0.5" checked={produtosPrevistos} onChange={(e) => setProdutosPrevistos(e.target.checked)} />
+                <span>Os produtos utilizados já estavam previstos no orçamento/pacote pago ({brl(totalProdutosComValor)}).</span>
+              </label>
+              {!produtosPrevistos && (
+                <p className="mt-1 pl-6 text-xs text-amber-700">Ao salvar, será proposto um <strong>orçamento complementar (rascunho)</strong> com estes produtos para a equipe revisar e enviar. Nada é cobrado automaticamente.</p>
+              )}
+            </div>
+          )}
+
           {erro && <p className="text-sm text-secundaria">{erro}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
@@ -510,6 +564,30 @@ function RegistrarModal({
               {salvando ? 'Salvando…' : editar ? 'Salvar' : 'Registrar'}
             </button>
           </div>
+
+          {proporProdutos && (
+            <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+              <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl">
+                <h3 className="text-base font-semibold text-texto">Propor orçamento complementar</h3>
+                <p className="mt-1 text-sm text-texto/70">O orçamento/pacote vinculado já está pago e estes produtos não estavam previstos. Deseja criar um <strong>orçamento complementar (rascunho)</strong> para a equipe revisar e enviar? Nada é cobrado automaticamente.</p>
+                <ul className="mt-3 space-y-1 rounded-lg bg-black/[0.02] p-3 text-sm">
+                  {proporProdutos.map((u, i) => (
+                    <li key={i} className="flex justify-between gap-2">
+                      <span className="min-w-0 truncate text-texto/70">{u.produto}{u.lote ? ` · lote ${u.lote}` : ''}</span>
+                      <span className="shrink-0 text-texto/60">{u.qtd} × {brl(Number(u.preco_venda))} = <strong className="text-texto">{brl(Number(u.preco_venda) * u.qtd)}</strong></span>
+                    </li>
+                  ))}
+                  <li className="flex justify-between gap-2 border-t border-black/10 pt-1 font-semibold text-texto"><span>Total</span><span>{brl(totalProdutosComValor)}</span></li>
+                </ul>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => { setProporProdutos(null); onSaved() }} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Agora não</button>
+                  <button onClick={criarComplementar} disabled={criandoComplementar} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                    {criandoComplementar ? 'Criando…' : 'Criar rascunho'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
