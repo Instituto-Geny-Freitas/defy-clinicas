@@ -373,6 +373,9 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
               )}
             </div>
           )}
+          {pacotes.length === 0 && (
+            <p className="mt-2 border-t border-primaria/20 pt-2 text-[11px] text-texto/50">Para vincular a um <strong>pacote de suplementação</strong>, crie o pacote antes na aba “Pacotes” (tipo Suplementações).</p>
+          )}
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
         {!editar && !vinculado && (

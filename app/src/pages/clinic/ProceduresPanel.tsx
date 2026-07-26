@@ -436,6 +436,9 @@ function RegistrarModal({
                 {pacoteId && pkgItens.length > 0 && <p className="mt-1 text-[11px] text-texto/50">Baixa uma sessão do item do pacote. Esgotados não podem ser vinculados — crie um novo orçamento (avulso).</p>}
               </div>
             )}
+            {pacotes.length === 0 && (
+              <p className="mt-2 text-[11px] text-texto/50">Para vincular a um <strong>pacote de procedimento</strong>, crie o pacote antes na aba “Pacotes” (tipo Procedimentos).</p>
+            )}
             {avulso && (
               <div className="mt-2">
                 <label className="mb-1 block text-sm text-texto/70">Valor a cobrar (procedimento avulso)</label>
