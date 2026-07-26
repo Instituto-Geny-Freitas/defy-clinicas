@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   addPackageSession, createPackage, deletePackage, deletePackageSession,
   listPackageItems, listPackageItemsForPackages, listPackageSessions, listPackages,
-  packageItemsRealizadas, savePackageItems, updatePackage,
-  type PackageItem, type PackageItemInput, type PackageSession, type TreatmentPackage,
+  listPackageRealizacoes, packageItemsRealizadas, savePackageItems, updatePackage,
+  type PackageItem, type PackageItemInput, type PackageRealizacao, type PackageSession, type TreatmentPackage,
 } from '@/lib/packages'
 import { currentProcedurePrices, listActiveIngredients, listProcedureTypes } from '@/lib/domains'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
@@ -21,6 +21,7 @@ export default function PackagesPanel({ patientId, clinicId, professionalId }: P
   const [verSessoes, setVerSessoes] = useState<TreatmentPackage | null>(null)
   const [itensPorPacote, setItensPorPacote] = useState<Record<string, PackageItem[]>>({})
   const [realizadas, setRealizadas] = useState<Record<string, number>>({})
+  const [realizPorPacote, setRealizPorPacote] = useState<Record<string, PackageRealizacao[]>>({})
 
   function recarregar() {
     listPackages(patientId).then((ps) => {
@@ -31,6 +32,10 @@ export default function PackagesPanel({ patientId, clinicId, professionalId }: P
         setItensPorPacote(grp)
         packageItemsRealizadas(its.map((i) => i.id)).then(setRealizadas).catch(() => {})
       }).catch(() => {})
+      // Realizados (com data) por pacote — para listar no card.
+      Promise.all(ps.map((p) => listPackageRealizacoes(p.id).then((rs) => [p.id, rs] as const).catch(() => [p.id, []] as const)))
+        .then((pairs) => setRealizPorPacote(Object.fromEntries(pairs)))
+        .catch(() => {})
     }).catch(() => {}).finally(() => setCarregando(false))
   }
   useEffect(recarregar, [patientId])
@@ -106,6 +111,21 @@ export default function PackagesPanel({ patientId, clinicId, professionalId }: P
                       })}
                     </div>
                     <p className="mt-1 text-[11px] text-texto/40">As sessões são baixadas ao registrar {p.tipo === 'suplementacao' ? 'suplementações' : 'procedimentos'} vinculados a este pacote.</p>
+                    {(realizPorPacote[p.id] ?? []).length > 0 && (
+                      <div className="mt-2 border-t border-black/5 pt-2">
+                        <div className="mb-1 text-[11px] font-medium text-texto/50">Sessões realizadas</div>
+                        <ul className="space-y-0.5">
+                          {(realizPorPacote[p.id] ?? []).map((r) => (
+                            <li key={r.id} className="flex flex-wrap items-center gap-x-2 text-xs text-texto/70">
+                              <span>{formatDateBR(r.data)}</span>
+                              <span className="text-texto/40">·</span>
+                              <span className="text-texto/80">{r.item_nome || r.nome}</span>
+                              {r.profissional && <><span className="text-texto/40">·</span><span>{r.profissional}</span></>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>

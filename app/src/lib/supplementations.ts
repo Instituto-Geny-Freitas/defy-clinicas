@@ -29,13 +29,17 @@ export async function listSupplementations(patientId: string): Promise<Supplemen
   return data ?? []
 }
 
-/** Suplementações ainda não pagas (para importar no orçamento). */
+/** Suplementações ainda não pagas (para importar no orçamento).
+ *  Exclui as vinculadas a item de plano/pacote — estas já são cobradas pelo
+ *  orçamento do plano/pacote (evita cobrança dupla). */
 export async function listUnpaidSupplementations(patientId: string): Promise<Supplementation[]> {
   const { data, error } = await supabase
     .from('supplementations')
     .select('*')
     .eq('patient_id', patientId)
     .eq('pago', false)
+    .is('treatment_plan_item_id', null)
+    .is('treatment_package_item_id', null)
     .order('data', { ascending: false })
   if (error) throw error
   return data ?? []
