@@ -6,7 +6,7 @@ import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
 import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
-import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
+import { listProcedureTypes, currentProcedurePrices, type ProcedureType } from '@/lib/domains'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import SnippetPicker from '@/components/SnippetPicker'
 import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
@@ -160,6 +160,7 @@ function RegistrarModal({
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
   const [planos, setPlanos] = useState<TreatmentPlan[]>([])
   const [tipos, setTipos] = useState<ProcedureType[]>([])
+  const [precos, setPrecos] = useState<Record<string, { valor: number; vigencia_inicio: string }>>({})
   const [planoId, setPlanoId] = useState('')
   const [quoteId, setQuoteId] = useState(proc?.quote_id ?? '')
   const [planItens, setPlanItens] = useState<(PlanItem & { saldo: number; realizadas: number })[]>([])
@@ -186,6 +187,7 @@ function RegistrarModal({
     listInventory().then(setEstoque).catch(() => {})
     listInventoryLots().then(setLotes).catch(() => {})
     listProcedureTypes().then(setTipos).catch(() => {})
+    currentProcedurePrices().then(setPrecos).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
     listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => p.tipo === 'procedimento'))).catch(() => {})
@@ -227,7 +229,15 @@ function RegistrarModal({
   }, [pacoteId, pacotes])
 
   const orcamentosDoPlano = planoId ? orcamentos.filter((q) => q.treatment_plan_id === planoId) : orcamentos
-  const avulso = !quoteId
+  // Avulso = sem nenhum vínculo (orçamento, item de plano ou item de pacote). Só então há valor a cobrar e recorrência.
+  const avulso = !quoteId && !planItemId && !packageItemId
+
+  // Preço vigente (Fase 1) do tipo de procedimento pelo nome selecionado.
+  const precoVigenteDoNome = (nome: string): number => {
+    const tipo = tipos.find((t) => t.nome === nome)
+    return tipo ? Number(precos[tipo.id]?.valor ?? 0) : 0
+  }
+  const fmtMoedaBR = (v: number) => String(v.toFixed(2)).replace('.', ',')
 
   const nomeProduto = (invId: string) => estoque.find((i) => i.id === invId)?.produto ?? ''
   const lotesComSaldo = lotes.filter((l) => Number(l.qtd_atual) > 0)
@@ -284,7 +294,7 @@ function RegistrarModal({
           data, regiao, observacoes: obs,
           valorCobrado: valor, produtos: prods,
         })
-        if (recPeriodo) {
+        if (recPeriodo && avulso) {
           await createRecurrence({
             clinicId, patientId, professionalId, tipo: 'procedimento', procedureId: novo.id,
             descricao: procedimento, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: data, dataLimite: recLimite || null,
@@ -309,7 +319,16 @@ function RegistrarModal({
           <div>
             <label className="mb-1 block text-sm text-texto/70">Procedimento *</label>
             <select className={field} value={procSelect}
-              onChange={(e) => { setProcSelect(e.target.value); if (e.target.value && e.target.value !== '__outro__') setProcedimento(e.target.value) }}>
+              onChange={(e) => {
+                const v = e.target.value
+                setProcSelect(v)
+                if (v && v !== '__outro__') {
+                  setProcedimento(v)
+                  // Fase 6: pré-preenche o valor avulso com o preço vigente do procedimento (editável).
+                  const preco = precoVigenteDoNome(v)
+                  if (preco > 0) setValorCobrado(fmtMoedaBR(preco))
+                }
+              }}>
               <option value="">{editar ? procedimento || 'Selecione…' : 'Selecione…'}</option>
               {tipos.map((t) => <option key={t.id} value={t.nome}>{t.nome}</option>)}
               <option value="__outro__">Outro (digitar)…</option>
@@ -383,6 +402,14 @@ function RegistrarModal({
                   <input className={field} inputMode="decimal" value={valorCobrado} onChange={(e) => setValorCobrado(e.target.value)} placeholder="0,00" />
                 </div>
                 <p className="mt-1 text-xs text-texto/60">Sem orçamento: informe o valor (use vírgula para centavos). Ele poderá ser importado depois em “Novo orçamento”. {parseMoneyBR(valorCobrado) > 0 && <strong>{brl(parseMoneyBR(valorCobrado))}</strong>}</p>
+                {precoVigenteDoNome(procedimento) > 0 && (
+                  <p className="mt-1 text-xs text-texto/60">
+                    Preço vigente do procedimento: <strong>{brl(precoVigenteDoNome(procedimento))}</strong>
+                    {Math.abs(parseMoneyBR(valorCobrado) - precoVigenteDoNome(procedimento)) > 0.001 && (
+                      <button type="button" onClick={() => setValorCobrado(fmtMoedaBR(precoVigenteDoNome(procedimento)))} className="ml-2 font-medium text-primaria hover:underline">usar preço vigente</button>
+                    )}
+                  </p>
+                )}
                 {totalProdutos > 0 && (
                   <p className="mt-1 text-xs text-texto/60">
                     Total dos produtos utilizados: <strong>{brl(totalProdutos)}</strong>
@@ -401,10 +428,10 @@ function RegistrarModal({
             )}
           </div>
 
-          {!editar && (
+          {!editar && avulso && (
             <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">
               <label className="mb-1 block text-sm font-medium text-texto/80">Recorrência recomendada (opcional)</label>
-              <p className="mb-2 text-xs text-texto/50">Deixa registrado que você recomenda repetir e gera alerta de retorno para a equipe e o paciente.</p>
+              <p className="mb-2 text-xs text-texto/50">Só para procedimento avulso (sem orçamento/plano/pacote). Deixa registrado que você recomenda repetir e gera alerta de retorno para a equipe e o paciente.</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <select className={field} value={recPeriodo} onChange={(e) => setRecPeriodo(e.target.value as '' | Periodicidade)}>
                   <option value="">— Sem recorrência —</option>

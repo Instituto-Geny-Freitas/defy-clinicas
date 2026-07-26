@@ -229,6 +229,8 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
 
   const qtdNum = Number(quantidade.replace(',', '.')) || 0
   const podeSalvar = medicacao.trim().length > 0 && qtdNum > 0
+  // Fase 6: recorrência só quando avulso (sem vínculo com item de plano/pacote).
+  const vinculado = !!planItemId || !!packageItemId
 
   async function salvar() {
     if (!podeSalvar) return
@@ -261,7 +263,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
           ativoLoteId: ativoLoteId || null, quantidade: qtdNum, treatmentPlanItemId: planItemId || null, treatmentPackageItemId: packageItemId || null,
         })
-        if (recPeriodo) {
+        if (recPeriodo && !vinculado) {
           await createRecurrence({
             clinicId, patientId, professionalId, tipo: 'suplementacao', supplementationId: novoId,
             descricao: medicacao, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: localDateToday(), dataLimite: recLimite || null,
@@ -370,10 +372,10 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           )}
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
-        {!editar && (
+        {!editar && !vinculado && (
           <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">
             <label className="mb-1 block text-sm font-medium text-texto/80">Recorrência recomendada (opcional)</label>
-            <p className="mb-2 text-xs text-texto/50">Registra a recomendação de repetir e gera alerta de retorno para a equipe e o paciente.</p>
+            <p className="mb-2 text-xs text-texto/50">Só para suplementação avulsa (sem vínculo com plano/pacote). Registra a recomendação de repetir e gera alerta de retorno para a equipe e o paciente.</p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <select className={field} value={recPeriodo} onChange={(e) => setRecPeriodo(e.target.value as '' | Periodicidade)}>
                 <option value="">— Sem recorrência —</option>
