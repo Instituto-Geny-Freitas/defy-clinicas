@@ -104,6 +104,20 @@ export async function planItemsRealizadas(itemIds: string[]): Promise<Record<str
   return map
 }
 
+/** Um item do plano pelo id (para derivar o plano ao editar procedimento/suplementação). */
+export async function getPlanItem(id: string): Promise<PlanItem | null> {
+  const { data, error } = await supabase.from('treatment_plan_items').select('*').eq('id', id).maybeSingle()
+  if (error) return null
+  return data
+}
+
+/** Itens de um plano com saldo de sessões (sessões − realizadas). */
+export async function listPlanItemsComSaldo(planId: string): Promise<(PlanItem & { realizadas: number; saldo: number })[]> {
+  const items = await listPlanItems(planId)
+  const realiz = await planItemsRealizadas(items.map((i) => i.id))
+  return items.map((i) => { const r = realiz[i.id] ?? 0; return { ...i, realizadas: r, saldo: Math.max(0, i.sessoes - r) } })
+}
+
 /** Salva os itens do plano preservando ids (update/insert/delete-diff).
  *  Bloqueia a remoção de itens que já têm realizações vinculadas. */
 export async function savePlanItems(clinicId: string, planId: string, items: PlanItemInput[]): Promise<void> {
