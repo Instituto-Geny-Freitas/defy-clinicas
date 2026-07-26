@@ -163,8 +163,6 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
   const editando = !!plano
   const [titulo, setTitulo] = useState(plano?.titulo ?? '')
   const [texto, setTexto] = useState(plano?.texto ?? '')
-  const [sessoes, setSessoes] = useState(plano?.num_sessoes != null ? String(plano.num_sessoes) : '')
-  const [freq, setFreq] = useState(plano?.frequencia ?? '')
   const [snippets, setSnippets] = useState<TextSnippet[]>([])
   const [salvando, setSalvando] = useState(false)
   const [iaInstrucao, setIaInstrucao] = useState('')
@@ -221,7 +219,7 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
     const itensValidos = items.filter((i) => i.refId)
     if (itensValidos.some((i) => !(i.sessoes > 0))) { setErroItens('Informe as sessões (maior que zero) de cada item.'); return }
     setSalvando(true); setErroItens(null)
-    const dados = { titulo: titulo || null, texto, num_sessoes: sessoes ? Number(sessoes) : null, frequencia: freq || null }
+    const dados = { titulo: titulo || null, texto }
     try {
       const planId = editando && plano
         ? (await updateTreatmentPlan(plano.id, dados), plano.id)
@@ -297,10 +295,6 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
           {erroItens && <p className="mt-1 text-xs text-secundaria">{erroItens}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div><label className="mb-1 block text-sm text-texto/70">Sessões</label><input type="number" className={field} value={sessoes} onChange={(e) => setSessoes(e.target.value)} /></div>
-          <div><label className="mb-1 block text-sm text-texto/70">Frequência</label><input className={field} value={freq} onChange={(e) => setFreq(e.target.value)} /></div>
-        </div>
         <p className="text-xs text-texto/50">O valor é definido depois, pela geração do orçamento vinculado a este plano (aba Financeiro).</p>
         <Footer onClose={onClose} onSave={salvar} disabled={salvando} label={salvando ? 'Salvando…' : 'Salvar plano'} />
       </div>
