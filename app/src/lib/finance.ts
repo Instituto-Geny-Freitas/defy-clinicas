@@ -80,6 +80,8 @@ interface CreateQuoteArgs {
   treatmentPlanId?: string | null
   itens: QuoteItem[]
   desconto: number
+  /** Status inicial do orçamento. Padrão 'aprovado'; use 'rascunho' para propostas (ex.: orçamento complementar). */
+  status?: QuoteStatus
 }
 
 export async function createQuote(args: CreateQuoteArgs): Promise<Quote> {
@@ -97,7 +99,7 @@ export async function createQuote(args: CreateQuoteArgs): Promise<Quote> {
       valor_bruto,
       desconto: args.desconto || 0,
       valor_total,
-      status: 'aprovado',
+      status: args.status ?? 'aprovado',
     })
     .select()
     .single()
