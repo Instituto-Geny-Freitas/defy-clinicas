@@ -148,6 +148,38 @@ export async function packageItemsRealizadas(itemIds: string[]): Promise<Record<
   return map
 }
 
+export interface PackageRealizacao {
+  id: string
+  tipo: 'procedimento' | 'suplementacao'
+  nome: string
+  item_nome: string
+  data: string
+  profissional: string | null
+}
+
+const embedNome = (v: unknown): string | null => {
+  if (!v) return null
+  const o = Array.isArray(v) ? v[0] : v
+  return (o as { nome?: string })?.nome ?? null
+}
+
+/** Procedimentos/suplementações já realizados vinculados aos itens de um pacote
+ *  (para exibir no card do pacote e no orçamento do pacote). Ordenado por data desc. */
+export async function listPackageRealizacoes(packageId: string): Promise<PackageRealizacao[]> {
+  const items = await listPackageItems(packageId)
+  if (items.length === 0) return []
+  const itemIds = items.map((i) => i.id)
+  const itemNome = new Map(items.map((i) => [i.id, i.nome]))
+  const [{ data: p }, { data: s }] = await Promise.all([
+    supabase.from('procedures_log').select('id, procedimento, data, treatment_package_item_id, professionals(nome)').in('treatment_package_item_id', itemIds),
+    supabase.from('supplementations').select('id, medicacao, data, treatment_package_item_id, professionals(nome)').in('treatment_package_item_id', itemIds),
+  ])
+  const out: PackageRealizacao[] = []
+  for (const r of p ?? []) out.push({ id: r.id as string, tipo: 'procedimento', nome: r.procedimento as string, item_nome: itemNome.get(r.treatment_package_item_id as string) ?? '', data: r.data as string, profissional: embedNome((r as { professionals?: unknown }).professionals) })
+  for (const r of s ?? []) out.push({ id: r.id as string, tipo: 'suplementacao', nome: r.medicacao as string, item_nome: itemNome.get(r.treatment_package_item_id as string) ?? '', data: r.data as string, profissional: embedNome((r as { professionals?: unknown }).professionals) })
+  return out.sort((a, b) => (a.data < b.data ? 1 : -1))
+}
+
 /** Itens do pacote com saldo (sessoes_compradas − realizadas) por item. */
 export async function listPackageItemsComSaldo(packageId: string, sessoesCompradas: number): Promise<(PackageItem & { realizadas: number; saldo: number })[]> {
   const items = await listPackageItems(packageId)

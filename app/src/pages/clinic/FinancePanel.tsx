@@ -24,7 +24,7 @@ import {
 } from '@/lib/finance'
 import { listProcedures, listUnbilledProcedures, linkProceduresToQuote, unlinkProcedureFromQuote, produtosDoOrcamento, VINCULO_HELP, type ProcedureRecord, type UsedProduct } from '@/lib/procedures'
 import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
-import { listPackages, updatePackage, type TreatmentPackage } from '@/lib/packages'
+import { listPackages, updatePackage, listPackageRealizacoes, type TreatmentPackage, type PackageRealizacao } from '@/lib/packages'
 import { listUnpaidSupplementations, listSupplementations, setSupplementationPaid } from '@/lib/supplementations'
 import { createSharedDocument, listSharedDocuments, type SharedDocument } from '@/lib/sharedDocs'
 import { buildOrcamentoPdf } from '@/lib/orcamentoPdf'
@@ -46,6 +46,9 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
   const [corrigindo, setCorrigindo] = useState<{ quote: Quote; grupo: string; parcelasAtuais: number } | null>(null)
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [pagamentos, setPagamentos] = useState<Payment[]>([])
+  // Fase 8b: pacotes com orçamento vinculado e seus realizados (por quote_id), para exibir no orçamento do pacote.
+  const [pacotePorQuote, setPacotePorQuote] = useState<Record<string, TreatmentPackage>>({})
+  const [realizPorPacote, setRealizPorPacote] = useState<Record<string, PackageRealizacao[]>>({})
   const [procedimentos, setProcedimentos] = useState<ProcedureRecord[]>([])
   const [compartilhados, setCompartilhados] = useState<SharedDocument[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -89,13 +92,19 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
   }
 
   function recarregar() {
-    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId), listSharedDocuments(patientId), listSupplementations(patientId)])
-      .then(([q, p, proc, sd, supl]) => {
+    Promise.all([listQuotes(patientId), listPaymentsByPatient(patientId), listProcedures(patientId), listSharedDocuments(patientId), listSupplementations(patientId), listPackages(patientId)])
+      .then(([q, p, proc, sd, supl, pks]) => {
         setQuotes(q)
         setPagamentos(p)
         setProcedimentos(proc)
         setCompartilhados(sd)
         reconciliarSuplementos(q, p, supl)
+        // Pacotes vinculados a orçamento → mapa por quote_id + realizações de cada um.
+        const comQuote = pks.filter((x) => x.quote_id)
+        setPacotePorQuote(Object.fromEntries(comQuote.map((x) => [x.quote_id as string, x])))
+        Promise.all(comQuote.map((pk) => listPackageRealizacoes(pk.id).then((rs) => [pk.id, rs] as const).catch(() => [pk.id, []] as const)))
+          .then((pairs) => setRealizPorPacote(Object.fromEntries(pairs)))
+          .catch(() => {})
       })
       .catch(() => {})
       .finally(() => setCarregando(false))
@@ -245,6 +254,31 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
                     {q.desconto > 0 && <div className="text-xs text-texto/50">desc. {brl(q.desconto)}</div>}
                   </div>
                 </div>
+                {(() => {
+                  const pk = pacotePorQuote[q.id]
+                  if (!pk) return null
+                  const rs = realizPorPacote[pk.id] ?? []
+                  return (
+                    <div className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2 text-xs">
+                      <div className="font-medium text-emerald-800">Pacote pré-pago · {pk.sessoes_compradas} sessões por item</div>
+                      {rs.length === 0 ? (
+                        <p className="mt-0.5 text-texto/50">Nenhuma sessão realizada ainda.</p>
+                      ) : (
+                        <ul className="mt-1 space-y-0.5">
+                          {rs.map((r) => (
+                            <li key={r.id} className="flex flex-wrap items-center gap-x-2 text-texto/70">
+                              <span>{formatDateBR(r.data)}</span>
+                              <span className="text-texto/40">·</span>
+                              <span className="text-texto/80">{r.item_nome || r.nome}</span>
+                              {r.profissional && <><span className="text-texto/40">·</span><span>{r.profissional}</span></>}
+                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">incluso no pacote</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })()}
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-black/5 pt-3 text-sm">
                   <span className="text-texto/60">Pago {brl(pago)}</span>
                   <span className={saldo > 0 ? 'font-semibold text-secundaria' : 'font-semibold text-emerald-600'}>

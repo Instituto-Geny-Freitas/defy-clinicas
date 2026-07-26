@@ -68,6 +68,8 @@ export async function listUnbilledProcedures(patientId: string): Promise<Procedu
     .select('*')
     .eq('patient_id', patientId)
     .is('quote_id', null)
+    .is('treatment_plan_item_id', null)
+    .is('treatment_package_item_id', null)
     .order('data', { ascending: false })
   if (error) throw error
   return (data ?? []).filter((p) =>
