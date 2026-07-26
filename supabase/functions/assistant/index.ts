@@ -617,7 +617,7 @@ async function runTool(name: string, args: Record<string, unknown>, prof: Prof, 
     case 'sugerir_recorrencias': {
       const { data, error } = await admin
         .from('recurrence_recommendations')
-        .select('id, descricao, periodicidade, dias_antecedencia, proxima_data, patient_id, professional_id, patients(nome)')
+        .select('id, descricao, periodicidade, dias_antecedencia, proxima_data, data_limite, patient_id, professional_id, patients(nome)')
         .eq('clinic_id', prof.clinic_id)
         .eq('status', 'ativa')
         .order('proxima_data', { ascending: true })
@@ -627,7 +627,7 @@ async function runTool(name: string, args: Record<string, unknown>, prof: Prof, 
         return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
       }
       const pendentes = (data ?? [])
-        .filter((r: Record<string, any>) => r.proxima_data <= addDias(hoje, Number(r.dias_antecedencia) || 0))
+        .filter((r: Record<string, any>) => (!r.data_limite || r.data_limite >= hoje) && r.proxima_data <= addDias(hoje, Number(r.dias_antecedencia) || 0))
         .map((r: Record<string, any>) => ({
           id: r.id,
           paciente: Array.isArray(r.patients) ? r.patients[0]?.nome : r.patients?.nome,

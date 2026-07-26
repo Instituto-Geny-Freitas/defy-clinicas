@@ -8,7 +8,8 @@ import { listTreatmentPlans, type TreatmentPlan } from '@/lib/treatmentPlans'
 import { listProcedureTypes, type ProcedureType } from '@/lib/domains'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import SnippetPicker from '@/components/SnippetPicker'
-import { createRecurrence, PERIOD_LABEL, type Periodicidade } from '@/lib/recurrence'
+import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
+import RecurrenceEditModal from '@/components/RecurrenceEditModal'
 import { formatDateBR, parseMoneyBR } from '@/lib/format'
 
 interface Props {
@@ -24,9 +25,12 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<ProcedureRecord | null>(null)
+  const [recorrencias, setRecorrencias] = useState<RecurrenceRec[]>([])
+  const [editRec, setEditRec] = useState<RecurrenceRec | null>(null)
 
   function recarregar() {
     listProcedures(patientId).then(setProcs).catch(() => {}).finally(() => setCarregando(false))
+    listRecurrences(patientId).then(setRecorrencias).catch(() => {})
     // Orçamentos quitados do paciente → marca os procedimentos vinculados como pagos.
     supabase.from('v_quote_balances').select('quote_id, saldo_a_receber').eq('patient_id', patientId)
       .then(({ data }) => setPagas(new Set((data ?? []).filter((b) => Number(b.saldo_a_receber) <= 0.005).map((b) => b.quote_id as string))))
@@ -45,6 +49,10 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
     recarregar()
   }
 
+  const recPorProc = new Map(
+    recorrencias.filter((r) => r.tipo === 'procedimento' && r.status === 'ativa' && r.procedure_id).map((r) => [r.procedure_id as string, r]),
+  )
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -62,6 +70,7 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
         <RegistrarModal clinicId={clinicId} patientId={patientId} professionalId={professionalId} proc={editando}
           onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
       )}
+      {editRec && <RecurrenceEditModal rec={editRec} onClose={() => setEditRec(null)} onSaved={() => { setEditRec(null); recarregar() }} />}
 
       {carregando ? (
         <p className="text-sm text-texto/50">Carregando…</p>
@@ -90,6 +99,12 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
                 {p.quote_id && <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">Vinculado a orçamento</span>}
                 {pago && <span className="rounded-full bg-emerald-600 px-2 py-0.5 font-medium text-white">✓ Pago</span>}
               </div>
+              {(() => { const r = recPorProc.get(p.id); return r ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-700">🔁 {PERIOD_LABEL[r.periodicidade]}{r.data_limite ? ` até ${formatDateBR(r.data_limite)}` : ''}</span>
+                  <button onClick={() => setEditRec(r)} className="font-medium text-primaria hover:underline">Editar recorrência</button>
+                </div>
+              ) : null })()}
               {p.produtos_usados?.length > 0 && (
                 <div className="mt-2">
                   <div className="mb-1 text-xs font-medium text-texto/60">Produtos utilizados (baixa de estoque){pago && <span className="ml-1 text-emerald-600">· pagos</span>}</div>
@@ -156,6 +171,7 @@ function RegistrarModal({
   const [filtroLote, setFiltroLote] = useState('')
   const [recPeriodo, setRecPeriodo] = useState<'' | Periodicidade>('')
   const [recAntecedencia, setRecAntecedencia] = useState('7')
+  const [recLimite, setRecLimite] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -228,7 +244,7 @@ function RegistrarModal({
         if (recPeriodo) {
           await createRecurrence({
             clinicId, patientId, professionalId, tipo: 'procedimento', procedureId: novo.id,
-            descricao: procedimento, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: data,
+            descricao: procedimento, periodicidade: recPeriodo, diasAntecedencia: Number(recAntecedencia) || 7, dataBase: data, dataLimite: recLimite || null,
           }).catch(() => {})
         }
       }
@@ -323,6 +339,12 @@ function RegistrarModal({
                   <div className="flex items-center gap-2">
                     <input type="number" min={0} max={365} className={field} value={recAntecedencia} onChange={(e) => setRecAntecedencia(e.target.value)} />
                     <span className="whitespace-nowrap text-xs text-texto/60">dias de antecedência</span>
+                  </div>
+                )}
+                {recPeriodo && (
+                  <div>
+                    <input type="date" className={field} value={recLimite} onChange={(e) => setRecLimite(e.target.value)} />
+                    <span className="mt-0.5 block text-[11px] text-texto/50">Alertar até (opcional — em branco = permanente)</span>
                   </div>
                 )}
               </div>
