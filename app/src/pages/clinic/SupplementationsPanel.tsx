@@ -8,6 +8,7 @@ import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
 import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
 import RecurrenceEditModal from '@/components/RecurrenceEditModal'
 import { Shell, Footer } from './TreatmentPlansPanel'
+import { PacoteModal } from './PackagesPanel'
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
@@ -169,6 +170,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
   const [recPeriodo, setRecPeriodo] = useState<'' | Periodicidade>('')
   const [recAntecedencia, setRecAntecedencia] = useState('7')
   const [recLimite, setRecLimite] = useState('')
+  const [novoPacote, setNovoPacote] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -352,31 +354,49 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           </div>
           {planoId && planItens.length === 0 && <p className="mt-1 text-[11px] text-texto/50">Este plano não tem itens de suplementação.</p>}
           {planoId && planItens.length > 0 && <p className="mt-1 text-[11px] text-texto/50">Baixa uma sessão do item ao salvar. Itens esgotados não podem ser vinculados — crie um novo orçamento (avulso).</p>}
-          {pacotes.length > 0 && (
-            <div className="mt-2 border-t border-primaria/20 pt-2">
-              <label className="mb-1 block text-sm text-texto/70">Pacote (consome sessão)</label>
-              <select className={field} value={pacoteId} onChange={(e) => setPacoteId(e.target.value)}>
-                <option value="">— Sem pacote —</option>
-                {pacotes.map((p) => <option key={p.id} value={p.id}>{p.procedimento} · {p.sessoes_compradas} sessões</option>)}
-              </select>
-              {pacoteId && pkgItens.length > 0 && (
-                <select className={`${field} mt-2`} value={packageItemId} onChange={(e) => { setPackageItemId(e.target.value); if (e.target.value) setPlanItemId('') }}>
-                  <option value="">— Não consumir sessão —</option>
-                  {pkgItens.map((it) => {
-                    const esgotado = it.saldo <= 0 && it.id !== (supl?.treatment_package_item_id ?? '')
-                    return <option key={it.id} value={it.id} disabled={esgotado}>{it.nome} · {it.realizadas}/{it.realizadas + it.saldo}{esgotado ? ' (esgotado)' : ''}</option>
-                  })}
-                </select>
-              )}
-              {packageItemId && (
-                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">Pacote pré-pago: o valor desta suplementação já está coberto pelo pacote. Os valores são travados na criação do pacote — diferenças futuras de preço não são cobradas nem estornadas.</p>
-              )}
+          <div className="mt-2 border-t border-primaria/20 pt-2">
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block text-sm text-texto/70">Pacote (consome sessão)</label>
+              <button type="button" onClick={() => setNovoPacote(true)} className="text-xs font-medium text-primaria hover:underline">+ Novo pacote</button>
             </div>
-          )}
-          {pacotes.length === 0 && (
-            <p className="mt-2 border-t border-primaria/20 pt-2 text-[11px] text-texto/50">Para vincular a um <strong>pacote de suplementação</strong>, crie o pacote antes na aba “Pacotes” (tipo Suplementações).</p>
-          )}
+            {pacotes.length > 0 ? (
+              <>
+                <select className={field} value={pacoteId} onChange={(e) => setPacoteId(e.target.value)}>
+                  <option value="">— Sem pacote —</option>
+                  {pacotes.map((p) => <option key={p.id} value={p.id}>{p.procedimento} · {p.sessoes_compradas} sessões</option>)}
+                </select>
+                {pacoteId && pkgItens.length > 0 && (
+                  <select className={`${field} mt-2`} value={packageItemId} onChange={(e) => { setPackageItemId(e.target.value); if (e.target.value) setPlanItemId('') }}>
+                    <option value="">— Não consumir sessão —</option>
+                    {pkgItens.map((it) => {
+                      const esgotado = it.saldo <= 0 && it.id !== (supl?.treatment_package_item_id ?? '')
+                      return <option key={it.id} value={it.id} disabled={esgotado}>{it.nome} · {it.realizadas}/{it.realizadas + it.saldo}{esgotado ? ' (esgotado)' : ''}</option>
+                    })}
+                  </select>
+                )}
+                {packageItemId && (
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">Pacote pré-pago: o valor desta suplementação já está coberto pelo pacote. Os valores são travados na criação do pacote — diferenças futuras de preço não são cobradas nem estornadas.</p>
+                )}
+              </>
+            ) : (
+              <p className="text-[11px] text-texto/50">Nenhum pacote de suplementação ainda. Use “+ Novo pacote” acima ou crie na aba “Pacotes”.</p>
+            )}
+          </div>
         </div>
+        {novoPacote && (
+          <PacoteModal
+            clinicId={clinicId} patientId={patientId} professionalId={professionalId} pacote={null} tipoInicial="suplementacao"
+            onClose={() => setNovoPacote(false)}
+            onSaved={(id) => {
+              setNovoPacote(false)
+              listPackages(patientId).then((ps) => {
+                const suppl = ps.filter((p) => p.tipo === 'suplementacao')
+                setPacotes(suppl)
+                if (id && suppl.some((p) => p.id === id)) setPacoteId(id)
+              }).catch(() => {})
+            }}
+          />
+        )}
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
         {!editar && !vinculado && (
           <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">

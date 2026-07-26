@@ -166,11 +166,11 @@ export default function PackagesPanel({ patientId, clinicId, professionalId }: P
 interface CatOpt { id: string; nome: string; preco: number }
 interface PkgItemDraft { id?: string; refId: string; nome: string; preco_unit: number }
 
-function PacoteModal({ clinicId, patientId, professionalId, pacote, onClose, onSaved }: {
-  clinicId: string; patientId: string; professionalId?: string | null; pacote: TreatmentPackage | null; onClose: () => void; onSaved: () => void
+export function PacoteModal({ clinicId, patientId, professionalId, pacote, tipoInicial, onClose, onSaved }: {
+  clinicId: string; patientId: string; professionalId?: string | null; pacote: TreatmentPackage | null; tipoInicial?: 'procedimento' | 'suplementacao'; onClose: () => void; onSaved: (pkgId?: string) => void
 }) {
   const editar = !!pacote
-  const [tipo, setTipo] = useState<'procedimento' | 'suplementacao'>(pacote?.tipo ?? 'procedimento')
+  const [tipo, setTipo] = useState<'procedimento' | 'suplementacao'>(pacote?.tipo ?? tipoInicial ?? 'procedimento')
   const [procOpts, setProcOpts] = useState<CatOpt[]>([])
   const [suplOpts, setSuplOpts] = useState<CatOpt[]>([])
   const [orcamentos, setOrcamentos] = useState<Quote[]>([])
@@ -227,7 +227,7 @@ function PacoteModal({ clinicId, patientId, professionalId, pacote, onClose, onS
         active_ingredient_id: tipo === 'suplementacao' ? i.refId : null,
         nome: i.nome, preco_unit: i.preco_unit,
       })))
-      onSaved()
+      onSaved(pkgId)
     } catch (e) { setErro((e as Error)?.message ?? 'Não foi possível salvar.'); setSalvando(false) }
   }
 
