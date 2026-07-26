@@ -39,9 +39,12 @@ import {
   deleteProcedureType,
   deleteRoute,
   deleteSupplier,
+  currentProcedurePrices,
   listActiveIngredients,
   listAtivoLotes,
+  listProcedureTypePrices,
   listProcedureTypes,
+  setProcedureTypePrice,
   listRoutes,
   listSuppliers,
   updateActiveIngredient,
@@ -52,6 +55,7 @@ import {
   type AtivoLote,
   type DomainItem,
   type ProcedureType,
+  type ProcedureTypePrice,
   type Supplier,
 } from '@/lib/domains'
 import Calculadora from '@/components/Calculadora'
@@ -83,7 +87,7 @@ import {
   DIAS_SEMANA, createAvailability, createBlock, deleteAvailability, deleteBlock,
   listAvailability, listBlocks, type AvailabilityWindow, type BlockRange,
 } from '@/lib/availability'
-import { formatDateBR, parseMoneyBR } from '@/lib/format'
+import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
 import { createExamType, deleteExamType, listExamTypes, updateExamType, type ExamType } from '@/lib/labs'
 import { getReferralConfig, saveReferralConfig } from '@/lib/referral'
 import { getLoyaltyConfig, saveLoyaltyConfig } from '@/lib/loyalty'
@@ -999,17 +1003,27 @@ function FormulaModal({ clinicId, formula, onClose, onSaved }: { clinicId: strin
 
 // --- Tipos de procedimento --------------------------------------------------
 function ProcedimentosSection({ clinicId }: { clinicId: string }) {
+  const { profile } = useAuth()
+  const createdBy = profile?.professional?.id ?? null
   const [itens, setItens] = useState<ProcedureType[]>([])
+  const [precos, setPrecos] = useState<Record<string, { valor: number; vigencia_inicio: string }>>({})
   const [nome, setNome] = useState('')
+  const [valor, setValor] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [ajustando, setAjustando] = useState<ProcedureType | null>(null)
+  const [historico, setHistorico] = useState<ProcedureType | null>(null)
 
-  function recarregar() { listProcedureTypes().then(setItens).catch(() => {}) }
+  function recarregar() {
+    listProcedureTypes().then(setItens).catch(() => {})
+    currentProcedurePrices().then(setPrecos).catch(() => {})
+  }
   useEffect(recarregar, [])
 
   async function salvar() {
     if (!nome.trim()) return
     setSalvando(true)
-    try { await createProcedureType(clinicId, nome); setNome(''); recarregar() } finally { setSalvando(false) }
+    try { await createProcedureType(clinicId, nome.trim(), { valor: parseMoneyBR(valor) || null, createdBy }); setNome(''); setValor(''); recarregar() }
+    finally { setSalvando(false) }
   }
   async function remover(id: string) { if (confirm('Excluir este tipo de procedimento?')) { await deleteProcedureType(id); recarregar() } }
 
@@ -1017,24 +1031,141 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
     <div className="max-w-2xl space-y-5">
       <div className="rounded-xl border border-black/5 bg-white p-5">
         <h3 className="mb-1 font-semibold text-texto">Novo tipo de procedimento</h3>
-        <p className="mb-3 text-xs text-texto/50">Usados no campo Procedimento ao registrar um atendimento.</p>
-        <div className="flex gap-2">
-          <input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Skinbooster PDRN" />
+        <p className="mb-3 text-xs text-texto/50">Usados no campo Procedimento ao registrar um atendimento. O valor é opcional, passa a valer a partir de hoje e mantém histórico (você pode reajustar depois).</p>
+        <div className="flex flex-wrap gap-2">
+          <input className={`${field} min-w-[12rem] flex-1`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Skinbooster PDRN" />
+          <input className={`${field} w-40 shrink-0`} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor R$ (opcional)" />
           <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
         </div>
       </div>
       <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
         <table className="w-full text-sm">
+          <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+            <th className="px-4 py-2 font-medium">Procedimento</th><th className="px-4 py-2 font-medium">Valor vigente</th><th className="px-4 py-2"></th>
+          </tr></thead>
           <tbody>
-            {itens.map((p) => (
-              <tr key={p.id} className="border-t border-black/5 first:border-t-0">
-                <td className="px-4 py-2 text-texto">{p.nome}</td>
-                <td className="px-4 py-2 text-right"><button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Excluir</button></td>
-              </tr>
-            ))}
-            {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
+            {itens.map((p) => {
+              const pr = precos[p.id]
+              return (
+                <tr key={p.id} className="border-t border-black/5">
+                  <td className="px-4 py-2 text-texto">{p.nome}</td>
+                  <td className="px-4 py-2 text-texto/70">
+                    {pr ? <>{brl(pr.valor)} <span className="text-xs text-texto/40">desde {formatDateBR(pr.vigencia_inicio)}</span></> : <span className="text-texto/40">sem valor</span>}
+                  </td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">
+                    <button onClick={() => setAjustando(p)} className="text-xs font-medium text-primaria hover:underline">Ajustar valor</button>
+                    <button onClick={() => setHistorico(p)} className="ml-3 text-xs font-medium text-texto/50 hover:underline">Histórico</button>
+                    <button onClick={() => remover(p.id)} className="ml-3 text-xs text-secundaria hover:underline">Excluir</button>
+                  </td>
+                </tr>
+              )
+            })}
+            {itens.length === 0 && <tr><td colSpan={3} className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
           </tbody>
         </table>
+      </div>
+      {ajustando && (
+        <PrecoProcedimentoModal
+          clinicId={clinicId} procedimento={ajustando} valorAtual={precos[ajustando.id]?.valor ?? 0} createdBy={createdBy}
+          onClose={() => setAjustando(null)} onSaved={() => { setAjustando(null); recarregar() }}
+        />
+      )}
+      {historico && <HistoricoPrecoModal procedimento={historico} onClose={() => setHistorico(null)} />}
+    </div>
+  )
+}
+
+/** Ajuste de valor do procedimento: % de reajuste (sobre o valor vigente) ou valor manual. */
+function PrecoProcedimentoModal({ clinicId, procedimento, valorAtual, createdBy, onClose, onSaved }: {
+  clinicId: string; procedimento: ProcedureType; valorAtual: number; createdBy: string | null; onClose: () => void; onSaved: () => void
+}) {
+  const base = Number(valorAtual) || 0
+  const [pct, setPct] = useState('')
+  const [novo, setNovo] = useState(base > 0 ? base.toFixed(2).replace('.', ',') : '')
+  const [vigencia, setVigencia] = useState(localDateToday())
+  const [salvando, setSalvando] = useState(false)
+
+  function aplicarPct(v: string) {
+    setPct(v)
+    const p = Number(v.replace(',', '.'))
+    if (!isNaN(p) && base > 0) setNovo((base * (1 + p / 100)).toFixed(2).replace('.', ','))
+  }
+
+  async function salvar() {
+    const valorNovo = parseMoneyBR(novo)
+    if (!(valorNovo > 0)) return
+    setSalvando(true)
+    try {
+      await setProcedureTypePrice({
+        clinicId, procedureTypeId: procedimento.id, valor: valorNovo, vigenciaInicio: vigencia,
+        reajustePct: pct.trim() ? Number(pct.replace(',', '.')) : null, valorAnterior: base, createdBy,
+      })
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Ajustar valor · {procedimento.nome}</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <div className="space-y-3">
+          <div className="rounded-lg bg-black/[0.03] px-3 py-2 text-sm text-texto/70">Valor vigente: <strong>{brl(base)}</strong></div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Reajuste (%)</label>
+            <input className={field} inputMode="decimal" value={pct} onChange={(e) => aplicarPct(e.target.value)} placeholder="Ex.: 20" disabled={base <= 0} />
+            <p className="mt-0.5 text-[11px] text-texto/40">{base > 0 ? 'Calcula sempre sobre o valor vigente; o novo valor pode ser editado manualmente.' : 'Sem valor vigente — informe o novo valor abaixo.'}</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Novo valor (R$)</label>
+            <input className={field} inputMode="decimal" value={novo} onChange={(e) => setNovo(e.target.value)} placeholder="0,00" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Vigência a partir de</label>
+            <input type="date" className={field} value={vigencia} onChange={(e) => setVigencia(e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando || !(parseMoneyBR(novo) > 0)} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar valor'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Histórico de preços do procedimento (com quem ajustou). */
+function HistoricoPrecoModal({ procedimento, onClose }: { procedimento: ProcedureType; onClose: () => void }) {
+  const [rows, setRows] = useState<ProcedureTypePrice[]>([])
+  const [carregando, setCarregando] = useState(true)
+  useEffect(() => { listProcedureTypePrices(procedimento.id).then(setRows).catch(() => {}).finally(() => setCarregando(false)) }, [procedimento.id])
+  return (
+    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-md overflow-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Histórico de preço · {procedimento.nome}</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        {carregando ? <p className="text-sm text-texto/50">Carregando…</p> : rows.length === 0 ? (
+          <p className="text-sm text-texto/50">Nenhum preço registrado.</p>
+        ) : (
+          <div className="space-y-2">
+            {rows.map((r) => (
+              <div key={r.id} className="rounded-lg border border-black/5 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-texto">{brl(Number(r.valor))}</span>
+                  <span className="text-xs text-texto/50">a partir de {formatDateBR(r.vigencia_inicio)}</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-texto/50">
+                  {r.reajuste_pct != null && <>reajuste {Number(r.reajuste_pct)}%{r.valor_anterior != null ? ` (de ${brl(Number(r.valor_anterior))})` : ''} · </>}
+                  {r.professionals?.nome ? `por ${r.professionals.nome}` : 'registro'} · {new Date(r.created_at).toLocaleDateString('pt-BR')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
