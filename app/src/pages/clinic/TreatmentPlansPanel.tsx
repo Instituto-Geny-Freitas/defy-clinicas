@@ -27,6 +27,8 @@ interface ItemDraft { id?: string; tipo: 'procedimento' | 'suplementacao'; refId
 
 interface Props { patientId: string; clinicId: string; professionalId?: string | null }
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+// Opções de frequência dos itens do plano (texto livre armazenado; lista para facilitar a escolha).
+const FREQ_OPCOES = ['Sessão única', 'Semanal', '2x por semana', 'Quinzenal', 'Mensal', 'Bimestral', 'Trimestral', 'Semestral', 'Anual']
 
 const PLAN_STATUS: Record<PlanStatus, { label: string; cls: string }> = {
   rascunho: { label: 'Rascunho', cls: 'bg-black/10 text-texto/60' },
@@ -215,8 +217,8 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
   const totalItens = items.reduce((s, it) => s + (it.preco_unit || 0) * (it.sessoes || 0), 0)
 
   async function salvar() {
-    if (!texto.trim()) return
     const itensValidos = items.filter((i) => i.refId)
+    if (!texto.trim() && itensValidos.length === 0) { setErroItens('Preencha o Conteúdo do plano ou adicione ao menos um item.'); return }
     if (itensValidos.some((i) => !(i.sessoes > 0))) { setErroItens('Informe as sessões (maior que zero) de cada item.'); return }
     setSalvando(true); setErroItens(null)
     const dados = { titulo: titulo || null, texto }
@@ -258,7 +260,7 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
           {iaErro && <p className="mt-1 text-xs text-secundaria">{iaErro}</p>}
           <p className="mt-1 text-xs text-texto/50">Usa anamnese e última avaliação do paciente. Revise antes de salvar.</p>
         </div>
-        <div><label className="mb-1 block text-sm text-texto/70">Conteúdo *</label><textarea rows={6} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} /></div>
+        <div><label className="mb-1 block text-sm text-texto/70">Conteúdo</label><textarea rows={6} className={field} value={texto} onChange={(e) => setTexto(e.target.value)} /><p className="mt-0.5 text-[11px] text-texto/40">Preencha o conteúdo do plano ou adicione ao menos um item abaixo.</p></div>
 
         <div className="rounded-xl border border-black/5 bg-black/[0.02] p-3">
           <div className="mb-1 flex items-center justify-between">
@@ -284,7 +286,13 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-texto/60">
                     <label className="flex items-center gap-1">Sessões <input type="number" min={1} className="w-16 rounded border border-black/10 px-1.5 py-1" value={it.sessoes} onChange={(e) => setItemField(i, { sessoes: Number(e.target.value) })} /></label>
-                    <label className="flex items-center gap-1">Freq. <input className="w-24 rounded border border-black/10 px-1.5 py-1" placeholder="mensal…" value={it.frequencia} onChange={(e) => setItemField(i, { frequencia: e.target.value })} /></label>
+                    <label className="flex items-center gap-1">Freq.
+                      <select className="w-32 rounded border border-black/10 px-1.5 py-1" value={it.frequencia} onChange={(e) => setItemField(i, { frequencia: e.target.value })}>
+                        <option value="">— Frequência —</option>
+                        {FREQ_OPCOES.map((f) => <option key={f} value={f}>{f}</option>)}
+                        {it.frequencia && !FREQ_OPCOES.includes(it.frequencia) && <option value={it.frequencia}>{it.frequencia}</option>}
+                      </select>
+                    </label>
                     <span className="ml-auto font-medium text-texto/70">{brl((it.preco_unit || 0) * (it.sessoes || 0))}</span>
                   </div>
                 </div>
