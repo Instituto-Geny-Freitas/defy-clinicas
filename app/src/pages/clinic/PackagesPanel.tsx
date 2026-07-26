@@ -289,6 +289,17 @@ function PacoteModal({ clinicId, patientId, professionalId, pacote, onClose, onS
           <div className="mt-1 flex justify-between text-base font-semibold text-texto"><span>Total do pacote</span><span>{brl(total)}</span></div>
         </div>
 
+        {tipo === 'suplementacao' && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <strong>Trava de preço.</strong> Os valores das medicações ficam <strong>congelados no ato da criação deste pacote</strong>. Se o preço de uma medicação mudar depois, a diferença <strong>não será cobrada nem estornada</strong> — o paciente paga o pacote antecipadamente pelos valores vigentes hoje (como uma trava/seguro de preço).
+          </div>
+        )}
+        {tipo === 'procedimento' && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
+            As <strong>sessões</strong> do pacote são pré-pagas pelo total acima. Já os <strong>produtos de estoque</strong> usados em cada procedimento são baixados na realização; se não estiverem previstos no pacote, o sistema propõe um <strong>orçamento complementar</strong> para cobrá-los pelo valor vigente na data.
+          </div>
+        )}
+
         <div>
           <label className="mb-1 block text-sm text-texto/70">Vincular a orçamento (opcional)</label>
           <select className={field} value={quoteId} onChange={(e) => setQuoteId(e.target.value)}>

@@ -368,6 +368,9 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
                   })}
                 </select>
               )}
+              {packageItemId && (
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800">Pacote pré-pago: o valor desta suplementação já está coberto pelo pacote. Os valores são travados na criação do pacote — diferenças futuras de preço não são cobradas nem estornadas.</p>
+              )}
             </div>
           )}
         </div>
