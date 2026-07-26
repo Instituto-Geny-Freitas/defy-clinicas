@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createSupplementation, deleteSupplementation, listSupplementations, setSupplementationPaid, updateSupplementation, type Supplementation } from '@/lib/supplementations'
 import { listActiveIngredients, listAtivoLotes, listRoutes, type ActiveIngredient, type AtivoLote, type DomainItem } from '@/lib/domains'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
+import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
 import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, type Payment } from '@/lib/finance'
 import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
 import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
@@ -153,6 +154,10 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
   const [planoId, setPlanoId] = useState('')
   const [planItens, setPlanItens] = useState<(PlanItem & { saldo: number; realizadas: number })[]>([])
   const [planItemId, setPlanItemId] = useState(supl?.treatment_plan_item_id ?? '')
+  const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
+  const [pacoteId, setPacoteId] = useState('')
+  const [pkgItens, setPkgItens] = useState<(PackageItem & { saldo: number; realizadas: number })[]>([])
+  const [packageItemId, setPackageItemId] = useState(supl?.treatment_package_item_id ?? '')
   const [quantidade, setQuantidade] = useState(supl ? String(supl.quantidade) : '1')
   const [medicacao, setMedicacao] = useState(supl?.medicacao ?? '')
   const [via, setVia] = useState(supl?.via_adm ?? '')
@@ -172,7 +177,9 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
     listAtivoLotes().then(setAtivoLotes).catch(() => {})
     listRoutes().then(setVias).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
+    listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => p.tipo === 'suplementacao'))).catch(() => {})
     if (supl?.treatment_plan_item_id) getPlanItem(supl.treatment_plan_item_id).then((it) => { if (it) setPlanoId(it.treatment_plan_id) }).catch(() => {})
+    if (supl?.treatment_package_item_id) getPackageItem(supl.treatment_package_item_id).then((it) => { if (it) setPacoteId(it.package_id) }).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Itens (suplementação) do plano selecionado, com saldo de sessões.
@@ -184,6 +191,17 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
       setPlanItemId((cur) => (cur && suplItems.some((i) => i.id === cur) ? cur : ''))
     }).catch(() => {})
   }, [planoId])
+
+  // Itens do pacote (suplementação) selecionado, com saldo.
+  useEffect(() => {
+    if (!pacoteId) { setPkgItens([]); return }
+    const pkg = pacotes.find((p) => p.id === pacoteId)
+    if (!pkg) return
+    listPackageItemsComSaldo(pacoteId, pkg.sessoes_compradas).then((its) => {
+      setPkgItens(its)
+      setPackageItemId((cur) => (cur && its.some((i) => i.id === cur) ? cur : ''))
+    }).catch(() => {})
+  }, [pacoteId, pacotes])
 
   const lotesDoAtivo = ativoLotes.filter((l) => l.ativo_id === ativoId && Number(l.qtd_atual) > 0)
   const saldoLote = (id: string) => Number(ativoLotes.find((l) => l.id === id)?.qtd_atual ?? 0)
@@ -223,6 +241,10 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
       const it = planItens.find((i) => i.id === planItemId)
       if (it && it.saldo <= 0) { setErro(`O item "${it.nome}" do plano está esgotado (${it.realizadas}/${it.sessoes} sessões). Crie um novo orçamento (avulso).`); return }
     }
+    if (packageItemId && !editar) {
+      const it = pkgItens.find((i) => i.id === packageItemId)
+      if (it && it.saldo <= 0) { setErro(`O item "${it.nome}" do pacote está esgotado. Crie um novo orçamento (avulso).`); return }
+    }
     setSalvando(true)
     try {
       const valor = parseMoneyBR(valorVenda)
@@ -230,14 +252,14 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
         await updateSupplementation(supl.id, {
           medicacao, via_adm: via || null, validade: validade || null, lote: lote || null,
           fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
-          ativo_lote_id: ativoLoteId || null, quantidade: qtdNum, treatment_plan_item_id: planItemId || null,
+          ativo_lote_id: ativoLoteId || null, quantidade: qtdNum, treatment_plan_item_id: planItemId || null, treatment_package_item_id: packageItemId || null,
         })
       } else {
         const novoId = await createSupplementation({
           clinicId, patientId, professionalId, medicacao,
           via_adm: via || null, validade: validade || null, lote: lote || null,
           fornecedor: fornecedor || null, valor_venda: valor, observacoes: obs || null,
-          ativoLoteId: ativoLoteId || null, quantidade: qtdNum, treatmentPlanItemId: planItemId || null,
+          ativoLoteId: ativoLoteId || null, quantidade: qtdNum, treatmentPlanItemId: planItemId || null, treatmentPackageItemId: packageItemId || null,
         })
         if (recPeriodo) {
           await createRecurrence({
@@ -316,7 +338,7 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
             {planoId && (
               <div>
                 <label className="mb-1 block text-sm text-texto/70">Item do plano (consome sessão)</label>
-                <select className={field} value={planItemId} onChange={(e) => setPlanItemId(e.target.value)}>
+                <select className={field} value={planItemId} onChange={(e) => { setPlanItemId(e.target.value); if (e.target.value) setPackageItemId('') }}>
                   <option value="">— Não consumir sessão —</option>
                   {planItens.map((it) => {
                     const esgotado = it.saldo <= 0 && it.id !== (supl?.treatment_plan_item_id ?? '')
@@ -328,6 +350,24 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
           </div>
           {planoId && planItens.length === 0 && <p className="mt-1 text-[11px] text-texto/50">Este plano não tem itens de suplementação.</p>}
           {planoId && planItens.length > 0 && <p className="mt-1 text-[11px] text-texto/50">Baixa uma sessão do item ao salvar. Itens esgotados não podem ser vinculados — crie um novo orçamento (avulso).</p>}
+          {pacotes.length > 0 && (
+            <div className="mt-2 border-t border-primaria/20 pt-2">
+              <label className="mb-1 block text-sm text-texto/70">Pacote (consome sessão)</label>
+              <select className={field} value={pacoteId} onChange={(e) => setPacoteId(e.target.value)}>
+                <option value="">— Sem pacote —</option>
+                {pacotes.map((p) => <option key={p.id} value={p.id}>{p.procedimento} · {p.sessoes_compradas} sessões</option>)}
+              </select>
+              {pacoteId && pkgItens.length > 0 && (
+                <select className={`${field} mt-2`} value={packageItemId} onChange={(e) => { setPackageItemId(e.target.value); if (e.target.value) setPlanItemId('') }}>
+                  <option value="">— Não consumir sessão —</option>
+                  {pkgItens.map((it) => {
+                    const esgotado = it.saldo <= 0 && it.id !== (supl?.treatment_package_item_id ?? '')
+                    return <option key={it.id} value={it.id} disabled={esgotado}>{it.nome} · {it.realizadas}/{it.realizadas + it.saldo}{esgotado ? ' (esgotado)' : ''}</option>
+                  })}
+                </select>
+              )}
+            </div>
+          )}
         </div>
         <div><label className="mb-1 block text-sm text-texto/70">Observações</label><textarea rows={2} className={field} value={obs} onChange={(e) => setObs(e.target.value)} /></div>
         {!editar && (

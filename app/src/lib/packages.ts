@@ -120,6 +120,12 @@ export async function listPackageItems(packageId: string): Promise<PackageItem[]
   return data ?? []
 }
 
+export async function getPackageItem(id: string): Promise<PackageItem | null> {
+  const { data, error } = await supabase.from('treatment_package_items').select('*').eq('id', id).maybeSingle()
+  if (error) return null
+  return data
+}
+
 export async function listPackageItemsForPackages(packageIds: string[]): Promise<PackageItem[]> {
   if (packageIds.length === 0) return []
   const { data, error } = await supabase.from('treatment_package_items').select('*').in('package_id', packageIds).order('ordem')
