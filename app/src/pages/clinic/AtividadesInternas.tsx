@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { listProfessionals } from '@/lib/settings'
 import type { Professional } from '@/lib/types'
+import { getForms, type FormDef } from '@/lib/adminForms'
+import { getAdminRecord, listRecords, type AdminRecord } from '@/lib/admin'
 import { formatDateBR, localDateToday } from '@/lib/format'
 import {
   addActivityLog, createActivity, deleteActivity, listActivities, listActivityLog, setActivityStatus, updateActivity,
@@ -99,6 +101,7 @@ export default function AtividadesInternas() {
                     {a.data && <span>📅 {formatDateBR(a.data)}{a.hora ? ` · ${a.hora.slice(0, 5)}` : ''}</span>}
                     {a.responsavel_professional_id && <span>👤 {nomePorProf.get(a.responsavel_professional_id) ?? '—'}</span>}
                     {a.status === 'executado' && a.data_efetivada && <span>✓ efetivada {formatDateBR(a.data_efetivada)}</span>}
+                    {a.admin_record_id && <span>🔗 registro vinculado</span>}
                   </div>
                 </div>
                 {canStatus(a) && (
@@ -128,6 +131,19 @@ export default function AtividadesInternas() {
   )
 }
 
+/** Rótulo curto de um registro administrativo (formulário · data · seq · 1º campo). */
+function recordLabel(rec: AdminRecord, forms: FormDef[]): string {
+  const def = forms.find((f) => f.chave === rec.form_chave)
+  const campoKey = def?.campos[0]?.key
+  const valor = campoKey ? rec.dados[campoKey] : undefined
+  return [
+    def?.titulo ?? rec.form_chave,
+    rec.ref_data ? formatDateBR(rec.ref_data) : null,
+    rec.seq || null,
+    valor != null && String(valor).trim() ? String(valor) : null,
+  ].filter(Boolean).join(' · ')
+}
+
 function AtividadeModal({ activity, isAdmin, myProfId, myNome, clinicId, profs, onClose, onSaved }: {
   activity: InternalActivity | null
   isAdmin: boolean; myProfId: string | null; myNome: string | null; clinicId: string; profs: Professional[]
@@ -142,10 +158,20 @@ function AtividadeModal({ activity, isAdmin, myProfId, myNome, clinicId, profs, 
   const [status, setStatus] = useState<ActivityStatus>(activity?.status ?? 'pendente')
   const [dataEfetivada, setDataEfetivada] = useState(activity?.data_efetivada ?? '')
   const [log, setLog] = useState<ActivityLogEntry[]>([])
+  const [forms, setForms] = useState<FormDef[]>([])
+  const [adminRecordId, setAdminRecordId] = useState(activity?.admin_record_id ?? '')
+  const [vinculo, setVinculo] = useState<AdminRecord | null>(null)
+  const [recFormChave, setRecFormChave] = useState('')
+  const [recs, setRecs] = useState<AdminRecord[]>([])
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => { if (activity) listActivityLog(activity.id).then(setLog).catch(() => {}) }, [activity])
+  useEffect(() => { getForms().then(setForms).catch(() => {}) }, [])
+  useEffect(() => {
+    if (activity?.admin_record_id) getAdminRecord(activity.admin_record_id).then((r) => { if (r) { setVinculo(r); setRecFormChave(r.form_chave) } }).catch(() => {})
+  }, [activity])
+  useEffect(() => { if (recFormChave) listRecords(recFormChave).then(setRecs).catch(() => {}); else setRecs([]) }, [recFormChave])
 
   const profsAtivos = profs.filter((p) => p.ativo)
 
@@ -159,6 +185,7 @@ function AtividadeModal({ activity, isAdmin, myProfId, myNome, clinicId, profs, 
           responsavel_professional_id: responsavel || null,
           data: data || null, hora: hora || null, status,
           data_efetivada: status === 'executado' ? (dataEfetivada || localDateToday()) : (dataEfetivada || null),
+          admin_record_id: adminRecordId || null,
         }
         // Log de ajustes das atividades criadas pelo Admin.
         if (activity.origem === 'admin') {
@@ -169,6 +196,7 @@ function AtividadeModal({ activity, isAdmin, myProfId, myNome, clinicId, profs, 
           push('data', activity.data, patch.data)
           push('hora', activity.hora, patch.hora)
           push('status', activity.status, patch.status)
+          push('registro vinculado', activity.admin_record_id, patch.admin_record_id)
           await updateActivity(activity.id, patch)
           if (campos.length) await addActivityLog(clinicId, activity.id, myProfId, myNome, campos).catch(() => {})
         } else {
@@ -181,6 +209,7 @@ function AtividadeModal({ activity, isAdmin, myProfId, myNome, clinicId, profs, 
           origem: isAdmin ? 'admin' : 'membro',
           data: data || null, hora: hora || null, status,
           dataEfetivada: status === 'executado' ? (dataEfetivada || localDateToday()) : (dataEfetivada || null),
+          adminRecordId: adminRecordId || null,
           createdBy: myProfId ?? '', createdByNome: myNome,
         })
       }
@@ -227,6 +256,28 @@ function AtividadeModal({ activity, isAdmin, myProfId, myNome, clinicId, profs, 
             {status === 'executado' && (
               <div><label className="mb-1 block text-sm text-texto/70">Data efetivada</label><input type="date" className={field} value={dataEfetivada} onChange={(e) => setDataEfetivada(e.target.value)} /></div>
             )}
+          </div>
+
+          <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3">
+            <label className="mb-1 block text-sm text-texto/70">Registro administrativo vinculado (opcional)</label>
+            {vinculo ? (
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate text-texto/80">🔗 {recordLabel(vinculo, forms)}</span>
+                <button type="button" onClick={() => { setVinculo(null); setAdminRecordId('') }} className="shrink-0 text-xs font-medium text-secundaria hover:underline">Desvincular</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <select className={field} value={recFormChave} onChange={(e) => setRecFormChave(e.target.value)}>
+                  <option value="">Formulário…</option>
+                  {forms.map((f) => <option key={f.chave} value={f.chave}>{f.titulo}</option>)}
+                </select>
+                <select className={field} value={adminRecordId} disabled={!recFormChave} onChange={(e) => { setAdminRecordId(e.target.value); setVinculo(recs.find((r) => r.id === e.target.value) ?? null) }}>
+                  <option value="">Registro…</option>
+                  {recs.map((r) => <option key={r.id} value={r.id}>{recordLabel(r, forms)}</option>)}
+                </select>
+              </div>
+            )}
+            <p className="mt-1 text-[11px] text-texto/40">Ex.: vincular esta atividade ao registro de uma medição (Temperatura do Refrigerador).</p>
           </div>
 
           {editar && activity?.origem === 'admin' && log.length > 0 && (

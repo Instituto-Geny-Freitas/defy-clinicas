@@ -28,6 +28,7 @@ export interface InternalActivity {
   hora: string | null
   status: ActivityStatus
   data_efetivada: string | null
+  admin_record_id: string | null
   created_by: string | null
   created_by_nome: string | null
   created_at: string
@@ -80,6 +81,7 @@ export interface CreateActivityInput {
   hora?: string | null
   status?: ActivityStatus
   dataEfetivada?: string | null
+  adminRecordId?: string | null
   createdBy: string           // professional id de quem cria
   createdByNome?: string | null
 }
@@ -96,6 +98,7 @@ export async function createActivity(input: CreateActivityInput): Promise<Intern
     hora: input.hora || null,
     status: input.status ?? 'pendente',
     data_efetivada: input.dataEfetivada ?? null,
+    admin_record_id: input.adminRecordId ?? null,
     created_by: input.createdBy,
     created_by_nome: input.createdByNome ?? null,
   }).select().single()
@@ -111,6 +114,7 @@ export interface ActivityPatch {
   hora?: string | null
   status?: ActivityStatus
   data_efetivada?: string | null
+  admin_record_id?: string | null
 }
 
 export async function updateActivity(id: string, patch: ActivityPatch): Promise<void> {
