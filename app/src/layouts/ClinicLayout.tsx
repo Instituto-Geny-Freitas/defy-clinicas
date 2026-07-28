@@ -20,6 +20,7 @@ const NAV_GESTAO = [
   { to: '/clinica/administrativo', label: 'Administrativo', perm: 'menu.administrativo' },
   { to: '/clinica/estoque', label: 'Estoque', perm: 'menu.estoque' },
   { to: '/clinica/configuracoes', label: 'Configurações', perm: 'admin' },
+  { to: '/clinica/reunioes', label: 'Reuniões Internas', perm: 'menu.reunioes' },
   { to: '/clinica/atividades', label: 'Atividades Internas', perm: 'menu.atividades' },
   { to: '/clinica/documentos', label: 'Modelos de Documentos', perm: 'menu.documentos' },
 ]
