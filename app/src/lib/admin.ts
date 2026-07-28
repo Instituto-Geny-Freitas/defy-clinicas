@@ -62,6 +62,14 @@ export async function listRecords(formChave: string, filtro?: RecordsFilter): Pr
   })) as AdminRecord[]
 }
 
+/** Um registro administrativo por id (para exibir vínculos). */
+export async function getAdminRecord(id: string): Promise<AdminRecord | null> {
+  const { data, error } = await supabase.from('admin_records').select('*, patients(nome)').eq('id', id).maybeSingle()
+  if (error) return null
+  if (!data) return null
+  return { ...data, patients: Array.isArray(data.patients) ? (data.patients[0] ?? null) : data.patients } as AdminRecord
+}
+
 export interface SaveRecordInput {
   clinicId: string
   formChave: string
