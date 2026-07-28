@@ -4,18 +4,23 @@ import { useAuth } from '@/auth/AuthProvider'
 import { usePermissions } from '@/auth/PermissionsProvider'
 import { useClinic } from '@/theme/ThemeProvider'
 
-const NAV = [
+// Itens principais (topo do menu), na ordem definida.
+const NAV_MAIN = [
   { to: '/clinica', label: 'Dashboard', end: true, perm: 'menu.dashboard' },
   { to: '/clinica/agenda', label: 'Agenda', perm: 'menu.agenda' },
   { to: '/clinica/pacientes', label: 'Pacientes', perm: 'menu.pacientes' },
-  { to: '/clinica/documentos', label: 'Modelos de Documentos', perm: 'menu.documentos' },
-  { to: '/clinica/estoque', label: 'Estoque', perm: 'menu.estoque' },
-  { to: '/clinica/financeiro', label: 'Financeiro', perm: 'menu.financeiro' },
-  { to: '/clinica/relatorios', label: 'Relatórios', perm: 'menu.relatorios' },
   { to: '/clinica/relacionamento', label: 'Relacionamento', perm: 'menu.relacionamento' },
   { to: '/clinica/crm', label: 'Comercial', perm: 'menu.crm' },
+  { to: '/clinica/financeiro', label: 'Financeiro', perm: 'menu.financeiro' },
+  { to: '/clinica/relatorios', label: 'Relatórios', perm: 'menu.relatorios' },
+]
+
+// Grupo "Gestão" (colapsável). Reuniões/Atividades Internas entram nas Fases 1-2.
+const NAV_GESTAO = [
   { to: '/clinica/administrativo', label: 'Administrativo', perm: 'menu.administrativo' },
+  { to: '/clinica/estoque', label: 'Estoque', perm: 'menu.estoque' },
   { to: '/clinica/configuracoes', label: 'Configurações', perm: 'admin' },
+  { to: '/clinica/documentos', label: 'Modelos de Documentos', perm: 'menu.documentos' },
 ]
 
 export default function ClinicLayout() {
@@ -24,9 +29,26 @@ export default function ClinicLayout() {
   const clinic = useClinic()
   const isAdmin = profile?.professional?.role === 'admin'
   const [menuAberto, setMenuAberto] = useState(false)
+  const [gestaoAberto, setGestaoAberto] = useState(true)
 
   // Configurações é exclusiva do admin; os demais itens seguem a matriz de permissões.
-  const navVisivel = NAV.filter((item) => (item.perm === 'admin' ? isAdmin : can(item.perm)))
+  const podeVer = (item: { perm: string }) => (item.perm === 'admin' ? isAdmin : can(item.perm))
+  const mainVisivel = NAV_MAIN.filter(podeVer)
+  const gestaoVisivel = NAV_GESTAO.filter(podeVer)
+
+  const renderItem = (item: { to: string; label: string; end?: boolean }) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      end={item.end}
+      onClick={() => setMenuAberto(false)}
+      className={({ isActive }) =>
+        `block rounded-lg px-3 py-2 text-sm transition ${isActive ? 'bg-primaria text-white' : 'text-texto/70 hover:bg-black/5'}`
+      }
+    >
+      {item.label}
+    </NavLink>
+  )
 
   const sidebar = (
     <>
@@ -39,7 +61,7 @@ export default function ClinicLayout() {
         <span className="truncate font-semibold text-texto">{clinic?.nome ?? 'Clínica'}</span>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-2">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
         <Link
           to="/assistente"
           onClick={() => setMenuAberto(false)}
@@ -47,21 +69,21 @@ export default function ClinicLayout() {
         >
           🤖 Assistente
         </Link>
-        {navVisivel.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={() => setMenuAberto(false)}
-            className={({ isActive }) =>
-              `block rounded-lg px-3 py-2 text-sm transition ${
-                isActive ? 'bg-primaria text-white' : 'text-texto/70 hover:bg-black/5'
-              }`
-            }
-          >
-            {item.label}
-          </NavLink>
-        ))}
+        {mainVisivel.map(renderItem)}
+        {gestaoVisivel.length > 0 && (
+          <div className="pt-2">
+            <button
+              onClick={() => setGestaoAberto((v) => !v)}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-texto/40 transition hover:bg-black/5"
+            >
+              <span>Gestão</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${gestaoAberto ? 'rotate-90' : ''}`}>
+                <polyline points="9 6 15 12 9 18" />
+              </svg>
+            </button>
+            {gestaoAberto && <div className="mt-1 space-y-1">{gestaoVisivel.map(renderItem)}</div>}
+          </div>
+        )}
       </nav>
 
       <div className="border-t border-black/5 px-5 py-3 text-xs text-texto/60">

@@ -106,6 +106,38 @@ function inicialNome(nome: string): string {
   return /[A-Z]/.test(c) ? c : '#'
 }
 
+const SETTINGS_GRUPOS: { titulo: string; itens: { k: Sec; l: string }[] }[] = [
+  { titulo: 'Negocial', itens: [
+    { k: 'visual', l: 'Identidade visual' },
+    { k: 'equipe', l: 'Equipe' },
+    { k: 'disponibilidade', l: 'Disponibilidade' },
+    { k: 'metas', l: 'Metas' },
+    { k: 'ativos', l: 'Ativos' },
+    { k: 'formularios', l: 'Formulários (Admin)' },
+    { k: 'textos', l: 'Textos-padrão' },
+    { k: 'formulas', l: 'Fórmulas' },
+    { k: 'indicacao', l: 'Indicação' },
+    { k: 'fidelidade', l: 'Fidelidade' },
+    { k: 'lgpd', l: 'LGPD' },
+    { k: 'imagem', l: 'Termo de Imagem' },
+  ] },
+  { titulo: 'Sistema', itens: [
+    { k: 'fornecedores', l: 'Fornecedores' },
+    { k: 'papeis', l: 'Papéis' },
+    { k: 'permissoes', l: 'Permissões' },
+    { k: 'exames', l: 'Exames' },
+    { k: 'procedimentos', l: 'Procedimentos' },
+    { k: 'recursos', l: 'Recursos' },
+    { k: 'servicos', l: 'Serviços Prestados' },
+    { k: 'unidades', l: 'Unidades' },
+    { k: 'despesas', l: 'Tipos de Despesa' },
+    { k: 'tipos_doc', l: 'Tipos de Documentos' },
+    { k: 'vacinas', l: 'Vacinas' },
+    { k: 'vias', l: 'Vias' },
+    { k: 'integracoes', l: 'Integrações' },
+  ] },
+]
+
 export default function Settings() {
   const { profile } = useAuth()
   const [sec, setSec] = useState<Sec>('visual')
@@ -122,43 +154,22 @@ export default function Settings() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-texto">Configurações</h1>
-      <div className="mt-4 mb-6 flex gap-1 overflow-x-auto border-b border-black/5">
-        {[
-          { k: 'visual', l: 'Identidade visual' },
-          { k: 'equipe', l: 'Equipe' },
-          { k: 'disponibilidade', l: 'Disponibilidade' },
-          { k: 'papeis', l: 'Papéis' },
-          { k: 'permissoes', l: 'Permissões' },
-          { k: 'integracoes', l: 'Integrações' },
-          { k: 'textos', l: 'Textos-padrão' },
-          { k: 'tipos_doc', l: 'Tipos de documento' },
-          { k: 'ativos', l: 'Ativos' },
-          { k: 'unidades', l: 'Unidades' },
-          { k: 'vias', l: 'Vias' },
-          { k: 'fornecedores', l: 'Fornecedores' },
-          { k: 'formulas', l: 'Fórmulas' },
-          { k: 'procedimentos', l: 'Procedimentos' },
-          { k: 'recursos', l: 'Recursos' },
-          { k: 'despesas', l: 'Tipos de Despesa' },
-          { k: 'exames', l: 'Exames' },
-          { k: 'servicos', l: 'Serviços Prestados' },
-          { k: 'vacinas', l: 'Vacinas' },
-          { k: 'formularios', l: 'Formulários (Admin)' },
-          { k: 'lgpd', l: 'LGPD' },
-          { k: 'imagem', l: 'Termo de Imagem' },
-          { k: 'indicacao', l: 'Indicação' },
-          { k: 'fidelidade', l: 'Fidelidade' },
-          { k: 'metas', l: 'Metas' },
-        ].map((t) => (
-          <button
-            key={t.k}
-            onClick={() => setSec(t.k as Sec)}
-            className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm transition ${
-              sec === t.k ? 'border-primaria font-semibold text-primaria' : 'border-transparent text-texto/60 hover:text-texto'
-            }`}
-          >
-            {t.l}
-          </button>
+      <div className="mt-4 mb-6 space-y-1.5 border-b border-black/5 pb-3">
+        {SETTINGS_GRUPOS.map((g) => (
+          <div key={g.titulo} className="flex flex-wrap items-center gap-1">
+            <span className="mr-1 w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-texto/30">{g.titulo}</span>
+            {g.itens.map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setSec(t.k)}
+                className={`whitespace-nowrap rounded-md px-2.5 py-1 text-sm transition ${
+                  sec === t.k ? 'bg-primaria font-semibold text-white' : 'text-texto/60 hover:bg-black/5'
+                }`}
+              >
+                {t.l}
+              </button>
+            ))}
+          </div>
         ))}
       </div>
 
