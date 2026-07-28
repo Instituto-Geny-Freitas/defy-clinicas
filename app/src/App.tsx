@@ -16,6 +16,7 @@ import Reports from '@/pages/clinic/Reports'
 import Relacionamento from '@/pages/clinic/Relacionamento'
 import CRM from '@/pages/clinic/CRM'
 import Administrativo from '@/pages/clinic/Administrativo'
+import AtividadesInternas from '@/pages/clinic/AtividadesInternas'
 import Settings from '@/pages/clinic/Settings'
 import Templates from '@/pages/clinic/Templates'
 import Assistant from '@/pages/Assistant'
@@ -86,6 +87,7 @@ export default function App() {
             <Route path="relacionamento" element={<RouteGuard perm="menu.relacionamento"><Relacionamento /></RouteGuard>} />
             <Route path="crm" element={<RouteGuard perm="menu.crm"><CRM /></RouteGuard>} />
             <Route path="administrativo" element={<RouteGuard perm="menu.administrativo"><Administrativo /></RouteGuard>} />
+            <Route path="atividades" element={<RouteGuard perm="menu.atividades"><AtividadesInternas /></RouteGuard>} />
             <Route path="configuracoes" element={<RouteGuard perm="admin"><Settings /></RouteGuard>} />
           </Route>
           </>

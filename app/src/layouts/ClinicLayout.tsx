@@ -15,11 +15,12 @@ const NAV_MAIN = [
   { to: '/clinica/relatorios', label: 'Relatórios', perm: 'menu.relatorios' },
 ]
 
-// Grupo "Gestão" (colapsável). Reuniões/Atividades Internas entram nas Fases 1-2.
+// Grupo "Gestão" (colapsável). Reuniões Internas entra na Fase 2.
 const NAV_GESTAO = [
   { to: '/clinica/administrativo', label: 'Administrativo', perm: 'menu.administrativo' },
   { to: '/clinica/estoque', label: 'Estoque', perm: 'menu.estoque' },
   { to: '/clinica/configuracoes', label: 'Configurações', perm: 'admin' },
+  { to: '/clinica/atividades', label: 'Atividades Internas', perm: 'menu.atividades' },
   { to: '/clinica/documentos', label: 'Modelos de Documentos', perm: 'menu.documentos' },
 ]
 
