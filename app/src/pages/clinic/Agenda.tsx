@@ -26,6 +26,7 @@ import { addWaitlist, countWaitlist, deleteWaitlist, listWaitlist, updateWaitlis
 import type { Patient, Professional } from '@/lib/types'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
 import MonthCalendar from '@/components/MonthCalendar'
+import AtividadesDoDia from '@/components/AtividadesDoDia'
 
 const dataLonga = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
@@ -86,6 +87,7 @@ export default function Agenda() {
   const [weekAppts, setWeekAppts] = useState<Appointment[]>([])
   const [acoesDe, setAcoesDe] = useState<Appointment | null>(null)
   const [novoSlot, setNovoSlot] = useState<{ data: string; horaInicio: string } | null>(null)
+  const [aba, setAba] = useState<'agenda' | 'atividades'>('agenda')
 
   function recarregar() {
     let desde: string | undefined, ate: string | undefined
@@ -174,6 +176,13 @@ export default function Agenda() {
 
   return (
     <div>
+      <div className="mb-3 flex gap-1">
+        <button onClick={() => setAba('agenda')} className={`rounded-full px-3 py-1 text-sm transition ${aba === 'agenda' ? 'bg-primaria font-medium text-white' : 'text-texto/60 hover:bg-black/5'}`}>Agenda</button>
+        <button onClick={() => setAba('atividades')} className={`rounded-full px-3 py-1 text-sm transition ${aba === 'atividades' ? 'bg-primaria font-medium text-white' : 'text-texto/60 hover:bg-black/5'}`}>Atividades do dia</button>
+      </div>
+      {aba === 'atividades' ? (
+        <AtividadesDoDia dataInicial={dataFiltro} profissionais={profissionais} />
+      ) : (<>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-texto">Agenda</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -387,6 +396,7 @@ export default function Agenda() {
           </div>
         </Shell>
       )}
+      </>)}
     </div>
   )
 }
