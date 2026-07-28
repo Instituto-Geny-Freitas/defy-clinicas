@@ -333,6 +333,8 @@ function RecordModal({ clinicId, def, record, onClose, onSaved }: {
   const [pacientes, setPacientes] = useState<Patient[]>([])
   const [profs, setProfs] = useState<Professional[]>([])
   const [ativos, setAtivos] = useState<ActiveIngredient[]>([])
+  // Opções por campo 'form_ref': registros do formulário referenciado (texto do campo exibido).
+  const [refOpts, setRefOpts] = useState<Record<string, string[]>>({})
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -345,6 +347,30 @@ function RecordModal({ clinicId, def, record, onClose, onSaved }: {
     if (precisaProfs) listProfessionals().then((p) => setProfs(p.filter((x) => x.ativo))).catch(() => {})
     if (precisaAtivos) listActiveIngredients().then(setAtivos).catch(() => {})
   }, [precisaPacientes, precisaProfs, precisaAtivos])
+
+  // Carrega as opções dos campos que referenciam outro formulário (snapshot do texto exibido).
+  const refSig = def.campos.filter((c) => c.tipo === 'form_ref' && c.refForm).map((c) => `${c.key}:${c.refForm}:${c.refCampo ?? ''}`).join('|')
+  useEffect(() => {
+    if (!refSig) { setRefOpts({}); return }
+    let cancel = false
+    ;(async () => {
+      const allForms = await getForms().catch(() => [] as FormDef[])
+      const campos = def.campos.filter((c) => c.tipo === 'form_ref' && c.refForm)
+      const cache = new Map<string, AdminRecord[]>()
+      const opts: Record<string, string[]> = {}
+      for (const c of campos) {
+        const rf = c.refForm as string
+        if (!cache.has(rf)) cache.set(rf, await listRecords(rf).catch(() => [] as AdminRecord[]))
+        const displayKey = c.refCampo || allForms.find((f) => f.chave === rf)?.campos[0]?.key || ''
+        const vals = (cache.get(rf) ?? [])
+          .map((r) => (displayKey && r.dados[displayKey] != null ? String(r.dados[displayKey]) : ''))
+          .filter((s) => s.trim())
+        opts[c.key] = [...new Set(vals)].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      }
+      if (!cancel) setRefOpts(opts)
+    })()
+    return () => { cancel = true }
+  }, [refSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k: string, v: unknown) => setDados((s) => ({ ...s, [k]: v }))
 
@@ -438,7 +464,7 @@ function RecordModal({ clinicId, def, record, onClose, onSaved }: {
             <div key={c.key} className={c.full || c.tipo === 'textarea' ? 'sm:col-span-2' : ''}>
               <label className="mb-1 block text-sm text-texto/70">{c.label}{c.obrigatorio && ' *'}</label>
               <FieldInput
-                field={c} value={dados[c.key]} profs={profs} ativos={ativos}
+                field={c} value={dados[c.key]} profs={profs} ativos={ativos} refOptions={refOpts[c.key] ?? []}
                 onChange={(v) => set(c.key, v)}
                 onAtivo={(nome) => escolherAtivo(c.key, nome)}
                 onUpload={(file) => onUpload(c.key, file)}
@@ -458,8 +484,8 @@ function RecordModal({ clinicId, def, record, onClose, onSaved }: {
   )
 }
 
-function FieldInput({ field: c, value, profs, ativos, onChange, onAtivo, onUpload, onAbrirAnexo }: {
-  field: FormField; value: unknown; profs: Professional[]; ativos: ActiveIngredient[]
+function FieldInput({ field: c, value, profs, ativos, refOptions, onChange, onAtivo, onUpload, onAbrirAnexo }: {
+  field: FormField; value: unknown; profs: Professional[]; ativos: ActiveIngredient[]; refOptions: string[]
   onChange: (v: unknown) => void; onAtivo: (nome: string) => void
   onUpload: (file: File) => void; onAbrirAnexo: (path: string) => void
 }) {
@@ -521,6 +547,18 @@ function FieldInput({ field: c, value, profs, ativos, onChange, onAtivo, onUploa
           {ativos.map((a) => <option key={a.id} value={a.nome}>{a.nome}</option>)}
           {!!v && !ativos.some((a) => a.nome === v) && <option value={v as string}>{v as string}</option>}
         </select>
+      )
+    case 'form_ref':
+      return (
+        <>
+          <select className={field} value={(v as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
+            <option value="">—</option>
+            {refOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            {/* preserva o valor atual mesmo se o registro de origem não estiver mais na lista */}
+            {!!v && !refOptions.includes(v as string) && <option value={v as string}>{v as string}</option>}
+          </select>
+          {refOptions.length === 0 && <p className="mt-0.5 text-[11px] text-texto/50">Nenhum registro no formulário de origem. Cadastre-os primeiro.</p>}
+        </>
       )
     case 'upload':
       return (

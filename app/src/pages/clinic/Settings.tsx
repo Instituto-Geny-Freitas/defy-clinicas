@@ -1381,6 +1381,7 @@ const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
   { v: 'select', l: 'Lista (uma opção)' }, { v: 'multiselect', l: 'Lista (várias)' },
   { v: 'upload', l: 'Upload de arquivo' }, { v: 'ativo', l: 'Ativo (produto)' },
   { v: 'profissional', l: 'Profissional' }, { v: 'paciente', l: 'Paciente' },
+  { v: 'form_ref', l: 'Registro de outro formulário' },
 ]
 const slugKey = (s: string) =>
   (s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'campo')
@@ -1481,6 +1482,27 @@ function FormulariosSection({ clinicId }: { clinicId: string }) {
                     <button onClick={() => removerCampo(i)} className="px-1 text-secundaria hover:underline" title="Excluir">✕</button>
                   </div>
                 </div>
+                {c.tipo === 'form_ref' && (
+                  <div className="mt-2 grid grid-cols-1 gap-2 rounded-lg bg-black/[0.02] p-2 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-0.5 block text-[11px] text-texto/50">Formulário referenciado (lista os registros)</label>
+                      <select className="w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.refForm ?? ''}
+                        onChange={(e) => { const rf = e.target.value; const alvo = forms.find((f) => f.chave === rf); editarCampo(i, { refForm: rf || undefined, refCampo: alvo?.campos[0]?.key }) }}>
+                        <option value="">— Selecione um formulário —</option>
+                        {forms.filter((f) => f.chave !== def.chave).map((f) => <option key={f.chave} value={f.chave}>{f.titulo}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[11px] text-texto/50">Campo exibido na lista</label>
+                      <select className="w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={c.refCampo ?? ''} disabled={!c.refForm}
+                        onChange={(e) => editarCampo(i, { refCampo: e.target.value || undefined })}>
+                        <option value="">— 1º campo —</option>
+                        {(forms.find((f) => f.chave === c.refForm)?.campos ?? []).map((cc) => <option key={cc.key} value={cc.key}>{cc.label}</option>)}
+                      </select>
+                    </div>
+                    {!c.refForm && <p className="text-[11px] text-secundaria sm:col-span-2">Escolha o formulário que fornecerá os registros para seleção.</p>}
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-texto/60">
                   <span className="text-texto/30">chave: {c.key}</span>
                   <label className="flex items-center gap-1"><input type="checkbox" checked={!!c.obrigatorio} onChange={(e) => editarCampo(i, { obrigatorio: e.target.checked })} /> obrigatório</label>
