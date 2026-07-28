@@ -12,6 +12,7 @@ export type FieldType =
   | 'ativo'        // referência a um ativo (active_ingredients); pode auto-preencher
   | 'profissional' // referência a um profissional da equipe
   | 'paciente'     // referência a um paciente
+  | 'form_ref'     // referência a registros de OUTRO formulário admin (grava o texto exibido — snapshot)
 
 export interface FormField {
   key: string
@@ -23,6 +24,8 @@ export interface FormField {
   suffix?: string          // sufixo visual (ex.: °C, BTUs)
   fonte?: string           // auto-preenchimento (ex.: 'ativo.validade', 'ativo.lote')
   auto?: 'profissional_logado' | 'hoje' | 'paciente_nome' | 'paciente_idade' | 'paciente_sexo'
+  refForm?: string         // (form_ref) chave do formulário referenciado
+  refCampo?: string        // (form_ref) chave do campo exibido do formulário referenciado (default: 1º campo)
 }
 
 export interface FormDef {
