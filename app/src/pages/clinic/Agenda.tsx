@@ -161,7 +161,7 @@ export default function Agenda() {
     if (!tel) return
     const nome = (a.patients?.nome ?? a.nome_avulso ?? '').trim().split(/\s+/)[0]
     const quando = new Date(a.inicio).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-    const msg = `Olá${nome ? ', ' + nome : ''}! Passando para lembrar do seu horário na ${clinic?.nome ?? 'clínica'} em ${quando}${a.procedimento ? ` (${a.procedimento})` : ''}. Podemos confirmar sua presença? 💚`
+    const msg = `Olá${nome ? ', ' + nome : ''}! Passando para lembrar do seu horário no ${clinic?.nome ?? 'clínica'} em ${quando}${a.procedimento ? ` (${a.procedimento})` : ''}. Podemos confirmar sua presença? 💚`
     window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`, '_blank')
   }
   const temTelefone = (a: Appointment) => !!(a.patients?.whatsapp ?? a.telefone_avulso)
