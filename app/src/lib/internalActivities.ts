@@ -115,6 +115,15 @@ export async function deleteActivity(id: string): Promise<void> {
   if (error) throw error
 }
 
+/** Muda só o status (e a data efetivada) — permitido a admin, criador OU responsável.
+ *  Via RPC SECURITY DEFINER (0069): restringe as colunas e registra log em atividades do Admin. */
+export async function setActivityStatus(id: string, status: ActivityStatus, dataEfetivada?: string | null): Promise<void> {
+  const { error } = await supabase.rpc('set_internal_activity_status', {
+    p_id: id, p_status: status, p_data_efetivada: dataEfetivada ?? null,
+  })
+  if (error) throw error
+}
+
 // ---- Log de ajustes --------------------------------------------------------
 export async function listActivityLog(activityId: string): Promise<ActivityLogEntry[]> {
   const { data, error } = await supabase

@@ -4,7 +4,7 @@ import { listProfessionals } from '@/lib/settings'
 import type { Professional } from '@/lib/types'
 import { formatDateBR, localDateToday } from '@/lib/format'
 import {
-  addActivityLog, createActivity, deleteActivity, listActivities, listActivityLog, updateActivity,
+  addActivityLog, createActivity, deleteActivity, listActivities, listActivityLog, setActivityStatus, updateActivity,
   ORIGEM_LABEL, STATUS_LABEL,
   type ActivityLogEntry, type ActivityOrigin, type ActivityStatus, type InternalActivity,
 } from '@/lib/internalActivities'
@@ -41,21 +41,23 @@ export default function AtividadesInternas() {
     recarregar()
   }, [])
 
-  const canEdit = (a: InternalActivity) => isAdmin || a.created_by === myProfId
+  // Edição completa: admin ou criador. Mudar só o status: também o responsável.
+  const canEditFull = (a: InternalActivity) => isAdmin || a.created_by === myProfId
+  const canStatus = (a: InternalActivity) => canEditFull(a) || a.responsavel_professional_id === myProfId
   const visiveis = itens.filter((a) => filtro === 'todas' || a.status === filtro)
 
   async function excluir(a: InternalActivity) {
-    if (!canEdit(a)) return
+    if (!canEditFull(a)) return
     if (!confirm(`Excluir a atividade "${a.titulo}"?`)) return
     await deleteActivity(a.id); recarregar()
   }
-  // Marca rapidamente o status (executado preenche a data efetivada).
-  async function marcar(a: InternalActivity, status: ActivityStatus) {
-    if (!canEdit(a)) return
-    const patch = { status, data_efetivada: status === 'executado' ? (a.data_efetivada ?? localDateToday()) : a.data_efetivada }
-    await updateActivity(a.id, patch)
-    if (a.origem === 'admin') await addActivityLog(clinicId, a.id, myProfId, myNome, [{ campo: 'status', de: a.status, para: status }]).catch(() => {})
-    recarregar()
+  // Muda só o status (executado preenche a data efetivada). Via RPC: admin/criador/responsável.
+  async function mudarStatus(a: InternalActivity, status: ActivityStatus) {
+    if (!canStatus(a) || status === a.status) return
+    try {
+      await setActivityStatus(a.id, status, status === 'executado' ? (a.data_efetivada ?? localDateToday()) : a.data_efetivada)
+      recarregar()
+    } catch { /* sem permissão / erro — mantém estado */ }
   }
 
   return (
@@ -99,11 +101,13 @@ export default function AtividadesInternas() {
                     {a.status === 'executado' && a.data_efetivada && <span>✓ efetivada {formatDateBR(a.data_efetivada)}</span>}
                   </div>
                 </div>
-                {canEdit(a) && (
+                {canStatus(a) && (
                   <div className="flex shrink-0 items-center gap-2 text-xs">
-                    {a.status !== 'executado' && <button onClick={() => marcar(a, 'executado')} className="font-medium text-emerald-600 hover:underline">Executar</button>}
-                    <button onClick={() => setModal(a)} className="font-medium text-texto/60 hover:underline">Editar</button>
-                    <button onClick={() => excluir(a)} className="font-medium text-secundaria hover:underline">Excluir</button>
+                    <select value={a.status} onChange={(e) => mudarStatus(a, e.target.value as ActivityStatus)} className="rounded-md border border-black/10 px-1.5 py-1 text-xs" title="Alterar status">
+                      {(Object.keys(STATUS_LABEL) as ActivityStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                    </select>
+                    {canEditFull(a) && <button onClick={() => setModal(a)} className="font-medium text-texto/60 hover:underline">Editar</button>}
+                    {canEditFull(a) && <button onClick={() => excluir(a)} className="font-medium text-secundaria hover:underline">Excluir</button>}
                   </div>
                 )}
               </div>
