@@ -10,7 +10,7 @@ export const NIVEL_LABEL: Record<Nivel, string> = {
   recepcao: 'Secretaria / Recepção',
 }
 
-export interface FeatureDef { key: string; label: string; group: 'Menu lateral' | 'Abas do paciente' }
+export interface FeatureDef { key: string; label: string; group: 'Menu lateral' | 'Abas do paciente' | 'Ações' }
 
 /** Funcionalidades que podem ser ligadas/desligadas por nível. */
 export const FEATURES: FeatureDef[] = [
@@ -43,14 +43,16 @@ export const FEATURES: FeatureDef[] = [
   { key: 'paciente.documentos', label: 'Documentos', group: 'Abas do paciente' },
   { key: 'paciente.financeiro', label: 'Financeiro', group: 'Abas do paciente' },
   { key: 'paciente.relatorios', label: 'Relatórios', group: 'Abas do paciente' },
+  // Ações (permissões de operação)
+  { key: 'reunioes.convocar', label: 'Convocar / gerenciar reuniões', group: 'Ações' },
 ]
 
 export const ALL_KEYS = FEATURES.map((f) => f.key)
 
 /** Permissões padrão por nível (usadas quando o admin ainda não personalizou). */
 export const DEFAULTS: Record<Exclude<Nivel, 'admin'>, string[]> = {
-  // Profissional: todos os módulos clínicos + todas as abas.
-  profissional: ALL_KEYS.slice(),
+  // Profissional: todos os módulos clínicos + todas as abas (exceto ações restritas, ex.: convocar reuniões).
+  profissional: ALL_KEYS.filter((k) => k !== 'reunioes.convocar'),
   // Secretaria/Recepção: agenda, cadastro (pacientes) e financeiro.
   recepcao: [
     'menu.dashboard', 'menu.agenda', 'menu.pacientes', 'menu.financeiro', 'menu.relacionamento', 'menu.crm', 'menu.reunioes', 'menu.atividades',

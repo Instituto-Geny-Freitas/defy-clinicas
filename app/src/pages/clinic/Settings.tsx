@@ -2327,7 +2327,7 @@ function PermissoesSection({ clinicId }: { clinicId: string }) {
 
   if (!matrix) return <p className="text-sm text-texto/50">Carregando…</p>
 
-  const grupos = ['Menu lateral', 'Abas do paciente'] as const
+  const grupos = ['Menu lateral', 'Abas do paciente', 'Ações'] as const
   const Switch = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
     <button type="button" onClick={onClick}
       className={`relative h-5 w-9 rounded-full transition ${on ? 'bg-primaria' : 'bg-black/15'}`}>

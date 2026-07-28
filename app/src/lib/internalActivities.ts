@@ -58,6 +58,17 @@ export async function listActivities(opts?: { de?: string; ate?: string }): Prom
   return (data ?? []) as InternalActivity[]
 }
 
+/** Atividades geradas/vinculadas a uma reunião (origem 'reuniao'). */
+export async function listMeetingActivities(meetingId: string): Promise<InternalActivity[]> {
+  const { data, error } = await supabase
+    .from('internal_activities')
+    .select('*')
+    .eq('meeting_id', meetingId)
+    .order('data', { ascending: true, nullsFirst: false })
+  if (error) throw error
+  return (data ?? []) as InternalActivity[]
+}
+
 export interface CreateActivityInput {
   clinicId: string
   titulo: string
