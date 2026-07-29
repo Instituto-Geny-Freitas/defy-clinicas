@@ -1,0 +1,125 @@
+name: Backup (Supabase logical)
+
+# Backup lógico completo do banco (roles + schema + dados, inclui auth/storage),
+# criptografado e enviado como asset de Release num repositório privado de backups.
+#
+# Cadência: roda TODO dia. O "tier" define a retenção:
+#   - dia 1 do mês  -> monthly  (retido 365 dias)
+#   - domingo       -> weekly   (retido 56 dias)
+#   - demais dias   -> daily    (retido 14 dias)
+# Como todo dump é COMPLETO, há granularidade diária com retenção escalonada.
+#
+# Secrets necessários (Settings > Secrets and variables > Actions):
+#   SUPABASE_DB_URL               connection string (Session Pooler, porta 5432)
+#   BACKUP_ENCRYPTION_PASSPHRASE  passphrase forte (AES256)
+#   BACKUP_REPO                   ex.: MinhaOrg/defy-backups  (repo privado)
+#   BACKUP_REPO_TOKEN             PAT com acesso de escritura (contents/releases) ao BACKUP_REPO
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC = 03:00 BRT, diariamente
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Tier do backup (auto usa a regra de data)"
+        type: choice
+        default: auto
+        options: [auto, daily, weekly, monthly]
+
+concurrency:
+  group: backup-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROJECT_NAME: clinicageny
+
+jobs:
+  backup:
+    name: Dump + encrypt + upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Determinar tier
+        id: tier
+        run: |
+          IN="${{ github.event.inputs.tier || 'auto' }}"
+          if [ "$IN" != "auto" ] && [ -n "$IN" ]; then
+            TIER="$IN"
+          else
+            DOM="$(date -u +%d)"; DOW="$(date -u +%u)"  # DOW: 7=domingo
+            if [ "$DOM" = "01" ]; then TIER="monthly"
+            elif [ "$DOW" = "7" ]; then TIER="weekly"
+            else TIER="daily"; fi
+          fi
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+          echo "Tier escolhido: $TIER"
+
+      - name: Executar backup
+        id: run
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          TIER: ${{ steps.tier.outputs.tier }}
+          OUT_DIR: ${{ github.workspace }}/backup-out
+        run: |
+          chmod +x scripts/backup/backup.sh
+          FILE="$(scripts/backup/backup.sh | tail -n1)"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "asset=$(basename "$FILE")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload para o repositório de backups (Release)
+        env:
+          GH_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+          BACKUP_REPO: ${{ secrets.BACKUP_REPO }}
+          TIER: ${{ steps.tier.outputs.tier }}
+          FILE: ${{ steps.run.outputs.file }}
+        run: |
+          TAG="backups-${TIER}"
+          if ! gh release view "$TAG" -R "$BACKUP_REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" -R "$BACKUP_REPO" \
+              --title "Backups (${TIER})" \
+              --notes "Assets de backup criptografados — tier ${TIER}. Gerados automaticamente."
+          fi
+          gh release upload "$TAG" "$FILE" -R "$BACKUP_REPO"
+          echo "Enviado $(basename "$FILE") para $BACKUP_REPO ($TAG)"
+
+      - name: Prune de backups antigos
+        env:
+          GH_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+          BACKUP_REPO: ${{ secrets.BACKUP_REPO }}
+          TIER: ${{ steps.tier.outputs.tier }}
+        run: |
+          case "$TIER" in
+            daily)   KEEP_DAYS=14 ;;
+            weekly)  KEEP_DAYS=56 ;;
+            monthly) KEEP_DAYS=365 ;;
+          esac
+          TAG="backups-${TIER}"
+          NOW="$(date -u +%s)"
+          echo "Prune tier=$TIER, retendo ${KEEP_DAYS} dias..."
+          gh release view "$TAG" -R "$BACKUP_REPO" --json assets \
+            --jq '.assets[].name' | while read -r NAME; do
+            # nome: <project>-<tier>-YYYYMMDDTHHMMSSZ-<sha>.tar.gz.gpg
+            STAMP="$(echo "$NAME" | grep -oE '[0-9]{8}T[0-9]{6}Z' | head -n1)"
+            [ -n "$STAMP" ] || { echo "  (ignorado, sem timestamp) $NAME"; continue; }
+            D="${STAMP:0:4}-${STAMP:4:2}-${STAMP:6:2}"
+            AGE_S=$(( NOW - $(date -u -d "$D" +%s) ))
+            AGE_D=$(( AGE_S / 86400 ))
+            if [ "$AGE_D" -gt "$KEEP_DAYS" ]; then
+              echo "  apagando $NAME (idade ${AGE_D}d)"
+              gh release delete-asset "$TAG" "$NAME" -R "$BACKUP_REPO" --yes
+            fi
+          done
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "### Backup ${{ steps.tier.outputs.tier }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Asset: \`${{ steps.run.outputs.asset }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Repositório: \`${{ secrets.BACKUP_REPO }}\`" >> "$GITHUB_STEP_SUMMARY"
