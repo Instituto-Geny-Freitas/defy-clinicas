@@ -92,14 +92,6 @@ export default function ClinicLayout() {
           </div>
         )}
       </nav>
-
-      <div className="border-t border-black/5 px-5 py-3 text-xs text-texto/60">
-        <div className="truncate">{profile?.professional?.nome}</div>
-        <div className="mb-2 uppercase tracking-wide text-texto/40">{profile?.professional?.role}</div>
-        <button onClick={signOut} className="text-secundaria hover:underline">
-          Sair
-        </button>
-      </div>
     </>
   )
 
@@ -121,12 +113,12 @@ export default function ClinicLayout() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar (só mobile) com botão de menu */}
-        <header className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-3 lg:hidden">
+        {/* Top bar (todas as telas): menu (mobile) à esquerda; usuário + Sair à direita */}
+        <header className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-3">
           <button
             aria-label="Abrir menu"
             onClick={() => setMenuAberto(true)}
-            className="rounded-lg p-1.5 text-texto hover:bg-black/5"
+            className="rounded-lg p-1.5 text-texto hover:bg-black/5 lg:hidden"
           >
             {/* ícone hambúrguer */}
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -135,7 +127,25 @@ export default function ClinicLayout() {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="truncate font-semibold text-texto">{clinic?.nome ?? 'Clínica'}</span>
+          <span className="truncate font-semibold text-texto lg:hidden">{clinic?.nome ?? 'Clínica'}</span>
+
+          <div className="ml-auto flex items-center gap-3">
+            <div className="text-right leading-tight">
+              <div className="max-w-[150px] truncate text-sm font-medium text-texto sm:max-w-[260px]">{profile?.professional?.nome}</div>
+              {profile?.professional?.role && <div className="hidden text-[11px] uppercase tracking-wide text-texto/40 sm:block">{profile.professional.role}</div>}
+            </div>
+            <button
+              onClick={signOut}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium text-texto/70 transition hover:bg-black/5"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Sair
+            </button>
+          </div>
         </header>
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
