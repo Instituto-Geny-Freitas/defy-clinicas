@@ -154,21 +154,28 @@ export default function Settings() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-texto">Configurações</h1>
-      <div className="mt-4 mb-6 space-y-1.5 border-b border-black/5 pb-3">
-        {SETTINGS_GRUPOS.map((g) => (
-          <div key={g.titulo} className="flex flex-wrap items-center gap-1">
-            <span className="mr-1 w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-texto/30">{g.titulo}</span>
-            {g.itens.map((t) => (
-              <button
-                key={t.k}
-                onClick={() => setSec(t.k)}
-                className={`whitespace-nowrap rounded-md px-2.5 py-1 text-sm transition ${
-                  sec === t.k ? 'bg-primaria font-semibold text-white' : 'text-texto/60 hover:bg-black/5'
-                }`}
-              >
-                {t.l}
-              </button>
-            ))}
+      <div className="mt-4 mb-6 space-y-4 border-b border-black/5 pb-4">
+        {SETTINGS_GRUPOS.map((g, i) => (
+          <div key={g.titulo}>
+            <div className="mb-2 flex items-center gap-2">
+              <span className={`h-4 w-1 rounded-full ${i === 0 ? 'bg-primaria' : 'bg-texto/40'}`} />
+              <span className="text-sm font-semibold uppercase tracking-wider text-texto">{g.titulo}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {g.itens.map((t) => (
+                <button
+                  key={t.k}
+                  onClick={() => setSec(t.k)}
+                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
+                    sec === t.k
+                      ? 'bg-primaria font-medium text-white'
+                      : 'border border-black/10 bg-white text-texto/70 hover:border-primaria/40 hover:bg-black/5'
+                  }`}
+                >
+                  {t.l}
+                </button>
+              ))}
+            </div>
           </div>
         ))}
       </div>
