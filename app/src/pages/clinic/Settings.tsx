@@ -141,6 +141,7 @@ const SETTINGS_GRUPOS: { titulo: string; itens: { k: Sec; l: string }[] }[] = [
 export default function Settings() {
   const { profile } = useAuth()
   const [sec, setSec] = useState<Sec>('visual')
+  const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({})
 
   if (profile?.professional?.role !== 'admin') {
     return (
@@ -155,29 +156,41 @@ export default function Settings() {
     <div>
       <h1 className="text-2xl font-semibold text-texto">Configurações</h1>
       <div className="mt-4 mb-6 space-y-4 border-b border-black/5 pb-4">
-        {SETTINGS_GRUPOS.map((g, i) => (
-          <div key={g.titulo}>
-            <div className="mb-2 flex items-center gap-2">
-              <span className={`h-4 w-1 rounded-full ${i === 0 ? 'bg-primaria' : 'bg-texto/40'}`} />
-              <span className="text-sm font-semibold uppercase tracking-wider text-texto">{g.titulo}</span>
+        {SETTINGS_GRUPOS.map((g, i) => {
+          const aberto = gruposAbertos[g.titulo] ?? true
+          return (
+            <div key={g.titulo}>
+              <button
+                onClick={() => setGruposAbertos((s) => ({ ...s, [g.titulo]: !aberto }))}
+                className="mb-2 flex items-center gap-2"
+                aria-expanded={aberto}
+              >
+                <span className={`h-4 w-1 rounded-full ${i === 0 ? 'bg-primaria' : 'bg-texto/40'}`} />
+                <span className="text-sm font-semibold uppercase tracking-wider text-texto">{g.titulo}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`text-texto/40 transition-transform ${aberto ? 'rotate-90' : ''}`}>
+                  <polyline points="9 6 15 12 9 18" />
+                </svg>
+              </button>
+              {aberto && (
+                <div className="flex flex-wrap gap-2">
+                  {g.itens.map((t) => (
+                    <button
+                      key={t.k}
+                      onClick={() => setSec(t.k)}
+                      className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
+                        sec === t.k
+                          ? 'bg-primaria font-medium text-white'
+                          : 'border border-black/10 bg-white text-texto/70 hover:border-primaria/40 hover:bg-black/5'
+                      }`}
+                    >
+                      {t.l}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {g.itens.map((t) => (
-                <button
-                  key={t.k}
-                  onClick={() => setSec(t.k)}
-                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition ${
-                    sec === t.k
-                      ? 'bg-primaria font-medium text-white'
-                      : 'border border-black/10 bg-white text-texto/70 hover:border-primaria/40 hover:bg-black/5'
-                  }`}
-                >
-                  {t.l}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {sec === 'visual' && <VisualSection />}
@@ -1025,9 +1038,12 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
   const createdBy = profile?.professional?.id ?? null
   const [itens, setItens] = useState<ProcedureType[]>([])
   const [precos, setPrecos] = useState<Record<string, { valor: number; vigencia_inicio: string }>>({})
-  const [nome, setNome] = useState('')
-  const [valor, setValor] = useState('')
-  const [salvando, setSalvando] = useState(false)
+  const [busca, setBusca] = useState('')
+  const [letra, setLetra] = useState<string | null>(null)
+  const [porPagina, setPorPagina] = useState(20)
+  const [qtdCustom, setQtdCustom] = useState('')
+  const [pagina, setPagina] = useState(0)
+  const [novo, setNovo] = useState(false)
   const [ajustando, setAjustando] = useState<ProcedureType | null>(null)
   const [historico, setHistorico] = useState<ProcedureType | null>(null)
 
@@ -1037,32 +1053,70 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
   }
   useEffect(recarregar, [])
 
-  async function salvar() {
-    if (!nome.trim()) return
-    setSalvando(true)
-    try { await createProcedureType(clinicId, nome.trim(), { valor: parseMoneyBR(valor) || null, createdBy }); setNome(''); setValor(''); recarregar() }
-    finally { setSalvando(false) }
-  }
+  const iniciaisExistentes = useMemo(() => {
+    const s = new Set<string>()
+    itens.forEach((p) => s.add(inicialNome(p.nome)))
+    return s
+  }, [itens])
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase()
+    return itens.filter((p) => {
+      if (termo && !p.nome.toLowerCase().includes(termo)) return false
+      if (letra && inicialNome(p.nome) !== letra) return false
+      return true
+    })
+  }, [itens, busca, letra])
+
+  useEffect(() => { setPagina(0) }, [busca, letra, porPagina])
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / porPagina))
+  const paginaSegura = Math.min(pagina, totalPaginas - 1)
+  const inicio = paginaSegura * porPagina
+  const visiveis = filtrados.slice(inicio, inicio + porPagina)
+  function aplicarCustom() { const n = Number(qtdCustom); if (n > 0) setPorPagina(Math.floor(n)) }
+
   async function remover(id: string) { if (confirm('Excluir este tipo de procedimento?')) { await deleteProcedureType(id); recarregar() } }
 
   return (
-    <div className="max-w-2xl space-y-5">
-      <div className="rounded-xl border border-black/5 bg-white p-5">
-        <h3 className="mb-1 font-semibold text-texto">Novo tipo de procedimento</h3>
-        <p className="mb-3 text-xs text-texto/50">Usados no campo Procedimento ao registrar um atendimento. O valor é opcional, passa a valer a partir de hoje e mantém histórico (você pode reajustar depois).</p>
-        <div className="flex flex-wrap gap-2">
-          <input className={`${field} min-w-[12rem] flex-1`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Skinbooster PDRN" />
-          <input className={`${field} w-40 shrink-0`} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor R$ (opcional)" />
-          <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
-        </div>
+    <div className="max-w-3xl space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <input className="flex-1 rounded-lg border border-black/10 px-3 py-2 text-sm" placeholder="Buscar por nome…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <span className="text-xs text-texto/40">{filtrados.length}</span>
+        <button onClick={() => setNovo(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo Procedimento</button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        <button onClick={() => setLetra(null)} className={`rounded-md px-2 py-1 text-xs font-semibold transition ${letra === null ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}>Todos</button>
+        {ALFABETO_ATIVOS.map((l) => {
+          const existe = iniciaisExistentes.has(l); const ativoL = letra === l
+          return (
+            <button key={l} disabled={!existe} onClick={() => setLetra(ativoL ? null : l)}
+              className={`h-7 w-7 rounded-md text-xs font-semibold transition ${ativoL ? 'bg-primaria text-white' : existe ? 'bg-black/5 text-texto/70 hover:bg-black/10' : 'cursor-default text-texto/20'}`}>
+              {l}
+            </button>
+          )
+        })}
+        {iniciaisExistentes.has('#') && (
+          <button onClick={() => setLetra(letra === '#' ? null : '#')} className={`h-7 w-7 rounded-md text-xs font-semibold transition ${letra === '#' ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`} title="Outros (número/símbolo)">#</button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-sm text-texto/70">
+        <span>Mostrar</span>
+        {OPCOES_QTD_ATIVOS.map((n) => (
+          <button key={n} onClick={() => { setPorPagina(n); setQtdCustom('') }} className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${porPagina === n && qtdCustom === '' ? 'bg-primaria text-white' : 'bg-black/5 text-texto/70 hover:bg-black/10'}`}>{n}</button>
+        ))}
+        <input type="number" min={1} value={qtdCustom} onChange={(e) => setQtdCustom(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') aplicarCustom() }} onBlur={aplicarCustom} placeholder="outro" className="w-20 rounded-md border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria" />
+        <span className="text-xs text-texto/50">registros por página</span>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
             <th className="px-4 py-2 font-medium">Procedimento</th><th className="px-4 py-2 font-medium">Valor vigente</th><th className="px-4 py-2"></th>
           </tr></thead>
           <tbody>
-            {itens.map((p) => {
+            {visiveis.map((p) => {
               const pr = precos[p.id]
               return (
                 <tr key={p.id} className="border-t border-black/5">
@@ -1078,10 +1132,25 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
                 </tr>
               )
             })}
-            {itens.length === 0 && <tr><td colSpan={3} className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
+            {filtrados.length === 0 && <tr><td colSpan={3} className="px-4 py-3 text-sm text-texto/50">Nenhum procedimento encontrado.</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {filtrados.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-texto/60">
+          <span>{inicio + 1}–{Math.min(inicio + porPagina, filtrados.length)} de {filtrados.length}{(busca || letra) && ` (${itens.length} no total)`}</span>
+          {totalPaginas > 1 && (
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={paginaSegura === 0} className="rounded-md bg-black/5 px-3 py-1 text-xs font-semibold text-texto/70 hover:bg-black/10 disabled:opacity-40">← Anterior</button>
+              <span className="text-xs">Página {paginaSegura + 1} de {totalPaginas}</span>
+              <button onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))} disabled={paginaSegura >= totalPaginas - 1} className="rounded-md bg-black/5 px-3 py-1 text-xs font-semibold text-texto/70 hover:bg-black/10 disabled:opacity-40">Próxima →</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {novo && <NovoProcedimentoModal clinicId={clinicId} createdBy={createdBy} onClose={() => setNovo(false)} onSaved={() => { setNovo(false); recarregar() }} />}
       {ajustando && (
         <PrecoProcedimentoModal
           clinicId={clinicId} procedimento={ajustando} valorAtual={precos[ajustando.id]?.valor ?? 0} createdBy={createdBy}
@@ -1089,6 +1158,46 @@ function ProcedimentosSection({ clinicId }: { clinicId: string }) {
         />
       )}
       {historico && <HistoricoPrecoModal procedimento={historico} onClose={() => setHistorico(null)} />}
+    </div>
+  )
+}
+
+/** Cadastro de um novo procedimento (mesmo modelo visual do "Ajustar valor"). */
+function NovoProcedimentoModal({ clinicId, createdBy, onClose, onSaved }: {
+  clinicId: string; createdBy: string | null; onClose: () => void; onSaved: () => void
+}) {
+  const [nome, setNome] = useState('')
+  const [valor, setValor] = useState('')
+  const [vigencia, setVigencia] = useState(localDateToday())
+  const [salvando, setSalvando] = useState(false)
+
+  async function salvar() {
+    if (!nome.trim()) return
+    setSalvando(true)
+    try {
+      await createProcedureType(clinicId, nome.trim(), { valor: parseMoneyBR(valor) || null, vigenciaInicio: vigencia, createdBy })
+      onSaved()
+    } catch { setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-6 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">Novo procedimento</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+        <p className="mb-3 text-xs text-texto/50">Usado no campo Procedimento ao registrar um atendimento. O valor é opcional, passa a valer a partir da vigência e mantém histórico (você pode reajustar depois).</p>
+        <div className="space-y-3">
+          <div><label className="mb-1 block text-sm text-texto/70">Nome *</label><input className={field} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Skinbooster PDRN" /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Valor R$ (opcional)</label><input className={field} inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Vigência a partir de</label><input type="date" className={field} value={vigencia} onChange={(e) => setVigencia(e.target.value)} /></div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-texto/70 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando || !nome.trim()} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Adicionar'}</button>
+        </div>
+      </div>
     </div>
   )
 }
