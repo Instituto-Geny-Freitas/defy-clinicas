@@ -73,17 +73,22 @@ export default function ClinicLayout() {
         </Link>
         {mainVisivel.map(renderItem)}
         {gestaoVisivel.length > 0 && (
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               onClick={() => setGestaoAberto((v) => !v)}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-texto/40 transition hover:bg-black/5"
+              className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-texto/70 transition hover:bg-black/5"
+              aria-expanded={gestaoAberto}
             >
-              <span>Gestão</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`transition-transform ${gestaoAberto ? 'rotate-90' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`shrink-0 transition-transform ${gestaoAberto ? 'rotate-90' : ''}`}>
                 <polyline points="9 6 15 12 9 18" />
               </svg>
+              <span>Gestão</span>
             </button>
-            {gestaoAberto && <div className="mt-1 space-y-1">{gestaoVisivel.map(renderItem)}</div>}
+            {gestaoAberto && (
+              <div className="ml-3 mt-1 space-y-1 border-l border-black/10 pl-2">
+                {gestaoVisivel.map(renderItem)}
+              </div>
+            )}
           </div>
         )}
       </nav>
