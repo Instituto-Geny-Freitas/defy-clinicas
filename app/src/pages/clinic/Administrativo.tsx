@@ -64,7 +64,7 @@ export default function Administrativo() {
           </button>
           {FORM_GROUPS.map((g) => (
             <div key={g} className="mt-3">
-              <div className="px-3 pb-1 text-xs font-bold uppercase tracking-wide text-texto">{g}</div>
+              <div className="px-3 pb-1 text-xs font-bold uppercase tracking-wide text-black">{g}</div>
               {forms.filter((f) => f.grupo === g).map((f) => (
                 <button key={f.chave} onClick={() => setSel(f.chave)}
                   className={`mb-1 block w-full rounded-lg px-3 py-2 text-left text-sm transition ${sel === f.chave ? 'bg-primaria text-white' : 'text-texto/70 hover:bg-black/5'}`}>
