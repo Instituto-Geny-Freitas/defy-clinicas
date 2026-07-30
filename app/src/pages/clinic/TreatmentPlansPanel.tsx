@@ -21,6 +21,11 @@ import {
 import { brl, listQuotes, type Quote } from '@/lib/finance'
 import { currentProcedurePrices, listActiveIngredients, listProcedureTypes } from '@/lib/domains'
 import { formatDateBR } from '@/lib/format'
+import { useAuth } from '@/auth/AuthProvider'
+import { getClinic, type ClinicFull } from '@/lib/settings'
+import { getPatient } from '@/lib/patients'
+import type { Patient } from '@/lib/types'
+import { buildPlanoPdf } from '@/lib/planoPdf'
 
 interface CatalogoOpt { id: string; nome: string; preco: number }
 interface ItemDraft { id?: string; tipo: 'procedimento' | 'suplementacao'; refId: string; nome: string; preco_unit: number; sessoes: number; frequencia: string }
@@ -48,6 +53,18 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
   const [editando, setEditando] = useState<TreatmentPlan | 'novo' | null>(null)
   const [itensPorPlano, setItensPorPlano] = useState<Record<string, PlanItem[]>>({})
   const [realizadas, setRealizadas] = useState<Record<string, number>>({})
+  const { profile } = useAuth()
+  const [clinic, setClinic] = useState<ClinicFull | null>(null)
+  const [paciente, setPaciente] = useState<Patient | null>(null)
+
+  useEffect(() => {
+    getClinic().then(setClinic).catch(() => {})
+    getPatient(patientId).then(setPaciente).catch(() => {})
+  }, [patientId])
+
+  function gerarPdf(p: TreatmentPlan, modo: 'download' | 'imprimir') {
+    buildPlanoPdf({ clinic, paciente, profissional: profile?.professional, plano: p, itens: itensPorPlano[p.id] ?? [] }, modo)
+  }
 
   function recarregar() {
     listTreatmentPlans(patientId).then((ps) => {
@@ -103,6 +120,8 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
+                  <button onClick={() => gerarPdf(p, 'download')} className="text-xs font-medium text-texto/60 hover:underline">PDF</button>
+                  <button onClick={() => gerarPdf(p, 'imprimir')} className="text-xs font-medium text-texto/60 hover:underline">Imprimir</button>
                   <button onClick={() => setEditando(p)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
                   <button onClick={async () => { if (confirm('Excluir este plano?')) { await deleteTreatmentPlan(p.id); recarregar() } }} className="text-xs text-secundaria hover:underline">Excluir</button>
                 </div>
