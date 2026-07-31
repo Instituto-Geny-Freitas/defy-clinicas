@@ -103,6 +103,27 @@ export async function listAtivoLotes(): Promise<AtivoLote[]> {
 }
 
 /**
+ * Preço de venda "vigente" por ativo, derivado dos LOTES.
+ * Os ativos migraram com preco_venda = 0 (o preço real vive em cada lote), então
+ * para MENSURAR (plano/pacote) usamos o preço de um lote DISPONÍVEL (com saldo),
+ * preferindo o de validade mais próxima (FEFO — o próximo a ser usado); se não
+ * houver lote com saldo, usa qualquer lote com preço. No procedimento/suplementação
+ * efetivo o profissional escolhe o lote do estoque (o valor pode diferir).
+ */
+export async function currentAtivoSalePrices(): Promise<Record<string, number>> {
+  const lotes = await listAtivoLotes() // já ordenado por validade asc (FEFO)
+  const comSaldo: Record<string, number> = {}
+  const qualquer: Record<string, number> = {}
+  for (const l of lotes) {
+    const preco = Number(l.preco_venda) || 0
+    if (preco <= 0) continue
+    if (!(l.ativo_id in qualquer)) qualquer[l.ativo_id] = preco
+    if (Number(l.qtd_atual) > 0 && !(l.ativo_id in comSaldo)) comSaldo[l.ativo_id] = preco
+  }
+  return { ...qualquer, ...comSaldo } // lote com saldo tem prioridade
+}
+
+/**
  * Entrada de estoque de ATIVO por lote: soma no mesmo lote (fornecedor+lote+validade)
  * ou cria um novo. O gatilho atualiza o saldo do lote.
  */
