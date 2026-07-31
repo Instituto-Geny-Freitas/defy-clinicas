@@ -5,7 +5,7 @@ import {
   listPackageRealizacoes, packageItemsRealizadas, savePackageItems, updatePackage,
   type PackageItem, type PackageItemInput, type PackageRealizacao, type PackageSession, type TreatmentPackage,
 } from '@/lib/packages'
-import { currentProcedurePrices, listActiveIngredients, listProcedureTypes } from '@/lib/domains'
+import { currentAtivoSalePrices, currentProcedurePrices, listActiveIngredients, listProcedureTypes } from '@/lib/domains'
 import { listQuotes, brl, type Quote } from '@/lib/finance'
 import { formatDateBR, localDateToday } from '@/lib/format'
 import { Shell, Footer } from './TreatmentPlansPanel'
@@ -184,9 +184,9 @@ export function PacoteModal({ clinicId, patientId, professionalId, pacote, tipoI
   const [erro, setErro] = useState('')
 
   useEffect(() => {
-    Promise.all([listProcedureTypes(), currentProcedurePrices(), listActiveIngredients()]).then(([tipos, precos, ativos]) => {
+    Promise.all([listProcedureTypes(), currentProcedurePrices(), listActiveIngredients(), currentAtivoSalePrices()]).then(([tipos, precos, ativos, precosAtivo]) => {
       setProcOpts(tipos.map((t) => ({ id: t.id, nome: t.nome, preco: precos[t.id]?.valor ?? 0 })))
-      setSuplOpts(ativos.map((a) => ({ id: a.id, nome: a.nome, preco: Number(a.preco_venda) || 0 })))
+      setSuplOpts(ativos.map((a) => ({ id: a.id, nome: a.nome, preco: precosAtivo[a.id] || Number(a.preco_venda) || 0 })))
     }).catch(() => {})
     listQuotes(patientId).then(setOrcamentos).catch(() => {})
     if (pacote) listPackageItems(pacote.id).then((its) => {
