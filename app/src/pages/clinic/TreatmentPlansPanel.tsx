@@ -20,7 +20,7 @@ import {
 } from '@/lib/treatmentPlans'
 import { brl, listQuotes, type Quote } from '@/lib/finance'
 import { currentAtivoSalePrices, currentProcedurePrices, listActiveIngredients, listProcedureTypes } from '@/lib/domains'
-import { formatDateBR } from '@/lib/format'
+import { formatDateBR, localDateToday } from '@/lib/format'
 import { useAuth } from '@/auth/AuthProvider'
 import { getClinic, type ClinicFull } from '@/lib/settings'
 import { getPatient } from '@/lib/patients'
@@ -63,7 +63,7 @@ export default function TreatmentPlansPanel({ patientId, clinicId, professionalI
   }, [patientId])
 
   function gerarPdf(p: TreatmentPlan, modo: 'download' | 'imprimir') {
-    buildPlanoPdf({ clinic, paciente, profissional: profile?.professional, plano: p, itens: itensPorPlano[p.id] ?? [] }, modo)
+    buildPlanoPdf({ clinic, paciente, profissional: profile?.professional, plano: p, itens: itensPorPlano[p.id] ?? [], valorOrcamento: valorDoPlano(p.id) }, modo)
   }
 
   function recarregar() {
@@ -184,6 +184,7 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
   const editando = !!plano
   const [titulo, setTitulo] = useState(plano?.titulo ?? '')
   const [texto, setTexto] = useState(plano?.texto ?? '')
+  const [data, setData] = useState(plano?.data ? plano.data.slice(0, 10) : localDateToday())
   const [snippets, setSnippets] = useState<TextSnippet[]>([])
   const [salvando, setSalvando] = useState(false)
   const [iaInstrucao, setIaInstrucao] = useState('')
@@ -240,7 +241,7 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
     if (!texto.trim() && itensValidos.length === 0) { setErroItens('Preencha o Conteúdo do plano ou adicione ao menos um item.'); return }
     if (itensValidos.some((i) => !(i.sessoes > 0))) { setErroItens('Informe as sessões (maior que zero) de cada item.'); return }
     setSalvando(true); setErroItens(null)
-    const dados = { titulo: titulo || null, texto }
+    const dados = { titulo: titulo || null, texto, data: data || localDateToday() }
     try {
       const planId = editando && plano
         ? (await updateTreatmentPlan(plano.id, dados), plano.id)
@@ -258,7 +259,10 @@ function Modal({ clinicId, patientId, professionalId, plano, onClose, onSaved }:
   return (
     <Shell titulo={editando ? 'Editar plano de tratamento' : 'Novo plano de tratamento'} onClose={onClose}>
       <div className="space-y-3">
-        <div><label className="mb-1 block text-sm text-texto/70">Título</label><input className={field} value={titulo} onChange={(e) => setTitulo(e.target.value)} /></div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr,10rem]">
+          <div><label className="mb-1 block text-sm text-texto/70">Título</label><input className={field} value={titulo} onChange={(e) => setTitulo(e.target.value)} /></div>
+          <div><label className="mb-1 block text-sm text-texto/70">Data do plano</label><input type="date" className={field} value={data} onChange={(e) => setData(e.target.value)} /></div>
+        </div>
         {snippets.length > 0 && (
           <div>
             <label className="mb-1 block text-sm text-texto/70">Inserir texto-padrão</label>

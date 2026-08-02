@@ -39,6 +39,7 @@ import {
   deleteProcedureType,
   deleteRoute,
   deleteSupplier,
+  currentAtivoSalePrices,
   currentProcedurePrices,
   listActiveIngredients,
   listAtivoLotes,
@@ -289,6 +290,8 @@ function DocumentTypesSection({ clinicId }: { clinicId: string }) {
 // --- Ativos de composição ---------------------------------------------------
 function AtivosSection({ clinicId }: { clinicId: string }) {
   const [itens, setItens] = useState<ActiveIngredient[]>([])
+  // Preço de venda derivado dos LOTES (o cadastro do ativo pode estar zerado).
+  const [precosLote, setPrecosLote] = useState<Record<string, number>>({})
   const [filtro, setFiltro] = useState<AtivoCategoria | ''>('')
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState<ActiveIngredient | 'novo' | null>(null)
@@ -298,7 +301,10 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
   const [qtdCustom, setQtdCustom] = useState('')             // valor "outro"
   const [pagina, setPagina] = useState(0)                    // página (0-based)
 
-  function recarregar() { listActiveIngredients().then(setItens).catch(() => {}) }
+  function recarregar() {
+    listActiveIngredients().then(setItens).catch(() => {})
+    currentAtivoSalePrices().then(setPrecosLote).catch(() => {})
+  }
   useEffect(recarregar, [])
 
   // Iniciais que existem dentro da categoria filtrada (para desabilitar letras vazias)
@@ -427,7 +433,10 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
                 <td className="px-3 py-1.5 text-texto/60">{a.fornecedor ?? '—'}</td>
                 <td className="px-3 py-1.5 text-texto/60">{brl(a.preco_aquisicao)}</td>
                 <td className="px-3 py-1.5 text-texto/60">{a.margem_pct}%</td>
-                <td className="px-3 py-1.5 font-medium text-texto">{brl(a.preco_venda)}</td>
+                <td className="px-3 py-1.5 font-medium text-texto">
+                  {brl(precosLote[a.id] || Number(a.preco_venda) || 0)}
+                  {precosLote[a.id] > 0 && !(Number(a.preco_venda) > 0) && <span className="ml-1 text-[10px] font-normal text-texto/40">(lote)</span>}
+                </td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">
                   <button onClick={() => setEditando(a)} className="mr-3 text-xs font-medium text-primaria hover:underline">Editar</button>
                   <button onClick={() => remover(a.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
