@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { localDateToday } from '@/lib/format'
 
 export type PlanStatus = 'rascunho' | 'pendente' | 'consentido' | 'cancelado'
 
@@ -173,6 +174,7 @@ interface CreateArgs {
   professionalId?: string | null
   titulo?: string | null
   texto: string
+  data?: string | null
   num_sessoes?: number | null
   frequencia?: string | null
   valor_total?: number | null
@@ -190,7 +192,7 @@ export async function suggestPlanIA(patientId: string, instrucao?: string): Prom
 
 export async function updateTreatmentPlan(
   id: string,
-  patch: { titulo?: string | null; texto?: string; num_sessoes?: number | null; frequencia?: string | null; valor_total?: number | null },
+  patch: { titulo?: string | null; texto?: string; data?: string | null; num_sessoes?: number | null; frequencia?: string | null; valor_total?: number | null },
 ): Promise<void> {
   const { error } = await supabase.from('treatment_plans').update(patch).eq('id', id)
   if (error) throw error
@@ -210,6 +212,7 @@ export async function createTreatmentPlan(args: CreateArgs): Promise<TreatmentPl
       professional_id: args.professionalId ?? null,
       titulo: args.titulo ?? null,
       texto: args.texto,
+      data: args.data ?? localDateToday(),
       num_sessoes: args.num_sessoes ?? null,
       frequencia: args.frequencia ?? null,
       valor_total: args.valor_total ?? null,
