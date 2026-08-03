@@ -5,7 +5,7 @@ Aplicação web responsiva (PWA): funciona no computador e no celular, e pode se
 "instalada" na tela inicial do aparelho, já com a **logo, o nome e as cores** da
 clínica (identidade visual).
 
-> **Acesso:** `https://defy-clinicas.vercel.app`
+> **Acesso:** `https://app-institutogenyfreitas.vercel.app`
 
 ---
 
@@ -39,7 +39,14 @@ Os papéis são **configuráveis** (Configurações → Papéis): cada papel apo
 
 ## 2. Primeira configuração (o que fazer antes de usar)
 
-Acesse **Configurações** (menu lateral, somente admin). As abas são:
+Acesse **Configurações** (menu lateral, em **GESTÃO** — somente admin). As abas estão
+organizadas em dois grupos, e cada título **expande ou recolhe** os seus itens:
+
+- **NEGOCIAL** — Identidade visual · Equipe · Disponibilidade · **Procedimentos** · Metas ·
+  Ativos · Formulários (Admin) · Textos-padrão · Fórmulas · Indicação · Fidelidade · LGPD ·
+  Termo de Imagem
+- **SISTEMA** — Fornecedores · Papéis · Permissões · Exames · Recursos · Serviços Prestados ·
+  Unidades · Tipos de Despesa · Tipos de Documentos · Vacinas · Vias · Integrações
 
 ### 2.1 Identidade visual
 - Envie o **logo** da clínica e clique em **Salvar**.
@@ -102,9 +109,14 @@ As mudanças se aplicam **na hora** (menu e abas se ajustam; a aba ativa muda se
 ### 2.7 Ativos (composição de fórmulas)
 - Catálogo de **ativos** das fórmulas manipuladas, classificados em **Ativos Gerais,
   Vitaminas, Esclerosantes e Anestésicos**, com **filtro por categoria** + busca.
+- **Busca por nome**, **filtro A–Z** e **paginação** (Mostrar 20/50/100 ou outro).
 - **CRUD completo** (criar/editar/excluir). Cada ativo tem: código, nome, categoria,
-  **apresentação/Via** (domínio), **fornecedor** (domínio), **lote**, **validade**,
-  **preço de aquisição**, **margem (%)** e **preço de venda** (calculado pela margem).
+  **apresentação/Via** (domínio) e **unidade**; **fornecedor, lote, validade, preço de
+  aquisição, margem (%) e preço de venda** ficam em cada **lote** (um mesmo ativo pode ter
+  lotes de fornecedores/validades diferentes). Use **+ Entrada** para lançar um lote.
+- A coluna **Venda** mostra o preço do **lote disponível** (marcado com *(lote)*) quando o
+  cadastro do ativo está sem valor. Esse é o preço usado para **mensurar** planos e pacotes;
+  na suplementação efetiva o profissional escolhe o **lote do estoque** no momento.
 
 ### 2.8 Vias
 - Domínio das **vias de administração / local** (ex.: Oral, Endovenosa). CRUD.
@@ -117,9 +129,18 @@ As mudanças se aplicam **na hora** (menu e abas se ajustam; a aba ativa muda se
 - Biblioteca de **fórmulas manipuladas** (nome, forma, composição e posologia). O admin
   monta as fórmulas aqui; na ficha do paciente a profissional apenas **designa** pelo nome.
 
-### 2.11 Procedimentos
+### 2.11 Procedimentos (com preço, vigência e histórico)
 - Lista dos **tipos de procedimento** (ex.: Skinbooster PDRN, Toxina botulínica…),
-  usada como domínio ao registrar um atendimento. CRUD.
+  usada como domínio ao registrar um atendimento e nos **itens do Plano/Pacote**.
+- **Busca por nome**, **filtro A–Z** e **paginação** (Mostrar 20/50/100 ou outro).
+- **+ Novo Procedimento:** abre a janela de cadastro com **Nome**, **Valor (opcional)** e
+  **Vigência a partir de**.
+- **Ajustar valor:** informe um **reajuste (%)** — o sistema calcula sobre o valor vigente —
+  ou digite o **novo valor**, com a **vigência**. Nada muda retroativamente.
+- **Histórico:** lista todos os preços por vigência, com o **reajuste aplicado**, o valor
+  anterior e **quem ajustou**.
+- O preço vigente é o que **preenche automaticamente** o valor do procedimento avulso e o
+  preço dos itens do Plano/Pacote (que ficam **congelados** no plano — snapshot).
 
 ### 2.12 Tipos de Despesa
 - Tipos usados no fluxo de caixa (ex.: Aluguel, Insumos, Energia). Cada tipo é
@@ -153,18 +174,36 @@ Configure os horários de atendimento de cada profissional. Na aba **Disponibili
 
 ## 3. Navegação geral (Área da Clínica)
 
-Menu lateral (no celular, abre pelo menu):
+No alto de toda tela há uma **barra superior** com o **nome do usuário** e o botão **Sair**
+(canto direito). No celular, o menu lateral abre pelo ícone ☰ à esquerda.
+
+Menu lateral — itens do dia a dia:
 
 | Item | Para quê |
 |------|----------|
-| **Dashboard** | Visão do dia: pacientes, consultas de hoje, documentos pendentes, a receber e alertas de estoque |
-| **Agenda** | Agendamentos, calendário e busca por data |
+| **Assistente** | Operar por conversa (agenda, financeiro, leads, alertas) |
+| **Dashboard** | Visão do dia: pacientes, consultas de hoje, documentos pendentes, a receber, alertas de estoque e **indicações a recompensar** |
+| **Agenda** | Agendamentos, calendário, busca por data e a aba **Atividades do dia** (uso interno) |
 | **Pacientes** | Cadastro e prontuário completo |
-| **Modelos de Documentos** | Criar/editar termos e orientações |
-| **Estoque** | Produtos, lotes, validade, margem |
+| **Relacionamento** | Aniversariantes, NPS e ações de relacionamento |
+| **Comercial** | Funil de leads (CRM) |
 | **Financeiro** | Fluxo de caixa: receitas, despesas, caixa, balanço e relatório |
 | **Relatórios** | Faturamento, estoque, atendimentos e **Mapa financeiro mensal** |
+
+Abaixo há o grupo **GESTÃO** — clique no título para **expandir ou recolher** os subitens:
+
+| Subitem de GESTÃO | Para quê |
+|-------------------|----------|
+| **Administrativo** | Formulários de qualidade e biossegurança (cap. 14) |
+| **Estoque** | Produtos, lotes, validade, margem |
 | **Configurações** | Ajustes da clínica (só admin) |
+| **Reuniões Internas** | Agendamento, convocação e **atas** das reuniões da equipe (cap. 16) |
+| **Atividades Internas** | Tarefas internas da equipe, com responsável e prazo (cap. 16) |
+| **Modelos de Documentos** | Criar/editar termos e orientações |
+
+> Cada item aparece conforme as **permissões** do nível de acesso (cap. 2.4).
+> **Reuniões** e **Atividades Internas** são de **uso interno** — nunca aparecem no
+> Portal do Paciente.
 
 ---
 
@@ -240,28 +279,36 @@ o vínculo com um paciente já cadastrado, sem precisar remarcar o horário.
 ### 5.2 Ficha do paciente (abas)
 Clique num paciente para abrir a ficha. No topo, **Editar** abre o cadastro.
 
+As abas seguem esta ordem:
+
 | Aba | O que faz |
 |-----|-----------|
 | **Resumo** | Dados pessoais, idade, status do consentimento LGPD |
 | **Agenda** | Agendamentos **deste paciente** + calendário só dele; realizados/cancelados ficam no fim da lista |
+| **Financeiro** | Orçamentos (vinculados a um **Plano** ou a um **Pacote**), pagamentos, saldo e **gerar/enviar orçamento em PDF** ao paciente |
+| **Plano** | Plano de tratamento com **itens** (procedimentos/suplementações), **sessões e frequência por item**, texto livre, **textos-padrão**, **Sugerir com IA**, **PDF/Imprimir** e **envio ao paciente para ciência** |
+| **Pacotes** | Pacotes de sessões **pré-pagos** (procedimentos **ou** suplementações), com itens, desconto e saldo por item |
+| **Procedimentos** | Registra o atendimento; **Editar/Excluir**, **CRUD de produtos** (baixa/estorno de estoque), vínculo a Orçamento, **item de Plano/Pacote** (consome sessão) ou **valor avulso** |
+| **Suplementação** | Medicação pelo **domínio de Ativos** (preenche fornecedor/lote/validade/valor de venda), vínculo a item de Plano/Pacote, indicador **Pago/Não pago**, **Editar/Excluir** |
+| **Manipulação** | **Designar fórmulas** da biblioteca e **gerar a receita em PDF** (enviar ao paciente e ao fornecedor) |
+| **Documentos** | Emitir termos/orientações, **assinar**, **gerar PDF** e **editar** |
 | **Anamnese** | Ficha clínica completa: hábitos, queixas, histórico de saúde, **profissão**, **estilo de trabalho** e **alergias** (também preenchida pelo próprio paciente no portal) |
 | **Avaliações** | Fichas Dermato Funcional, Capilar e Corporal (escalas e perimetria) |
-| **Plano** | Plano de tratamento — texto livre, **textos-padrão** e **Sugerir com IA**. Editar/excluir |
-| **Procedimentos** | Registra o atendimento; **Editar/Excluir**, **CRUD de produtos** (baixa/estorno de estoque), vínculo a Orçamento ou **valor avulso** |
-| **Medidas** | Peso, IMC, gordura etc. por sessão, com **gráfico de evolução** |
-| **Suplementação** | Medicação pelo **domínio de Ativos** (preenche fornecedor/lote/validade/valor de venda), indicador **Pago/Não pago**, **Editar/Excluir** |
-| **Manipulação** | **Designar fórmulas** da biblioteca e **gerar a receita em PDF** (enviar ao paciente e ao fornecedor) |
 | **Exames** | **Requisição em PDF (A4)**, **anexar resultados** no dossiê |
+| **Medidas** | Peso, IMC, gordura etc. por sessão, com **gráfico de evolução** e a **variação de peso** (kg e %) entre sessões |
 | **Fotos** | Fotos clínicas antes/depois/evolução (bucket privado) |
-| **Documentos** | Emitir termos/orientações, **assinar**, **gerar PDF** e **editar** |
-| **Financeiro** | Orçamentos (vinculados a um Plano), pagamentos, saldo e **gerar/enviar orçamento em PDF** ao paciente |
 | **Relatórios** | Relatórios que o **paciente gerou** — visualizar e baixar |
 
 ### 5.3 Encadeamento Plano → Orçamento → Procedimento
-1. **Crie o Plano** (aba Plano).
-2. **Crie o Orçamento** (aba Financeiro) e **vincule-o ao Plano**.
-3. Ao **Registrar o Procedimento**, escolha o **Plano** e o **Orçamento**; ou deixe
-   **sem orçamento** e informe um **Valor a cobrar** (procedimento **avulso**).
+1. **Crie o Plano** (aba Plano) e adicione os **itens** (cada procedimento/suplementação
+   com suas **sessões**, **frequência** e preço do cadastro).
+2. **Crie o Orçamento** (aba Financeiro → **Novo orçamento** → *Plano / avulso*) e
+   **selecione o Plano**: os itens do plano entram no orçamento com o valor de cada um,
+   e o **Total** já reflete o plano. Aplique o **Desconto** se houver — o paciente pode
+   **pagar o plano antecipadamente**.
+3. Ao **Registrar o Procedimento**, escolha o **Plano** e o **Orçamento** e, no campo
+   **Item do plano**, o item que está sendo realizado (**consome uma sessão**); ou deixe
+   **sem vínculo** e informe um **Valor a cobrar** (procedimento **avulso**).
 
 ### 5.4 Procedimentos avulsos e importação no orçamento
 - Sem plano/orçamento, informe o **Valor a cobrar** no procedimento (selo *Avulso*).
@@ -306,6 +353,71 @@ totalmente editáveis.
   **Configurações → Exames** (ver item 2.14).
 - **Resultados:** o profissional pode **anexar** PDF/imagem no dossiê do paciente (e o
   paciente também pode enviar pelo portal).
+
+### 5.8 Plano de tratamento: itens, sessões e controle de saldo
+
+O plano deixou de ser só um texto: ele tem **itens**, e é por eles que o sistema controla o
+tratamento.
+
+- **+ Procedimento / + Suplementação:** cada item traz o **preço do cadastro**
+  (procedimento: preço vigente; suplementação: preço do **lote disponível** do Ativo) e você
+  define **Sessões** e **Frequência** (Sessão única, Semanal, 2x por semana, Quinzenal,
+  Mensal, Bimestral, Trimestral, Semestral, Anual). O modal mostra o **Total dos itens**.
+- **Conteúdo** (texto) é opcional quando há ao menos um item — e vice-versa.
+- **Data do plano:** editável no modal (use para corrigir a data quando necessário).
+- **Controle de sessões:** ao registrar um procedimento/suplementação vinculado a um item,
+  o sistema **baixa uma sessão** e mostra o andamento (ex.: `2/5 sessões`). Item **esgotado
+  não pode ser vinculado** — nesse caso, crie um **novo orçamento (avulso)**. Excluir o
+  registro **devolve** a sessão.
+- **PDF / Imprimir:** gera o plano com **cabeçalho da clínica** (nome, CNPJ, responsável
+  técnico, contato), a **tabela de itens** (sessões, frequência, valor unitário, subtotal e
+  total), o **orçamento vinculado com o desconto e o valor negociado**, e no rodapé os
+  **dados do profissional** (nome + conselho) e a **data/hora de geração**.
+- **Enviar ao paciente:** o plano vai ao portal para o paciente **dar ciência**
+  (fica *Aguardando ciência* → *Consentido*, com autenticação). A equipe também pode
+  **Registrar consentimento** quando ele for dado presencialmente.
+
+### 5.9 Pacotes de sessões (pré-pagos)
+
+- **Aba Pacotes → + Novo pacote:** escolha o **tipo** (só **Procedimentos** *ou* só
+  **Suplementações**), adicione os **itens**, informe as **Sessões compradas** (cada item é
+  realizado essa quantidade de vezes) e o **Desconto** (R$ ou %). O sistema mostra
+  subtotal → desconto → **Total do pacote**.
+- **Cobrança:** em **Financeiro → Novo orçamento → Pacote (pré-pago)**, escolha o pacote —
+  o orçamento entra com **uma linha: o total negociado**, para o paciente **pagar
+  antecipadamente**. Os itens **não são cobrados por linha**.
+- **Uso das sessões:** ao registrar um procedimento/suplementação, selecione o **Pacote** e
+  o **item** — o sistema baixa a sessão, registra a **data** e lista a realização **no
+  pacote e no orçamento** ("incluso no pacote").
+- **Trava de preço (pacote de suplementação):** os valores das medicações ficam
+  **congelados na criação** do pacote. Se o preço mudar depois, a diferença **não é cobrada
+  nem estornada** — o paciente pagou antecipado pelo valor da época.
+- **Pacote de procedimentos:** as **sessões** são pré-pagas, mas os **produtos de estoque**
+  usados em cada atendimento são cobrados **na realização** (ver 5.11).
+- Atalho **+ Novo pacote** também aparece dentro dos modais de procedimento e suplementação.
+
+### 5.10 Preço do procedimento e valor avulso
+
+- O preço de cada procedimento vive em **Configurações → Procedimentos**, com **vigência e
+  histórico** (ver 2.11).
+- Ao **Registrar procedimento**, escolher o tipo **preenche automaticamente** o
+  *Valor a cobrar* com o **preço vigente** (editável; há o atalho *usar preço vigente*).
+- **Avulso = sem nenhum vínculo** (sem orçamento, sem item de plano e sem item de pacote).
+  Só nesse caso existem *Valor a cobrar* e **Recorrência recomendada** — assim uma sessão
+  já paga no plano/pacote **nunca é cobrada duas vezes**.
+- Registros **vinculados** a item de plano/pacote **não aparecem** em
+  *Importar procedimentos avulsos* / *Importar suplementações não pagas* (proteção contra
+  cobrança dupla).
+
+### 5.11 Produtos não previstos → orçamento complementar
+
+Quando um procedimento vinculado a um **orçamento/pacote já pago** usa **produtos com valor
+de venda**, o modal pergunta: **"os produtos já estavam previstos?"**
+
+- **Sim** (padrão) — nada acontece.
+- **Não** — ao salvar, o sistema **propõe** um **orçamento complementar** (em **rascunho**)
+  listando os produtos e o total. A equipe revisa e envia em **Financeiro**.
+  **Nada é cobrado automaticamente.**
 
 ---
 
@@ -570,13 +682,32 @@ temperatura do refrigerador, higienização de equipamentos, limpeza de ambiente
 - Clique em **PDF** na barra de filtros para gerar o relatório do período selecionado,
   com cabeçalho da clínica e assinatura do responsável técnico.
 
-### 14.5 Personalizar formulários (Configurações → Administrativo)
+### 14.5 Personalizar formulários (Configurações → Formulários (Admin))
 O admin pode **personalizar** qualquer formulário padrão:
 - Renomear campos, alterar a obrigatoriedade, adicionar opções de seleção ou remover campos.
 - A personalização **substitui completamente** a definição padrão daquele formulário;
   se precisar voltar ao padrão, use o botão **Restaurar padrão**.
 - Os dados já gravados nos registros anteriores **não são apagados** — a personalização
   afeta apenas a exibição e o formulário de criação/edição.
+
+**Tipos de campo disponíveis:** Texto, Texto longo, Número, Data, Hora, Sim/Não,
+Lista (uma opção), Lista (várias), Upload de arquivo, **Ativo (produto)**, **Profissional**,
+**Paciente** e **Registro de outro formulário**.
+
+#### Campo "Registro de outro formulário" (relacionar registros)
+Faz um campo **listar os registros de outro formulário**, para o usuário **selecionar** em
+vez de digitar. Ao escolher esse tipo, defina:
+1. **Formulário referenciado** — a lista **exclui o formulário atual** (evita
+   auto-referência).
+2. **Campo exibido** — qual campo do formulário de origem aparece na lista.
+
+*Exemplo:* no formulário **Esterilização**, mude o campo **Equipamento** para
+*Registro de outro formulário → Equipamentos* (campo exibido: *Nome do aparelho*). A partir
+daí o usuário escolhe o equipamento já cadastrado.
+
+> O campo guarda o **texto** selecionado (como já ocorre com *Ativo* e *Profissional*).
+> Assim, excluir ou renomear o registro de origem **não apaga nem quebra** os registros que
+> já o citaram. Registros antigos preservam o que foi digitado.
 
 ---
 
@@ -617,7 +748,67 @@ do sistema pela conversa, **com o mesmo login** e as mesmas permissões da equip
 
 ---
 
-*Este manual cobre as funcionalidades desenvolvidas até **julho de 2026**, incluindo recorrência de
-retornos, NPS, indicação, fidelidade/cashback, relacionamento, gestão financeira, agenda semanal,
-agendamento online e o CRM comercial. Itens em evolução: cobrança PIX automática, **envio por
-WhatsApp** e a operação **multi-clínica** (ver `docs/ROADMAP-multiclinica.md`).*
+## 16. Gestão interna: Reuniões e Atividades
+
+Duas telas no grupo **GESTÃO** para a operação da equipe. **Nada aqui aparece no Portal do
+Paciente.**
+
+### 16.1 Reuniões Internas
+
+Agendamento, convocação e **ata** das reuniões da clínica.
+
+- **+ Nova reunião:** **Título**, **Data**, **Hora**, **Status** (Agendada / Realizada /
+  Cancelada), **Tópicos** e **Participantes** (marque quem vai — há o atalho **Todos**).
+- **Ata:** campo de texto livre, preenchido/ajustado pelo responsável.
+- **PDF da ata:** cabeçalho da clínica, participantes, tópicos e a ata.
+- **Convocação:** os participantes veem a reunião na **Agenda → aba Atividades do dia**
+  (seção *Reuniões do dia*), com o botão **Confirmar presença** e link para a ata.
+- **Minha participação** (para quem foi convocado, na tela da reunião):
+  **Confirmar presença**, **Dar ciência** e **Manifestação** (registrar pontos/observações).
+- **Atividades desta reunião:** gere as tarefas decididas na reunião informando
+  **título, responsável e data acordada**. Elas aparecem também em **Atividades Internas**
+  com a origem **Reunião**. Excluir a reunião **preserva** as atividades geradas.
+- **Quem pode criar/convocar:** definido pela permissão **"Convocar / gerenciar reuniões"**
+  (Configurações → Permissões, grupo **Ações**). O **Admin** sempre pode; os demais níveis
+  são liberados pelo admin. Quem não tem a permissão **visualiza** a reunião e a ata e pode
+  **gerar o PDF**.
+
+### 16.2 Atividades Internas
+
+Controle central das tarefas da equipe — vindas de reuniões, designadas pelo Admin ou
+criadas pelo próprio membro para o seu dia a dia.
+
+- **+ Nova atividade:** **Título**, **Descrição**, **Data**, **Hora**, **Responsável**,
+  **Status** e **Data efetivada**.
+- **Status:** **Pendente**, **Executado** (registra a data efetivada) ou **Redirecionado**
+  (quando a tarefa é repassada a outro responsável e/ou remarcada). Há um seletor de status
+  direto na lista e o atalho de filtro por status no topo.
+- **Origem** de cada atividade: **Admin**, **Membro** ou **Reunião**.
+- **Quem pode o quê:**
+
+| Perfil | Pode |
+|--------|------|
+| **Admin** | Criar, editar e excluir **todas**; ver o histórico de ajustes |
+| **Membro** | Ver as **atribuídas a si** e as **que criou**; editar/excluir **só as que criou** |
+| **Responsável** | Mesmo sem ser o criador, pode **alterar o status** (executado/redirecionado) da tarefa que lhe foi atribuída |
+
+- **Log de ajustes:** as atividades criadas pelo **Admin** guardam o **histórico**
+  (campo alterado, de → para, quem alterou e quando), visível na edição.
+- **Vínculo com o Administrativo:** uma atividade pode apontar para um **registro
+  administrativo** (ex.: a tarefa "medir temperatura" ligada ao registro do formulário
+  *Temperatura do Refrigerador*). Escolha **Formulário → Registro**; o card mostra
+  *🔗 registro vinculado*. Excluir o registro apenas **desfaz o vínculo**.
+- **Na Agenda:** a aba **Atividades do dia** mostra (somente leitura) as atividades da data
+  escolhida — hora, título, status, origem e responsável — com link **Gerenciar atividades**.
+
+---
+
+*Este manual cobre as funcionalidades desenvolvidas até **agosto de 2026**: recorrência de retornos
+(com data-limite), NPS, indicação, fidelidade/cashback, relacionamento, gestão financeira, agenda
+semanal, agendamento online, CRM comercial, o módulo **Administrativo** (formulários configuráveis,
+inclusive campos que referenciam outros formulários), o módulo **clínico-financeiro** (preço de
+procedimento com vigência e histórico, planos com itens e controle de sessões, pacotes pré-pagos com
+trava de preço, orçamento complementar de produtos) e a **gestão interna** (Reuniões com ata/PDF e
+Atividades Internas). Itens em evolução: **transcrição de áudio da reunião por IA** para compor a
+ata, cobrança PIX automática, **envio por WhatsApp** e a operação **multi-clínica**
+(ver `docs/ROADMAP-multiclinica.md`).*

@@ -204,10 +204,13 @@
     <div class="where"><b>Onde fica:</b> <span class="sep">›</span> ficha do paciente <span class="sep">›</span> aba <b>Pacotes</b> <span class="sep">·</span> paciente vê em <b>“Meus pacotes”</b> no portal</div>
     <p class="block-label">Como usar</p>
     <ol class="steps">
-      <li>Na aba <b>Pacotes</b>, cadastre o pacote: procedimento, nº de sessões e valor.</li>
-      <li>Conforme as sessões são realizadas, acompanhe <b>compradas × realizadas × restantes</b>.</li>
+      <li>Na aba <b>Pacotes</b>, clique em <b>+ Novo pacote</b>: escolha o <b>tipo</b> (só procedimentos <i>ou</i> só suplementações), adicione os <b>itens</b>, as <b>sessões compradas</b> e o <b>desconto</b> (R$ ou %).</li>
+      <li>Cobre o pacote em <b>Financeiro › Novo orçamento › Pacote (pré-pago)</b>: o orçamento entra com o <b>total negociado</b>, para o paciente <b>pagar antecipadamente</b>.</li>
+      <li>Ao registrar um procedimento/suplementação, selecione o <b>Pacote</b> e o <b>item</b> — o sistema <b>baixa a sessão</b>, guarda a data e lista a realização no pacote e no orçamento.</li>
+      <li>Acompanhe o saldo por item (ex.: <b>2/10 sessões</b>). Item esgotado não pode ser vinculado — crie um novo orçamento avulso.</li>
       <li>O paciente vê o progresso e o valor do pacote no portal.</li>
     </ol>
+    <p class="note"><b>Pacote de suplementação:</b> os valores ficam <b>travados na criação</b> — se o preço da medicação mudar depois, a diferença não é cobrada nem estornada. <b>Pacote de procedimentos:</b> as sessões são pré-pagas, mas produtos de estoque usados no atendimento são cobrados na hora (o sistema propõe um orçamento complementar quando não estavam previstos).</p>
   </section>
 
   <section class="feature">
@@ -317,6 +320,39 @@
       <li><b>Comissões por profissional:</b> receita atribuída × o % configurado (apenas informativo).</li>
     </ol>
     <div class="callout tip"><span class="tag">Dica:</span> defina meta e comissões em <b>Configurações → Metas</b>; deixe a comissão em branco para não calcular.</div>
+  </section>
+
+  <h2 class="group-title">Gestão interna da equipe</h2>
+
+  <section class="feature">
+    <p class="eyebrow">Gestão · Reuniões Internas</p>
+    <h3>Reuniões com ata e convocação</h3>
+    <p class="purpose">Agende a reunião, convoque a equipe, registre a ata e transforme o que foi decidido em tarefas.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> menu <b>GESTÃO</b> <span class="sep">›</span> <b>Reuniões Internas</b> <span class="sep">·</span> convocação aparece em <b>Agenda › Atividades do dia</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li><b>+ Nova reunião:</b> título, data, hora, tópicos e <b>participantes</b> (há o atalho <b>Todos</b>).</li>
+      <li>Cada participante vê a reunião na <b>Agenda</b> e clica em <b>Confirmar presença</b>.</li>
+      <li>Escreva a <b>ata</b>; quem participou pode <b>dar ciência</b> e registrar sua <b>manifestação</b>.</li>
+      <li>Em <b>Atividades desta reunião</b>, crie as tarefas com <b>responsável</b> e <b>data acordada</b>.</li>
+      <li>Use <b>PDF</b> para arquivar ou compartilhar a ata.</li>
+    </ol>
+    <div class="callout tip"><span class="tag">Acesso:</span> criar e convocar depende da permissão <b>“Convocar / gerenciar reuniões”</b> (Configurações → Permissões). Quem não tem consegue <b>ler a ata</b> e gerar o PDF.</div>
+  </section>
+
+  <section class="feature">
+    <p class="eyebrow">Gestão · Atividades Internas</p>
+    <h3>Tarefas da equipe</h3>
+    <p class="purpose">Controle central das tarefas internas: das reuniões, designadas pelo admin ou criadas por você.</p>
+    <div class="where"><b>Onde fica:</b> <span class="sep">›</span> menu <b>GESTÃO</b> <span class="sep">›</span> <b>Atividades Internas</b> <span class="sep">·</span> visão do dia em <b>Agenda › Atividades do dia</b></div>
+    <p class="block-label">Como usar</p>
+    <ol class="steps">
+      <li><b>+ Nova atividade:</b> título, descrição, data, hora e responsável.</li>
+      <li>Acompanhe pelo status: <b>Pendente</b>, <b>Executado</b> (registra a data efetivada) ou <b>Redirecionado</b> (repassada/remarcada).</li>
+      <li>Você edita as atividades que <b>criou</b>; se uma tarefa foi <b>atribuída a você</b>, pode ao menos <b>mudar o status</b>.</li>
+      <li>Se a tarefa gera um registro no <b>Administrativo</b> (ex.: medir a temperatura do refrigerador), vincule-a ao registro pelo campo <b>Formulário → Registro</b>.</li>
+    </ol>
+    <div class="callout warn"><span class="tag">Atenção:</span> reuniões e atividades são de <b>uso interno</b> — nunca aparecem no portal do paciente. As atividades criadas pelo admin guardam <b>histórico de ajustes</b>.</div>
   </section>
 
   <footer>
