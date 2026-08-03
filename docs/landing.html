@@ -144,6 +144,41 @@
   .reveal{opacity:0;transform:translateY(20px);transition:opacity .8s ease,transform .8s ease}
   .reveal.in{opacity:1;transform:none}
   @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+  /* Celular: topo compacto e ilustrações que nunca estouram a largura. */
+  .mock,.mock *{min-width:0}
+  svg,img{max-width:100%}
+  @media(max-width:520px){
+    .nav{padding:12px 16px;gap:10px}
+    .nav .btn{padding:10px 14px;font-size:.8rem}
+    .brand{gap:8px}
+    .brand .mark{width:28px;height:28px}
+    .brand .bname strong{font-size:1rem}
+    .hero{padding:60px 0 48px}
+    .sec{padding:56px 0}
+    .mock{padding:12px}
+    .mock-body{grid-template-columns:46px 1fr;gap:8px}
+    .mkpis{grid-template-columns:repeat(2,1fr)}
+    .mock-side{height:170px}
+  }
+
+  /* Impressão / PDF: preserva o visual escuro, revela os blocos animados e evita cortes. */
+  @media print{
+    @page{size:A4;margin:11mm}
+    html,body{background:var(--bg) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .reveal{opacity:1 !important;transform:none !important;transition:none !important}
+    header{position:static;backdrop-filter:none}
+    .sec{padding:26px 0}
+    .hero{padding:34px 0 26px}
+    .sec-head,.card,.step,.ditem,.slide,.stat,.mock{break-inside:avoid}
+    h1,h2,h3{break-after:avoid}
+    .carousel{display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow:visible}
+    .slide{flex:none;max-width:none}
+    .car-nav{display:none}
+    .marquee,.strip{animation:none !important}
+    a{text-decoration:none}
+  }
 </style>
 </head>
 <body>
@@ -293,10 +328,11 @@
 
 <section class="sec">
   <div class="wrap stats reveal">
-    <div class="stat"><div class="num" data-count="9">0</div><div class="lbl">módulos integrados</div></div>
-    <div class="stat"><div class="num" data-count="1">0</div><div class="lbl">assistente com IA</div></div>
-    <div class="stat"><div class="num" data-count="100" data-suffix="%">0</div><div class="lbl">dados isolados por clínica</div></div>
-    <div class="stat"><div class="num" data-count="24" data-suffix="/7">0</div><div class="lbl">acesso na nuvem</div></div>
+    <!-- O valor final já vem no HTML (vale para PDF/impressão e sem JS); a animação conta de 0 até ele. -->
+    <div class="stat"><div class="num" data-count="9">9</div><div class="lbl">módulos integrados</div></div>
+    <div class="stat"><div class="num" data-count="1">1</div><div class="lbl">assistente com IA</div></div>
+    <div class="stat"><div class="num" data-count="100" data-suffix="%">100%</div><div class="lbl">dados isolados por clínica</div></div>
+    <div class="stat"><div class="num" data-count="24" data-suffix="/7">24/7</div><div class="lbl">acesso na nuvem</div></div>
   </div>
 </section>
 
