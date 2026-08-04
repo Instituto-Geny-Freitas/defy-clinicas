@@ -62,6 +62,7 @@ import {
 import Calculadora from '@/components/Calculadora'
 import { getImageConsentConfig, saveImageConsentConfig } from '@/lib/imageConsent'
 import { brl } from '@/lib/finance'
+import { getNpsConfig, saveNpsConfig, NPS_DEFAULT, NPS_TIPO_LABEL, type NpsConfig, type NpsQuestion, type NpsQuestionType } from '@/lib/nps'
 import {
   createFormulation,
   deleteFormulation,
@@ -96,7 +97,7 @@ import { getGestaoConfig, saveGestaoConfig } from '@/lib/gestao'
 import { listResources, createResource, deleteResource, type Resource } from '@/lib/resources'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'tipos_doc' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'metas' | 'recursos'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'tipos_doc' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'nps' | 'metas' | 'recursos'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 const ALFABETO_ATIVOS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -120,6 +121,7 @@ const SETTINGS_GRUPOS: { titulo: string; itens: { k: Sec; l: string }[] }[] = [
     { k: 'formulas', l: 'Fórmulas' },
     { k: 'indicacao', l: 'Indicação' },
     { k: 'fidelidade', l: 'Fidelidade' },
+    { k: 'nps', l: 'NPS' },
     { k: 'lgpd', l: 'LGPD' },
     { k: 'imagem', l: 'Termo de Imagem' },
   ] },
@@ -218,6 +220,7 @@ export default function Settings() {
       {sec === 'imagem' && <ImagemSection />}
       {sec === 'indicacao' && <IndicacaoSection clinicId={clinicId} />}
       {sec === 'fidelidade' && <FidelidadeSection clinicId={clinicId} />}
+      {sec === 'nps' && <NpsSection clinicId={clinicId} />}
       {sec === 'metas' && <MetasSection clinicId={clinicId} />}
     </div>
   )
@@ -2863,6 +2866,117 @@ function IntegracoesSection({ clinicId }: { clinicId: string }) {
           {waSalvando ? 'Salvando…' : 'Salvar WhatsApp'}
         </button>
         {waMsg && <span className="text-sm text-texto/60">{waMsg}</span>}
+      </div>
+    </div>
+  )
+}
+
+// --- NPS (pesquisa de satisfação) -------------------------------------------
+/** Configura a pesquisa do portal: textos, periodicidade, gatilho e perguntas extras. */
+function NpsSection({ clinicId }: { clinicId: string }) {
+  const [inicial, setInicial] = useState<NpsConfig | null>(null)
+  useEffect(() => { getNpsConfig().then(setInicial).catch(() => setInicial({ ...NPS_DEFAULT })) }, [])
+  if (!inicial) return <p className="text-sm text-texto/50">Carregando…</p>
+  return <NpsForm clinicId={clinicId} inicial={inicial} />
+}
+
+/** Formulário do NPS — recebe a configuração já carregada (evita estado nulo). */
+function NpsForm({ clinicId, inicial }: { clinicId: string; inicial: NpsConfig }) {
+  const [cfg, setCfg] = useState<NpsConfig>(inicial)
+  const [salvando, setSalvando] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  const set = <K extends keyof NpsConfig>(k: K, v: NpsConfig[K]) => setCfg({ ...cfg, [k]: v })
+  const setPergunta = (i: number, patch: Partial<NpsQuestion>) =>
+    set('perguntas', cfg.perguntas.map((q, idx) => (idx === i ? { ...q, ...patch } : q)))
+
+  function addPergunta() {
+    const id = `p${Date.now().toString(36)}`
+    set('perguntas', [...cfg.perguntas, { id, label: 'Nova pergunta', tipo: 'texto' }])
+  }
+  function moverPergunta(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= cfg.perguntas.length) return
+    const arr = cfg.perguntas.slice();[arr[i], arr[j]] = [arr[j], arr[i]]; set('perguntas', arr)
+  }
+  const removerPergunta = (i: number) => set('perguntas', cfg.perguntas.filter((_, idx) => idx !== i))
+
+  async function salvar() {
+    setSalvando(true); setMsg(null)
+    try { await saveNpsConfig(clinicId, cfg); setMsg('Configuração do NPS salva.') }
+    catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
+  }
+
+  return (
+    <div className="max-w-2xl space-y-5">
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <h3 className="mb-1 font-semibold text-texto">Pesquisa de satisfação (NPS)</h3>
+        <p className="mb-3 text-xs text-texto/50">
+          Aparece no <strong>portal do paciente</strong> depois do atendimento. A nota de 0 a 10 calcula o
+          NPS; as perguntas extras são livres. Acompanhe as respostas em <strong>Relatórios → Satisfação</strong>.
+        </p>
+        <label className="flex items-center gap-2 text-sm text-texto/80">
+          <input type="checkbox" checked={cfg.ativo} onChange={(e) => set('ativo', e.target.checked)} />
+          Pesquisa ativa (desmarque para não exibir no portal)
+        </label>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-black/5 bg-white p-5">
+        <h4 className="text-sm font-semibold text-texto/70">Textos</h4>
+        <div><label className="mb-1 block text-sm text-texto/70">Título do convite</label><input className={field} value={cfg.convite} onChange={(e) => set('convite', e.target.value)} /></div>
+        <div><label className="mb-1 block text-sm text-texto/70">Pergunta da nota (0 a 10)</label><input className={field} value={cfg.pergunta} onChange={(e) => set('pergunta', e.target.value)} /></div>
+        <div><label className="mb-1 block text-sm text-texto/70">Texto do campo de comentário</label><input className={field} value={cfg.comentarioLabel} onChange={(e) => set('comentarioLabel', e.target.value)} /></div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 rounded-xl border border-black/5 bg-white p-5 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Repetir a cada (dias)</label>
+          <input type="number" min={1} className={field} value={cfg.periodicidadeDias} onChange={(e) => set('periodicidadeDias', Number(e.target.value))} />
+          <p className="mt-0.5 text-[11px] text-texto/40">O paciente só é convidado de novo após este intervalo.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Convidar a partir de (atendimentos)</label>
+          <input type="number" min={1} className={field} value={cfg.minAtendimentos} onChange={(e) => set('minAtendimentos', Number(e.target.value))} />
+          <p className="mt-0.5 text-[11px] text-texto/40">Nº de atendimentos <strong>realizados</strong> antes de exibir a pesquisa.</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-black/5 bg-white p-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-texto/70">Perguntas adicionais (opcional)</h4>
+          <button onClick={addPergunta} className="text-xs font-medium text-primaria hover:underline">+ Adicionar pergunta</button>
+        </div>
+        {cfg.perguntas.length === 0 && <p className="text-xs text-texto/40">Somente a nota e o comentário. Adicione perguntas próprias se quiser.</p>}
+        <div className="space-y-2">
+          {cfg.perguntas.map((q, i) => (
+            <div key={q.id} className="rounded-lg border border-black/10 p-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-12">
+                <input className="sm:col-span-6 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={q.label} onChange={(e) => setPergunta(i, { label: e.target.value })} placeholder="Pergunta" />
+                <select className="sm:col-span-3 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={q.tipo} onChange={(e) => setPergunta(i, { tipo: e.target.value as NpsQuestionType })}>
+                  {(Object.keys(NPS_TIPO_LABEL) as NpsQuestionType[]).map((t) => <option key={t} value={t}>{NPS_TIPO_LABEL[t]}</option>)}
+                </select>
+                <div className="sm:col-span-3 flex items-center justify-end gap-1 text-texto/50">
+                  <button onClick={() => moverPergunta(i, -1)} className="px-1 hover:text-texto" title="Subir">↑</button>
+                  <button onClick={() => moverPergunta(i, 1)} className="px-1 hover:text-texto" title="Descer">↓</button>
+                  <button onClick={() => removerPergunta(i)} className="px-1 text-secundaria hover:underline" title="Excluir">✕</button>
+                </div>
+              </div>
+              {q.tipo === 'escolha' && (
+                <input className="mt-2 w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={(q.opcoes ?? []).join(', ')}
+                  onChange={(e) => setPergunta(i, { opcoes: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+                  placeholder="Opções separadas por vírgula (ex.: Atendimento, Estrutura, Preço)" />
+              )}
+              <label className="mt-1 flex items-center gap-1 text-xs text-texto/60">
+                <input type="checkbox" checked={!!q.obrigatoria} onChange={(e) => setPergunta(i, { obrigatoria: e.target.checked })} /> obrigatória
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar NPS'}</button>
+        {msg && <span className="text-sm text-texto/60">{msg}</span>}
       </div>
     </div>
   )
