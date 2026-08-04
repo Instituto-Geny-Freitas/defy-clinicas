@@ -26,6 +26,7 @@ export default function PatientHome() {
   const [proxima, setProxima] = useState<Appointment | null>(null)
   const [pacotes, setPacotes] = useState<TreatmentPackage[]>([])
   const [ultimoRealizado, setUltimoRealizado] = useState<Appointment | null>(null)
+  const [qtdRealizados, setQtdRealizados] = useState(0)
   const [refCfg, setRefCfg] = useState<ReferralConfig | null>(null)
   const [refInfo, setRefInfo] = useState<{ total: number; count: number }>({ total: 0, count: 0 })
   const [loyCfg, setLoyCfg] = useState<LoyaltyConfig | null>(null)
@@ -46,10 +47,11 @@ export default function PatientHome() {
           .filter((a) => a.status !== 'cancelado' && a.status !== 'realizado' && new Date(a.inicio).getTime() >= agora)
           .sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime())[0]
         setProxima(futura ?? null)
-        const realizado = appts
+        const realizados = appts
           .filter((a) => a.status === 'realizado')
-          .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())[0]
-        setUltimoRealizado(realizado ?? null)
+          .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())
+        setUltimoRealizado(realizados[0] ?? null)
+        setQtdRealizados(realizados.length)   // gatilho da pesquisa de satisfação
       })
       .catch(() => {})
   }
@@ -183,7 +185,7 @@ export default function PatientHome() {
           clinicId={patient.clinic_id}
           patientId={patient.id}
           appointmentId={ultimoRealizado?.id}
-          elegivel={!!ultimoRealizado}
+          atendimentos={qtdRealizados}
         />
       )}
 

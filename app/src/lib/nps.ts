@@ -1,11 +1,74 @@
 import { supabase } from '@/lib/supabase'
 
+// ---- Configuração (clinics.dados_empresa.nps) -------------------------------
+export type NpsQuestionType = 'texto' | 'nota' | 'escolha'
+export const NPS_TIPO_LABEL: Record<NpsQuestionType, string> = {
+  texto: 'Texto livre', nota: 'Nota (0 a 10)', escolha: 'Escolha (opções)',
+}
+
+/** Pergunta adicional do NPS (definida pelo admin). */
+export interface NpsQuestion {
+  id: string
+  label: string
+  tipo: NpsQuestionType
+  opcoes?: string[]        // para 'escolha'
+  obrigatoria?: boolean
+}
+
+export interface NpsConfig {
+  ativo: boolean
+  /** Título do card no portal (ex.: "Como foi seu atendimento?"). */
+  convite: string
+  /** Pergunta da nota 0–10 (a que calcula o NPS). */
+  pergunta: string
+  /** Texto de apoio do campo de comentário. */
+  comentarioLabel: string
+  /** Só reapresenta a pesquisa após estes dias (padrão 90). */
+  periodicidadeDias: number
+  /** Nº mínimo de atendimentos realizados para convidar (padrão 1). */
+  minAtendimentos: number
+  perguntas: NpsQuestion[]
+}
+
+export const NPS_DEFAULT: NpsConfig = {
+  ativo: true,
+  convite: 'Como foi seu atendimento?',
+  pergunta: 'De 0 a 10, o quanto você recomendaria a clínica a um amigo?',
+  comentarioLabel: 'Quer deixar um comentário? (opcional)',
+  periodicidadeDias: 90,
+  minAtendimentos: 1,
+  perguntas: [],
+}
+
+export async function getNpsConfig(): Promise<NpsConfig> {
+  const { data } = await supabase.from('clinics').select('dados_empresa').limit(1).maybeSingle()
+  const c = (data?.dados_empresa as { nps?: Partial<NpsConfig> } | null)?.nps
+  if (!c) return { ...NPS_DEFAULT }
+  return {
+    ativo: c.ativo !== false,
+    convite: c.convite || NPS_DEFAULT.convite,
+    pergunta: c.pergunta || NPS_DEFAULT.pergunta,
+    comentarioLabel: c.comentarioLabel || NPS_DEFAULT.comentarioLabel,
+    periodicidadeDias: Number(c.periodicidadeDias) > 0 ? Number(c.periodicidadeDias) : NPS_DEFAULT.periodicidadeDias,
+    minAtendimentos: Number(c.minAtendimentos) > 0 ? Number(c.minAtendimentos) : NPS_DEFAULT.minAtendimentos,
+    perguntas: Array.isArray(c.perguntas) ? (c.perguntas as NpsQuestion[]) : [],
+  }
+}
+
+export async function saveNpsConfig(clinicId: string, cfg: NpsConfig): Promise<void> {
+  const { data } = await supabase.from('clinics').select('dados_empresa').eq('id', clinicId).maybeSingle()
+  const dados = { ...((data?.dados_empresa as Record<string, unknown>) ?? {}), nps: cfg }
+  const { error } = await supabase.from('clinics').update({ dados_empresa: dados }).eq('id', clinicId)
+  if (error) throw error
+}
+
 export interface NpsResponse {
   id: string
   patient_id: string
   appointment_id: string | null
   score: number
   comentario: string | null
+  respostas: Record<string, unknown>
   created_at: string
   patients?: { nome: string } | null
 }
@@ -53,6 +116,7 @@ export async function submitNps(args: {
   appointmentId?: string | null
   score: number
   comentario?: string | null
+  respostas?: Record<string, unknown>
 }): Promise<void> {
   const { error } = await supabase.from('nps_responses').insert({
     clinic_id: args.clinicId,
@@ -60,6 +124,7 @@ export async function submitNps(args: {
     appointment_id: args.appointmentId ?? null,
     score: args.score,
     comentario: args.comentario ?? null,
+    respostas: args.respostas ?? {},
   })
   if (error) throw error
 }
