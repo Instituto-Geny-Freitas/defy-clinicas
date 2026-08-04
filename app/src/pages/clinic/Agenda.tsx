@@ -24,6 +24,7 @@ import { listProfessionals } from '@/lib/settings'
 import { listResources, resourceConflict, type Resource } from '@/lib/resources'
 import { addWaitlist, countWaitlist, deleteWaitlist, listWaitlist, updateWaitlistStatus, type WaitlistEntry } from '@/lib/waitlist'
 import type { Patient, Professional } from '@/lib/types'
+import { comArtigo } from '@/lib/format'
 import ApptStatusBadge from '@/components/ApptStatusBadge'
 import MonthCalendar from '@/components/MonthCalendar'
 import AtividadesDoDia from '@/components/AtividadesDoDia'
@@ -163,7 +164,7 @@ export default function Agenda() {
     if (!tel) return
     const nome = (a.patients?.nome ?? a.nome_avulso ?? '').trim().split(/\s+/)[0]
     const quando = new Date(a.inicio).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-    const msg = `Olá${nome ? ', ' + nome : ''}! Passando para lembrar do seu horário no ${clinic?.nome ?? 'clínica'} em ${quando}${a.procedimento ? ` (${a.procedimento})` : ''}. Podemos confirmar sua presença? 💚`
+    const msg = `Olá${nome ? ', ' + nome : ''}! Passando para lembrar do seu horário ${comArtigo(clinic?.nome ?? 'Clínica', 'em')} em ${quando}${a.procedimento ? ` (${a.procedimento})` : ''}. Podemos confirmar sua presença? 💚`
     window.open(`https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`, '_blank')
   }
   const temTelefone = (a: Appointment) => !!(a.patients?.whatsapp ?? a.telefone_avulso)

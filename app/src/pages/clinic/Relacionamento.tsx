@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useClinic } from '@/theme/ThemeProvider'
 import { listPatients } from '@/lib/patients'
 import { listAppointments } from '@/lib/appointments'
-import { formatDateBR, localDateToday } from '@/lib/format'
+import { comArtigo, formatDateBR, localDateToday } from '@/lib/format'
 import type { Patient } from '@/lib/types'
 
 type Tab = 'aniversariantes' | 'inativos'
@@ -20,7 +20,7 @@ function linkWhatsApp(whatsapp: string | null | undefined, msg: string): string 
 
 export default function Relacionamento() {
   const clinic = useClinic()
-  const nomeClinica = clinic?.nome ?? 'nossa clínica'
+  const nomeClinica = clinic?.nome ?? 'Clínica'
   const [tab, setTab] = useState<Tab>('aniversariantes')
   const [patients, setPatients] = useState<Patient[]>([])
   const [ultimaVisita, setUltimaVisita] = useState<Map<string, string>>(new Map())
@@ -117,7 +117,7 @@ function Aniversariantes({ patients, nomeClinica }: { patients: Patient[]; nomeC
             <tbody>
               {lista.map(({ p, mmdd, faz }) => {
                 const ehHoje = mmdd === diaAtual
-                const msg = `Feliz aniversário, ${primeiroNome(p.nome)}! 🎉 Toda a equipe da ${nomeClinica} deseja um dia maravilhoso. 💚`
+                const msg = `Feliz aniversário, ${primeiroNome(p.nome)}! 🎉 Toda a equipe ${comArtigo(nomeClinica, 'de')} deseja um dia maravilhoso. 💚`
                 const link = linkWhatsApp(p.whatsapp, msg)
                 return (
                   <tr key={p.id} className={`border-t border-black/5 ${ehHoje ? 'bg-primaria/5' : ''}`}>
@@ -202,7 +202,7 @@ function Inativos({ patients, ultimaVisita, temFutura, nomeClinica }: {
             </thead>
             <tbody>
               {lista.map(({ p, ult }) => {
-                const msg = `Olá, ${primeiroNome(p.nome)}! Sentimos sua falta na ${nomeClinica}. Que tal agendar um horário? Estamos com novidades para você. 💚`
+                const msg = `Olá, ${primeiroNome(p.nome)}! Sentimos sua falta ${comArtigo(nomeClinica, 'em')}. Que tal agendar um horário? Estamos com novidades para você. 💚`
                 const link = linkWhatsApp(p.whatsapp, msg)
                 return (
                   <tr key={p.id} className="border-t border-black/5">
