@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { brl, listAllQuotes } from '@/lib/finance'
 import { estoqueBaixo, listInventory, validadeProxima } from '@/lib/inventory'
@@ -127,7 +128,8 @@ export default function Reports() {
   const nps90 = nps.filter((n) => (Date.now() - new Date(n.created_at).getTime()) / 86400000 <= 90)
   const npsCalc = calcNps(nps90)
   const npsCor = npsCalc.nps >= 50 ? 'text-emerald-600' : npsCalc.nps >= 0 ? 'text-amber-600' : 'text-secundaria'
-  const comentarios = nps.filter((n) => n.comentario && n.comentario.trim()).slice(0, 6)
+  // Comentários da MESMA janela dos indicadores (antes vinham de todo o histórico).
+  const comentarios = nps90.filter((n) => n.comentario && n.comentario.trim()).slice(0, 6)
 
   return (
     <div>
@@ -206,7 +208,12 @@ export default function Reports() {
         {card('Taxa de faltas', `${r.taxaFaltaMes}%`, r.taxaFaltaMes >= 20 ? 'text-secundaria' : r.taxaFaltaMes > 0 ? 'text-amber-600' : 'text-primaria')}
       </div>
 
-      <h2 className="mt-8 mb-2 text-sm font-semibold text-texto/70">Satisfação (NPS — últimos 90 dias)</h2>
+      <div className="mt-8 mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-texto/70">Satisfação (NPS — últimos 90 dias)</h2>
+        <Link to="/clinica/relacionamento" className="text-xs font-medium text-primaria hover:underline">
+          Ver todas as respostas (Relacionamento → NPS) →
+        </Link>
+      </div>
       {npsCalc.total === 0 ? (
         <p className="rounded-xl border border-black/5 bg-white p-5 text-sm text-texto/50">Ainda sem respostas de pesquisa de satisfação.</p>
       ) : (

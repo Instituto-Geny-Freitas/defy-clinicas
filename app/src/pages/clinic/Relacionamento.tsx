@@ -4,8 +4,9 @@ import { listPatients } from '@/lib/patients'
 import { listAppointments } from '@/lib/appointments'
 import { comArtigo, formatDateBR, localDateToday } from '@/lib/format'
 import type { Patient } from '@/lib/types'
+import NpsPanel from './NpsPanel'
 
-type Tab = 'aniversariantes' | 'inativos'
+type Tab = 'aniversariantes' | 'inativos' | 'nps'
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -51,10 +52,10 @@ export default function Relacionamento() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-texto">Relacionamento</h1>
-      <p className="mt-1 text-sm text-texto/60">Aniversariantes e reativação de pacientes inativos</p>
+      <p className="mt-1 text-sm text-texto/60">Aniversariantes, reativação de inativos e pesquisa de satisfação</p>
 
       <div className="mt-4 mb-6 flex gap-1 overflow-x-auto border-b border-black/5">
-        {([['aniversariantes', 'Aniversariantes'], ['inativos', 'Inativos']] as [Tab, string][]).map(([k, l]) => (
+        {([['aniversariantes', 'Aniversariantes'], ['inativos', 'Inativos'], ['nps', 'NPS']] as [Tab, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)}
             className={`whitespace-nowrap px-4 py-2 text-sm font-medium ${tab === k ? 'border-b-2 border-primaria text-primaria' : 'text-texto/60 hover:text-texto'}`}>
             {l}
@@ -66,8 +67,10 @@ export default function Relacionamento() {
         <p className="p-6 text-sm text-texto/50">Carregando…</p>
       ) : tab === 'aniversariantes' ? (
         <Aniversariantes patients={patients} nomeClinica={nomeClinica} />
-      ) : (
+      ) : tab === 'inativos' ? (
         <Inativos patients={patients} ultimaVisita={ultimaVisita} temFutura={temFutura} nomeClinica={nomeClinica} />
+      ) : (
+        <NpsPanel patients={patients} ultimaVisita={ultimaVisita} nomeClinica={nomeClinica} />
       )}
     </div>
   )
