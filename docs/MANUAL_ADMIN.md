@@ -43,8 +43,8 @@ Acesse **Configurações** (menu lateral, em **GESTÃO** — somente admin). As 
 organizadas em dois grupos, e cada título **expande ou recolhe** os seus itens:
 
 - **NEGOCIAL** — Identidade visual · Equipe · Disponibilidade · **Procedimentos** · Metas ·
-  Ativos · Formulários (Admin) · Textos-padrão · Fórmulas · Indicação · Fidelidade · LGPD ·
-  Termo de Imagem
+  Ativos · Formulários (Admin) · Textos-padrão · Fórmulas · Indicação · Fidelidade · **NPS** ·
+  LGPD · Termo de Imagem
 - **SISTEMA** — Fornecedores · Papéis · Permissões · Exames · Recursos · Serviços Prestados ·
   Unidades · Tipos de Despesa · Tipos de Documentos · Vacinas · Vias · Integrações
 
@@ -170,6 +170,29 @@ Configure os horários de atendimento de cada profissional. Na aba **Disponibili
 - Informe: profissional, data de início, data de fim e um **motivo** (opcional).
 - Os bloqueios aparecem na verificação de disponibilidade ao agendar (status "Bloqueado").
 
+### 2.16 NPS (pesquisa de satisfação)
+Controla a pesquisa que o paciente responde **no portal**. Tudo é editável aqui — antes era fixo.
+
+- **Pesquisa ativa:** desmarque para não exibir a pesquisa no portal.
+- **Textos:** **título do convite** (ex.: "Como foi seu atendimento?"), a **pergunta da nota
+  (0 a 10)** — é ela que calcula o NPS — e o **rótulo do campo de comentário**.
+- **Repetir a cada (dias):** intervalo mínimo antes de convidar o mesmo paciente de novo
+  (padrão 90).
+- **Convidar a partir de (atendimentos):** nº de atendimentos **realizados** que o paciente
+  precisa ter para ver a pesquisa (padrão 1).
+- **Perguntas adicionais (opcional):** perguntas próprias além da nota, cada uma com um tipo:
+
+| Tipo | Como aparece ao paciente |
+|------|--------------------------|
+| **Texto livre** | Campo de texto |
+| **Nota (0 a 10)** | Botões de 0 a 10 (não entra no cálculo do NPS) |
+| **Escolha (opções)** | Lista de opções que você define, separadas por vírgula |
+
+  Use ↑ ↓ para ordenar, **obrigatória** para exigir resposta e ✕ para excluir.
+
+> As respostas ficam em **Relacionamento → NPS** (cap. 17). Perguntas novas valem para as
+> **próximas** respostas — as antigas continuam como foram enviadas.
+
 ---
 
 ## 3. Navegação geral (Área da Clínica)
@@ -185,7 +208,7 @@ Menu lateral — itens do dia a dia:
 | **Dashboard** | Visão do dia: pacientes, consultas de hoje, documentos pendentes, a receber, alertas de estoque e **indicações a recompensar** |
 | **Agenda** | Agendamentos, calendário, busca por data e a aba **Atividades do dia** (uso interno) |
 | **Pacientes** | Cadastro e prontuário completo |
-| **Relacionamento** | Aniversariantes, NPS e ações de relacionamento |
+| **Relacionamento** | Aniversariantes, reativação de inativos e **NPS** — painel, exportação e convite (cap. 17) |
 | **Comercial** | Funil de leads (CRM) |
 | **Financeiro** | Fluxo de caixa: receitas, despesas, caixa, balanço e relatório |
 | **Relatórios** | Faturamento, estoque, atendimentos e **Mapa financeiro mensal** |
@@ -734,7 +757,7 @@ do sistema pela conversa, **com o mesmo login** e as mesmas permissões da equip
 | **Financeiro** | "Quanto recebi este mês?" · "Quanto tenho a receber de cartão?" · "Registre um recebimento de R$ 200 no PIX da Ana no orçamento em aberto" · "Lance uma despesa de R$ 450 de aluguel" · "Marque a despesa de energia como paga" |
 | **Retornos (recorrência)** | "Tem retornos recomendados pendentes?" · "Agende o retorno da paciente X" |
 | **Comercial (CRM)** | "Quais leads estão em avaliação?" · "Quantos leads novos temos?" · "Cadastre um lead: Fulana, veio do Instagram, interesse em botox" · "Quais follow-ups tenho para hoje?" · "Tem lead parado?" |
-| **Relacionamento** | "Quem faz aniversário este mês?" · "Aniversariantes de agosto" |
+| **Relacionamento** | "Quem faz aniversário este mês?" · "Aniversariantes de agosto" · "Qual o NPS da clínica?" |
 | **Administrativo** | "Registre uma intercorrência para o paciente X" · "Quais formulários administrativos existem?" |
 | **Alertas** | "Tem algum alerta?" (estoque baixo, validade próxima, agendamentos a regularizar) |
 
@@ -803,8 +826,52 @@ criadas pelo próprio membro para o seu dia a dia.
 
 ---
 
+## 17. Relacionamento (aniversariantes, inativos e NPS)
+
+Menu **Relacionamento**, com três abas.
+
+### 17.1 Aniversariantes
+Lista os aniversariantes do mês (abre no mês atual; troque o mês para planejar). Quem faz
+aniversário **hoje** aparece destacado. O botão **Parabenizar** abre o WhatsApp com a
+mensagem pronta.
+
+### 17.2 Inativos
+Pacientes que não voltam há um tempo e **não têm agendamento futuro** — com a data do último
+atendimento e um botão que abre o WhatsApp com o convite de retorno.
+
+### 17.3 NPS (pesquisa de satisfação)
+
+**Onde o paciente responde:** no **portal**, na tela inicial. A pesquisa aparece quando ele
+tem o **nº de atendimentos realizados** configurado (2.16) e **não respondeu** dentro do
+intervalo definido. Ele dá a **nota de 0 a 10**, responde as **perguntas adicionais** (se
+houver) e pode deixar um **comentário**.
+
+**Como o NPS é calculado:** `% promotores (9–10) − % detratores (0–6)`. Os **passivos (7–8)**
+entram no total, mas não somam nem subtraem.
+
+**O painel (aba NPS):**
+- **Período:** campos *De/Até* e os atalhos **30 dias · 90 dias · 12 meses · Tudo**.
+- **Indicadores:** NPS, Respostas, **Promotores**, **Passivos** e **Detratores** — com a
+  quantidade e o **percentual** de cada faixa.
+- **Evolução mensal:** o NPS e o nº de respostas mês a mês, em barras.
+- **Respostas:** tabela com data, paciente, nota (colorida por faixa), comentário e as
+  respostas de **cada pergunta adicional**.
+- **Exportar:** **CSV** (abre no Excel com os acentos corretos) e **PDF** (indicadores +
+  evolução + respostas, com o cabeçalho da clínica).
+- Se a pesquisa estiver **desativada** em Configurações, o painel avisa.
+
+**Convidar para a pesquisa:** o bloco no fim da aba lista os pacientes **já atendidos e sem
+resposta** dentro da periodicidade. **Convidar** abre o WhatsApp com a mensagem pronta — a
+resposta continua sendo dada no portal (então a nota entra no mesmo cálculo).
+
+> Em **Relatórios** há também o resumo dos **últimos 90 dias** (NPS, respostas, promotores,
+> detratores e os comentários recentes), com link para este painel completo.
+
+---
+
 *Este manual cobre as funcionalidades desenvolvidas até **agosto de 2026**: recorrência de retornos
-(com data-limite), NPS, indicação, fidelidade/cashback, relacionamento, gestão financeira, agenda
+(com data-limite), **NPS configurável** (textos, periodicidade, gatilho e perguntas próprias, com painel
+e exportação), indicação, fidelidade/cashback, relacionamento, gestão financeira, agenda
 semanal, agendamento online, CRM comercial, o módulo **Administrativo** (formulários configuráveis,
 inclusive campos que referenciam outros formulários), o módulo **clínico-financeiro** (preço de
 procedimento com vigência e histórico, planos com itens e controle de sessões, pacotes pré-pagos com
