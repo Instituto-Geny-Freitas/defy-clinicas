@@ -87,6 +87,49 @@ export async function listNpsResponses(limite = 200): Promise<NpsResponse[]> {
   })) as NpsResponse[]
 }
 
+/** Respostas num intervalo de datas (YYYY-MM-DD), para o painel consolidado. */
+export async function listNpsPeriodo(de?: string | null, ate?: string | null): Promise<NpsResponse[]> {
+  let q = supabase.from('nps_responses').select('*, patients(nome)').order('created_at', { ascending: false })
+  if (de) q = q.gte('created_at', `${de}T00:00:00`)
+  if (ate) q = q.lte('created_at', `${ate}T23:59:59`)
+  const { data, error } = await q
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    ...r,
+    patients: Array.isArray(r.patients) ? (r.patients[0] ?? null) : r.patients,
+  })) as NpsResponse[]
+}
+
+/** NPS mês a mês (mais antigo → mais recente), para a evolução. */
+export function npsPorMes(respostas: NpsResponse[]): { mes: string; nps: number; total: number }[] {
+  const grupos = new Map<string, NpsResponse[]>()
+  for (const r of respostas) {
+    const mes = r.created_at.slice(0, 7)   // YYYY-MM
+    const arr = grupos.get(mes) ?? []
+    arr.push(r); grupos.set(mes, arr)
+  }
+  return [...grupos.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([mes, rs]) => ({ mes, ...calcNps(rs) }))
+    .map(({ mes, nps, total }) => ({ mes, nps, total }))
+}
+
+/** CSV das respostas (inclui as perguntas adicionais configuradas). */
+export function npsCsv(respostas: NpsResponse[], perguntas: NpsQuestion[]): string {
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const head = ['Data', 'Paciente', 'Nota', 'Faixa', 'Comentário', ...perguntas.map((p) => p.label)]
+  const faixa = (s: number) => (s >= 9 ? 'Promotor' : s >= 7 ? 'Passivo' : 'Detrator')
+  const linhas = respostas.map((r) => [
+    new Date(r.created_at).toLocaleString('pt-BR'),
+    r.patients?.nome ?? '',
+    r.score,
+    faixa(r.score),
+    r.comentario ?? '',
+    ...perguntas.map((p) => r.respostas?.[p.id] ?? ''),
+  ])
+  return [head, ...linhas].map((l) => l.map(esc).join(';')).join('\r\n')
+}
+
 /** Quantas respostas de NPS o paciente já enviou (para não repetir a pesquisa). */
 export async function countNpsByPatient(patientId: string): Promise<number> {
   const { count, error } = await supabase
