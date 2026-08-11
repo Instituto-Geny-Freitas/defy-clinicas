@@ -5,6 +5,7 @@ import type { Patient, Professional } from '@/lib/types'
 import type { ProcedureRecord } from '@/lib/procedures'
 import type { Supplementation } from '@/lib/supplementations'
 import { formatDateBR } from '@/lib/format'
+import { brl } from '@/lib/finance'
 
 const TEAL: [number, number, number] = [15, 118, 110]
 
@@ -116,7 +117,13 @@ export function buildProcedimentoPdf(args: {
 
   y = bloco(doc, y, 'Procedimento', txt(proc.procedimento))
   if (proc.regiao) y = bloco(doc, y, 'Região', txt(proc.regiao))
-  if (proc.observacoes) y = bloco(doc, y, 'Observações', txt(proc.observacoes))
+
+  // Valor: só o procedimento avulso tem valor próprio; vinculado, a cobrança é do orçamento.
+  const valorProc = Number(proc.valor_cobrado) || 0
+  if (valorProc > 0) y = bloco(doc, y, 'Valor do procedimento', brl(valorProc))
+  else if (proc.quote_id) y = bloco(doc, y, 'Valor do procedimento', 'Incluído no orçamento vinculado')
+
+  if (proc.observacoes) y = bloco(doc, y, 'Observações do profissional', txt(proc.observacoes))
 
   const produtos = (proc.produtos_usados ?? []).filter((p) => p.produto)
   if (produtos.length > 0) {
@@ -153,12 +160,14 @@ export function buildSuplementacaoPdf(args: {
 
   y = bloco(doc, y, 'Medicação / ativo', txt(supl.medicacao))
 
+  const valorSupl = Number(supl.valor_venda) || 0
   const linhas: [string, string][] = [
     ['Via / local', txt(supl.via_adm) || '—'],
     ['Quantidade', String(supl.quantidade ?? 1)],
     ['Lote', txt(supl.lote) || '—'],
     ['Validade', supl.validade ? formatDateBR(supl.validade) : '—'],
     ['Fornecedor', txt(supl.fornecedor) || '—'],
+    ['Valor', valorSupl > 0 ? `${brl(valorSupl)}${supl.pago ? ' · pago' : ''}` : '—'],
   ]
   autoTable(doc, {
     startY: y,
@@ -170,7 +179,7 @@ export function buildSuplementacaoPdf(args: {
   })
   y = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 18
 
-  if (supl.observacoes) bloco(doc, y, 'Observações', txt(supl.observacoes))
+  if (supl.observacoes) bloco(doc, y, 'Observações do profissional', txt(supl.observacoes))
 
   rodape(doc, profissional)
   return { blob: doc.output('blob'), filename: nomeArquivo('Suplementacao', paciente, supl.data) }
