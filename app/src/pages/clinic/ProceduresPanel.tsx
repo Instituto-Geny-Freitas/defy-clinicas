@@ -7,6 +7,11 @@ import { supabase } from '@/lib/supabase'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
 import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
 import { PacoteModal } from './PackagesPanel'
+import { getClinic, listProfessionals, type ClinicFull } from '@/lib/settings'
+import type { Professional } from '@/lib/types'
+import { getPatient } from '@/lib/patients'
+import { buildProcedimentoPdf, profissionalPdf } from '@/lib/atendimentoPdf'
+import PdfAcoes from '@/components/PdfAcoes'
 import { listProcedureTypes, currentProcedurePrices, type ProcedureType } from '@/lib/domains'
 import { listPhotos, type ClinicalPhoto } from '@/lib/photos'
 import SnippetPicker from '@/components/SnippetPicker'
@@ -28,11 +33,18 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<ProcedureRecord | null>(null)
   const [recorrencias, setRecorrencias] = useState<RecurrenceRec[]>([])
+  // Dados do cabeçalho/assinatura dos PDFs de atendimento.
+  const [clinicFull, setClinicFull] = useState<ClinicFull | null>(null)
+  const [profs, setProfs] = useState<Professional[]>([])
+  const [paciente, setPaciente] = useState<Awaited<ReturnType<typeof getPatient>>>(null)
   const [editRec, setEditRec] = useState<RecurrenceRec | null>(null)
 
   function recarregar() {
     listProcedures(patientId).then(setProcs).catch(() => {}).finally(() => setCarregando(false))
     listRecurrences(patientId).then(setRecorrencias).catch(() => {})
+    getClinic().then(setClinicFull).catch(() => {})
+    listProfessionals().then(setProfs).catch(() => {})
+    getPatient(patientId).then(setPaciente).catch(() => {})
     // Orçamentos quitados do paciente → marca os procedimentos vinculados como pagos.
     supabase.from('v_quote_balances').select('quote_id, saldo_a_receber').eq('patient_id', patientId)
       .then(({ data }) => setPagas(new Set((data ?? []).filter((b) => Number(b.saldo_a_receber) <= 0.005).map((b) => b.quote_id as string))))
@@ -88,6 +100,15 @@ export default function ProceduresPanel({ patientId, clinicId, professionalId }:
                 <div className="font-medium text-texto">{p.procedimento}</div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-texto/50">{formatDateBR(p.data)}</div>
+                  <PdfAcoes
+                    clinicId={clinicId} patientId={patientId} professionalId={p.professional_id ?? professionalId}
+                    categoria="procedimento" compacto
+                    montar={() => buildProcedimentoPdf({
+                      clinic: clinicFull, paciente,
+                      profissional: profissionalPdf(profs.find((x) => x.id === (p.professional_id ?? professionalId)) ?? null),
+                      proc: p,
+                    })}
+                  />
                   <button onClick={() => setEditando(p)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
                   <button onClick={() => excluir(p)} className="text-xs font-medium text-secundaria hover:underline">Excluir</button>
                 </div>
