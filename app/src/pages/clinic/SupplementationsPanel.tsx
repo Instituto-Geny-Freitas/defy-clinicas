@@ -7,6 +7,11 @@ import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, typ
 import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
 import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
 import RecurrenceEditModal from '@/components/RecurrenceEditModal'
+import { getClinic, listProfessionals, type ClinicFull } from '@/lib/settings'
+import { getPatient } from '@/lib/patients'
+import type { Professional } from '@/lib/types'
+import { buildSuplementacaoPdf, profissionalPdf } from '@/lib/atendimentoPdf'
+import PdfAcoes from '@/components/PdfAcoes'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import { PacoteModal } from './PackagesPanel'
 
@@ -24,6 +29,10 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<Supplementation | null>(null)
   const [recorrencias, setRecorrencias] = useState<RecurrenceRec[]>([])
+  // Cabeçalho/assinatura dos PDFs de atendimento.
+  const [clinicFull, setClinicFull] = useState<ClinicFull | null>(null)
+  const [paciente, setPaciente] = useState<Awaited<ReturnType<typeof getPatient>>>(null)
+  const [profs, setProfs] = useState<Professional[]>([])
   const [editRec, setEditRec] = useState<RecurrenceRec | null>(null)
 
   function recarregar() {
@@ -32,6 +41,9 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
       .catch(() => {})
       .finally(() => setCarregando(false))
     listRecurrences(patientId).then(setRecorrencias).catch(() => {})
+    getClinic().then(setClinicFull).catch(() => {})
+    getPatient(patientId).then(setPaciente).catch(() => {})
+    listProfessionals().then(setProfs).catch(() => {})
   }
   useEffect(recarregar, [patientId])
 
@@ -130,6 +142,17 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
                     ) : <span className="text-texto/30">—</span> })()}
                   </td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">
+                    <span className="mr-3 inline-flex items-center gap-3">
+                      <PdfAcoes
+                        clinicId={clinicId} patientId={patientId} professionalId={professionalId}
+                        categoria="suplementacao" compacto
+                        montar={() => buildSuplementacaoPdf({
+                          clinic: clinicFull, paciente,
+                          profissional: profissionalPdf(profs.find((x) => x.id === professionalId) ?? null),
+                          supl: s,
+                        })}
+                      />
+                    </span>
                     <button onClick={() => setEditando(s)} className="text-xs font-medium text-primaria hover:underline">Editar</button>
                     <button onClick={() => excluir(s)} className="ml-3 text-xs font-medium text-secundaria hover:underline">Excluir</button>
                   </td>
