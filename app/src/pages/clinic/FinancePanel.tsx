@@ -31,6 +31,7 @@ import { buildOrcamentoPdf } from '@/lib/orcamentoPdf'
 import { useClinic } from '@/theme/ThemeProvider'
 import { useAuth } from '@/auth/AuthProvider'
 import { formatDateBR } from '@/lib/format'
+import ConsistenciaPanel from '@/components/ConsistenciaPanel'
 
 interface Props {
   patientId: string
@@ -165,6 +166,8 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
 
   return (
     <div>
+      <ConsistenciaPanel patientId={patientId} />
+
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-semibold text-texto">Orçamentos e pagamentos</h3>
         <button onClick={() => setModalOrc(true)} className="rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
