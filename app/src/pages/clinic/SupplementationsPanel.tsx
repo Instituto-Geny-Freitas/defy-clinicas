@@ -3,7 +3,7 @@ import { createSupplementation, deleteSupplementation, listSupplementations, set
 import { listActiveIngredients, listAtivoLotes, listRoutes, type ActiveIngredient, type AtivoLote, type DomainItem } from '@/lib/domains'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
 import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
-import { brl, listQuotes, listPaymentsByPatient, totalLiquidado, type Quote, type Payment } from '@/lib/finance'
+import { brl } from '@/lib/finance'
 import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
 import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
 import RecurrenceEditModal from '@/components/RecurrenceEditModal'
@@ -12,6 +12,7 @@ import { getPatient } from '@/lib/patients'
 import type { Professional } from '@/lib/types'
 import { buildSuplementacaoPdf, profissionalPdf } from '@/lib/atendimentoPdf'
 import PdfAcoes from '@/components/PdfAcoes'
+import { carregarVinculoCtx, vinculoSuplementacao, type VinculoCtx } from '@/lib/vinculoFinanceiro'
 import { Shell, Footer } from './TreatmentPlansPanel'
 import { PacoteModal } from './PackagesPanel'
 
@@ -23,8 +24,6 @@ type Vinculo = 'quitado' | 'aberto' | 'nenhum'
 
 export default function SupplementationsPanel({ patientId, clinicId, professionalId }: Props) {
   const [itens, setItens] = useState<Supplementation[]>([])
-  const [quotes, setQuotes] = useState<Quote[]>([])
-  const [pagamentos, setPagamentos] = useState<Payment[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(false)
   const [editando, setEditando] = useState<Supplementation | null>(null)
@@ -33,31 +32,35 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
   const [clinicFull, setClinicFull] = useState<ClinicFull | null>(null)
   const [paciente, setPaciente] = useState<Awaited<ReturnType<typeof getPatient>>>(null)
   const [profs, setProfs] = useState<Professional[]>([])
+  // Contexto do vínculo financeiro (orçamento direto, plano ou pacote).
+  const [vctx, setVctx] = useState<VinculoCtx | null>(null)
   const [editRec, setEditRec] = useState<RecurrenceRec | null>(null)
 
   function recarregar() {
-    Promise.all([listSupplementations(patientId), listQuotes(patientId), listPaymentsByPatient(patientId)])
-      .then(([s, q, p]) => { setItens(s); setQuotes(q); setPagamentos(p) })
+    listSupplementations(patientId)
+      .then(setItens)
       .catch(() => {})
       .finally(() => setCarregando(false))
     listRecurrences(patientId).then(setRecorrencias).catch(() => {})
     getClinic().then(setClinicFull).catch(() => {})
     getPatient(patientId).then(setPaciente).catch(() => {})
     listProfessionals().then(setProfs).catch(() => {})
+    carregarVinculoCtx(patientId).then(setVctx).catch(() => {})
   }
   useEffect(recarregar, [patientId])
 
-  /** Verifica se a suplementação está em algum orçamento e se ele está quitado. */
+  /** Situação financeira: item do orçamento, item de PLANO ou item de PACOTE.
+   *  (Antes só olhava o item importado no orçamento, e por isso registros
+   *  vinculados a plano/pacote apareciam como "sem vínculo".) */
   function vinculoDe(id: string): Vinculo {
-    let aberto = false
-    for (const q of quotes) {
-      const temItem = (q.itens ?? []).some((it) => it.origem === 'suplementacao' && it.ref_id === id)
-      if (!temItem) continue
-      const quitado = (Number(q.valor_total) - totalLiquidado(pagamentos, q.id)) <= 0.005
-      if (quitado) return 'quitado'
-      aberto = true
-    }
-    return aberto ? 'aberto' : 'nenhum'
+    const s = itens.find((x) => x.id === id)
+    if (!s || !vctx) return 'nenhum'
+    return vinculoSuplementacao(s, vctx).vinculo
+  }
+  /** Como o registro está coberto (para explicar na tela). */
+  function viaDe(id: string) {
+    const s = itens.find((x) => x.id === id)
+    return s && vctx ? vinculoSuplementacao(s, vctx) : null
   }
 
   async function marcarPago(s: Supplementation, pago: boolean) {
@@ -73,7 +76,15 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
       return
     }
     if (v === 'nenhum') {
-      if (!confirm('Esta suplementação NÃO está vinculada a nenhum orçamento pago. Deseja marcá-la como paga manualmente mesmo assim?')) return
+      const r = viaDe(s.id)
+      const motivo = r?.linkQuebrado
+        ? `O vínculo com o ${r.via} está quebrado (item removido).`
+        : r?.semOrcamento
+          ? `Está vinculada a um ${r.via}, mas esse ${r.via} ainda não tem orçamento gerado.`
+          : 'Não está em nenhum orçamento, plano ou pacote.'
+      if (!confirm(`${motivo}
+
+Deseja marcá-la como paga manualmente mesmo assim?`)) return
     }
     await marcarPago(s, true)
   }
