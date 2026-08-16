@@ -3,7 +3,7 @@ import { createSupplementation, deleteSupplementation, listSupplementations, set
 import { listActiveIngredients, listAtivoLotes, listRoutes, type ActiveIngredient, type AtivoLote, type DomainItem } from '@/lib/domains'
 import { listTreatmentPlans, listPlanItemsComSaldo, getPlanItem, type TreatmentPlan, type PlanItem } from '@/lib/treatmentPlans'
 import { listPackages, listPackageItemsComSaldo, getPackageItem, type TreatmentPackage, type PackageItem } from '@/lib/packages'
-import { brl } from '@/lib/finance'
+import { brl, registerPayment, totalLiquidado, type PaymentMethod, type Quote } from '@/lib/finance'
 import { formatDateBR, localDateToday, parseMoneyBR } from '@/lib/format'
 import { createRecurrence, listRecurrences, PERIOD_LABEL, type Periodicidade, type RecurrenceRec } from '@/lib/recurrence'
 import RecurrenceEditModal from '@/components/RecurrenceEditModal'
@@ -34,6 +34,8 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
   const [profs, setProfs] = useState<Professional[]>([])
   // Contexto do vínculo financeiro (orçamento direto, plano ou pacote).
   const [vctx, setVctx] = useState<VinculoCtx | null>(null)
+  // Pagamento parcial de um item que abate o saldo do orçamento vinculado.
+  const [pagando, setPagando] = useState<{ supl: Supplementation; quote: Quote; saldo: number } | null>(null)
   const [editRec, setEditRec] = useState<RecurrenceRec | null>(null)
 
   function recarregar() {
@@ -68,11 +70,22 @@ export default function SupplementationsPanel({ patientId, clinicId, professiona
     recarregar()
   }
 
-  /** Marca como pago validando o vínculo com orçamento pago (evita marcar indevidamente). */
+  /**
+   * Marcar como pago:
+   *  - orçamento QUITADO  → só marca (já foi cobrado; não gera pagamento novo);
+   *  - orçamento ABERTO   → abre o pagamento parcial, que ABATE o saldo do orçamento;
+   *  - sem vínculo        → marcação manual, com confirmação.
+   */
   async function acionarPago(s: Supplementation) {
-    const v = vinculoDe(s.id)
-    if (v === 'aberto') {
-      alert('Esta suplementação está em um orçamento ainda NÃO quitado. Para marcá-la como paga, receba o pagamento do orçamento (aba Financeiro). A marcação manual foi bloqueada para preservar a integridade financeira.')
+    const r = viaDe(s.id)
+    const v = r?.vinculo ?? 'nenhum'
+    if (v === 'aberto' && r?.quoteId && vctx) {
+      const quote = vctx.quotes.find((q) => q.id === r.quoteId)
+      if (quote) {
+        const saldo = Number(quote.valor_total) - totalLiquidado(vctx.pagamentos, quote.id)
+        if (saldo > 0.005 && Number(s.valor_venda) > 0) { setPagando({ supl: s, quote, saldo }); return }
+      }
+      await marcarPago(s, true)   // sem saldo/valor a abater: só registra o status
       return
     }
     if (v === 'nenhum') {
@@ -172,6 +185,16 @@ Deseja marcá-la como paga manualmente mesmo assim?`)) return
             </tbody>
           </table>
         </div>
+      )}
+      {pagando && (
+        <PagarItemModal
+          clinicId={clinicId} patientId={patientId}
+          titulo={pagando.supl.medicacao}
+          quote={pagando.quote} saldo={pagando.saldo}
+          valorSugerido={Number(pagando.supl.valor_venda) || 0}
+          onClose={() => setPagando(null)}
+          onPago={async () => { await marcarPago(pagando.supl, true); setPagando(null) }}
+        />
       )}
       {editRec && <RecurrenceEditModal rec={editRec} onClose={() => setEditRec(null)} onSaved={() => { setEditRec(null); recarregar() }} />}
     </div>
@@ -458,6 +481,71 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
         )}
         {erro && <p className="text-sm text-secundaria">{erro}</p>}
         <Footer onClose={onClose} onSave={salvar} disabled={salvando || !podeSalvar} label={salvando ? 'Salvando…' : 'Salvar'} />
+      </div>
+    </Shell>
+  )
+}
+
+/**
+ * Pagamento parcial de um item (suplementação/procedimento) que ABATE o saldo
+ * do orçamento vinculado. Evita cobrança em duplicidade: o valor entra como
+ * pagamento do próprio orçamento, então o saldo remanescente fica correto.
+ */
+function PagarItemModal({ clinicId, patientId, titulo, quote, saldo, valorSugerido, onClose, onPago }: {
+  clinicId: string
+  patientId: string
+  titulo: string
+  quote: Quote
+  saldo: number
+  valorSugerido: number
+  onClose: () => void
+  onPago: () => Promise<void> | void
+}) {
+  const maximo = Math.round(Math.min(valorSugerido > 0 ? valorSugerido : saldo, saldo) * 100) / 100
+  const [valor, setValor] = useState(maximo)
+  const [metodo, setMetodo] = useState<PaymentMethod>('pix')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  const restante = Math.max(0, Math.round((saldo - (Number(valor) || 0)) * 100) / 100)
+
+  async function confirmar() {
+    const v = Number(valor) || 0
+    if (v <= 0) { setErro('Informe um valor maior que zero.'); return }
+    if (v > saldo + 0.005) { setErro(`O valor não pode passar do saldo do orçamento (${brl(saldo)}).`); return }
+    setSalvando(true); setErro(null)
+    try {
+      await registerPayment({ clinicId, quoteId: quote.id, patientId, valor: v, metodo, status: 'pago' })
+      await onPago()
+    } catch (e) { setErro((e as Error)?.message || 'Não foi possível registrar o pagamento.'); setSalvando(false) }
+  }
+
+  return (
+    <Shell titulo={`Receber · ${titulo}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="rounded-lg bg-black/[0.03] p-3 text-sm text-texto/70">
+          Este item está num orçamento <strong>ainda em aberto</strong>. O valor recebido entra como
+          pagamento desse orçamento, abatendo o saldo — sem cobrar duas vezes.
+          <div className="mt-1">Saldo atual: <strong className="text-texto">{brl(saldo)}</strong></div>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Valor recebido</label>
+          <input type="number" step="0.01" min={0} className={field} value={valor} onChange={(e) => setValor(Number(e.target.value))} />
+          <p className="mt-1 text-xs text-texto/60">Saldo do orçamento após este recebimento: <strong>{brl(restante)}</strong></p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-texto/70">Forma de pagamento</label>
+          <select className={field} value={metodo} onChange={(e) => setMetodo(e.target.value as PaymentMethod)}>
+            <option value="pix">PIX</option>
+            <option value="cartao_credito">Cartão de crédito</option>
+            <option value="cartao_debito">Cartão de débito</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="transferencia">Transferência</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        {erro && <p className="text-sm text-secundaria">{erro}</p>}
+        <Footer onClose={onClose} onSave={confirmar} disabled={salvando} label={salvando ? 'Registrando…' : 'Registrar recebimento'} />
       </div>
     </Shell>
   )

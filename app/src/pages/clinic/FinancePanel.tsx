@@ -123,10 +123,15 @@ export default function FinancePanel({ patientId, clinicId, professionalId, paci
     const atual = new Map(supl.map((s) => [s.id, s.pago]))
     const desejado = new Map<string, boolean>()
     for (const q of qs) {
-      const quitado = (Number(q.valor_total) - totalLiquidado(pgs, q.id)) <= 0.005
+      const recebido = totalLiquidado(pgs, q.id)
+      const quitado = (Number(q.valor_total) - recebido) <= 0.005
       for (const it of q.itens ?? []) {
         if (it.origem === 'suplementacao' && it.ref_id) {
           desejado.set(it.ref_id, (desejado.get(it.ref_id) ?? false) || quitado)
+          // Só pode DESMARCAR quando o orçamento não tem nenhum recebimento (ex.:
+          // estorno/exclusão do pagamento). Com pagamento parcial, a marcação
+          // manual do item é preservada — foi o paciente pagando aquela parte.
+          if (!quitado && recebido > 0.005) desejado.set(it.ref_id, atual.get(it.ref_id) ?? false)
         }
       }
     }
