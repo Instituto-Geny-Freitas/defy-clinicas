@@ -60,6 +60,7 @@ import {
   type Supplier,
 } from '@/lib/domains'
 import Calculadora from '@/components/Calculadora'
+import { SnippetEditModal, SnippetHistoricoModal } from '@/components/SnippetModals'
 import { getImageConsentConfig, saveImageConsentConfig } from '@/lib/imageConsent'
 import { brl } from '@/lib/finance'
 import { getNpsConfig, saveNpsConfig, NPS_DEFAULT, NPS_TIPO_LABEL, type NpsConfig, type NpsQuestion, type NpsQuestionType } from '@/lib/nps'
@@ -1669,6 +1670,8 @@ function TextosSection({ clinicId }: { clinicId: string }) {
   const [titulo, setTitulo] = useState('')
   const [conteudo, setConteudo] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [editando, setEditando] = useState<Snippet | null>(null)
+  const [historico, setHistorico] = useState<Snippet | null>(null)
 
   function recarregar() { listAllSnippets().then(setSnippets).catch(() => {}) }
   useEffect(recarregar, [])
@@ -1705,15 +1708,28 @@ function TextosSection({ clinicId }: { clinicId: string }) {
       <div className="space-y-2">
         {snippets.map((s) => (
           <div key={s.id} className="rounded-xl border border-black/5 bg-white p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium text-texto">{s.titulo} <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/50">{s.categoria}</span></div>
-              <button onClick={() => remover(s.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium text-texto">
+                {s.titulo}
+                <span className="ml-2 rounded-full bg-black/5 px-2 py-0.5 text-xs text-texto/50">{s.categoria}</span>
+                {(s.versao ?? 1) > 1 && <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">v{s.versao}</span>}
+              </div>
+              <div className="flex shrink-0 items-center gap-3 text-xs">
+                <button onClick={() => setEditando(s)} className="font-medium text-primaria hover:underline">Editar</button>
+                {(s.versao ?? 1) > 1 && <button onClick={() => setHistorico(s)} className="font-medium text-texto/60 hover:underline">Histórico</button>}
+                <button onClick={() => remover(s.id)} className="text-secundaria hover:underline">Excluir</button>
+              </div>
             </div>
             <p className="mt-1 whitespace-pre-wrap text-sm text-texto/60">{s.conteudo}</p>
           </div>
         ))}
         {snippets.length === 0 && <p className="text-sm text-texto/50">Nenhum texto-padrão cadastrado.</p>}
       </div>
+
+      {editando && (
+        <SnippetEditModal clinicId={clinicId} snippet={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); recarregar() }} />
+      )}
+      {historico && <SnippetHistoricoModal snippet={historico} onClose={() => setHistorico(null)} />}
     </div>
   )
 }

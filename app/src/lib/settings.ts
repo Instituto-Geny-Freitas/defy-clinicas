@@ -162,12 +162,14 @@ export interface Snippet {
   titulo: string
   conteudo: string
   ativo: boolean
+  versao?: number
+  updated_at?: string
 }
 
 export async function listAllSnippets(): Promise<Snippet[]> {
   const { data, error } = await supabase
     .from('treatment_text_snippets')
-    .select('id, categoria, titulo, conteudo, ativo')
+    .select('id, categoria, titulo, conteudo, ativo, versao, updated_at')
     .order('categoria')
     .order('titulo')
   if (error) throw error
@@ -182,6 +184,70 @@ export async function createSnippet(clinicId: string, input: { categoria: string
 export async function deleteSnippet(id: string): Promise<void> {
   const { error } = await supabase.from('treatment_text_snippets').delete().eq('id', id)
   if (error) throw error
+}
+
+// ---- Edição com histórico de versões ---------------------------------------
+export interface SnippetVersion {
+  id: string
+  snippet_id: string
+  versao: number
+  categoria: string | null
+  titulo: string
+  conteudo: string
+  created_by_nome: string | null
+  created_at: string
+}
+
+/** Versões ANTERIORES de um texto-padrão (mais recente primeiro). */
+export async function listSnippetVersions(snippetId: string): Promise<SnippetVersion[]> {
+  const { data, error } = await supabase
+    .from('treatment_text_snippet_versions')
+    .select('id, snippet_id, versao, categoria, titulo, conteudo, created_by_nome, created_at')
+    .eq('snippet_id', snippetId)
+    .order('versao', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * Edita um texto-padrão preservando o conteúdo anterior como versão.
+ * O texto já inserido em planos/observações é uma CÓPIA no registro do
+ * paciente — editar aqui nunca altera o histórico clínico.
+ */
+export async function updateSnippet(
+  id: string,
+  input: { categoria: string; titulo: string; conteudo: string },
+  autor?: { clinicId: string; createdBy?: string | null; createdByNome?: string | null },
+): Promise<void> {
+  // 1) Lê o estado atual e o arquiva como versão.
+  const { data: atual, error: e1 } = await supabase
+    .from('treatment_text_snippets')
+    .select('clinic_id, categoria, titulo, conteudo, versao')
+    .eq('id', id)
+    .single()
+  if (e1) throw e1
+
+  const semMudanca = atual.categoria === input.categoria && atual.titulo === input.titulo && atual.conteudo === input.conteudo
+  if (semMudanca) return
+
+  const { error: e2 } = await supabase.from('treatment_text_snippet_versions').insert({
+    clinic_id: autor?.clinicId ?? atual.clinic_id,
+    snippet_id: id,
+    versao: Number(atual.versao) || 1,
+    categoria: atual.categoria,
+    titulo: atual.titulo,
+    conteudo: atual.conteudo,
+    created_by: autor?.createdBy ?? null,
+    created_by_nome: autor?.createdByNome ?? null,
+  })
+  if (e2) throw e2
+
+  // 2) Grava a nova versão no registro corrente.
+  const { error: e3 } = await supabase
+    .from('treatment_text_snippets')
+    .update({ ...input, versao: (Number(atual.versao) || 1) + 1, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (e3) throw e3
 }
 
 export async function upsertIntegration(s: IntegrationSetting): Promise<void> {
