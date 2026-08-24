@@ -1523,6 +1523,35 @@ const TIPOS_CAMPO: { v: FieldType; l: string }[] = [
   { v: 'profissional', l: 'Profissional' }, { v: 'paciente', l: 'Paciente' },
   { v: 'form_ref', l: 'Registro de outro formulário' },
 ]
+/**
+ * Campo de opções separadas por vírgula.
+ *
+ * Guarda o TEXTO digitado em estado local e só derruba a lista para o pai.
+ * Antes o input era controlado por `opcoes.join(', ')`: a cada tecla o texto
+ * era reconstruído da lista (que descarta itens vazios), então a vírgula recém
+ * digitada desaparecia e era impossível começar um novo item.
+ */
+function OpcoesInput({ opcoes, onChange, className, placeholder }: {
+  opcoes: string[] | undefined
+  onChange: (v: string[]) => void
+  className?: string
+  placeholder?: string
+}) {
+  const [texto, setTexto] = useState((opcoes ?? []).join(', '))
+  return (
+    <input
+      className={className}
+      value={texto}
+      placeholder={placeholder}
+      onChange={(e) => {
+        setTexto(e.target.value)
+        onChange(e.target.value.split(',').map((x) => x.trim()).filter(Boolean))
+      }}
+      onBlur={() => setTexto((opcoes ?? []).join(', '))}   // normaliza ao sair
+    />
+  )
+}
+
 const slugKey = (s: string) =>
   (s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'campo')
 
@@ -1614,7 +1643,13 @@ function FormulariosSection({ clinicId }: { clinicId: string }) {
                     {TIPOS_CAMPO.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
                   </select>
                   {(c.tipo === 'select' || c.tipo === 'multiselect') ? (
-                    <input className="sm:col-span-3 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={(c.opcoes ?? []).join(', ')} onChange={(e) => editarCampo(i, { opcoes: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} placeholder="Opções (vírgula)" />
+                    <OpcoesInput
+                      key={`${def.chave}-${c.key}`}
+                      className="sm:col-span-3 rounded-lg border border-black/10 px-2 py-1.5 text-sm"
+                      opcoes={c.opcoes}
+                      onChange={(v) => editarCampo(i, { opcoes: v })}
+                      placeholder="Opções separadas por vírgula"
+                    />
                   ) : <div className="sm:col-span-3" />}
                   <div className="sm:col-span-2 flex items-center justify-end gap-1 text-texto/50">
                     <button onClick={() => moverCampo(i, -1)} className="px-1 hover:text-texto" title="Subir">↑</button>
@@ -2978,9 +3013,13 @@ function NpsForm({ clinicId, inicial }: { clinicId: string; inicial: NpsConfig }
                 </div>
               </div>
               {q.tipo === 'escolha' && (
-                <input className="mt-2 w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={(q.opcoes ?? []).join(', ')}
-                  onChange={(e) => setPergunta(i, { opcoes: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
-                  placeholder="Opções separadas por vírgula (ex.: Atendimento, Estrutura, Preço)" />
+                <OpcoesInput
+                  key={q.id}
+                  className="mt-2 w-full rounded-lg border border-black/10 px-2 py-1.5 text-sm"
+                  opcoes={q.opcoes}
+                  onChange={(v) => setPergunta(i, { opcoes: v })}
+                  placeholder="Opções separadas por vírgula (ex.: Atendimento, Estrutura, Preço)"
+                />
               )}
               <label className="mt-1 flex items-center gap-1 text-xs text-texto/60">
                 <input type="checkbox" checked={!!q.obrigatoria} onChange={(e) => setPergunta(i, { obrigatoria: e.target.checked })} /> obrigatória
