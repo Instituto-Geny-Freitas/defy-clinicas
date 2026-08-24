@@ -233,7 +233,15 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
 
   useEffect(() => {
     listActiveIngredients().then(setAtivos).catch(() => {})
-    listAtivoLotes().then(setAtivoLotes).catch(() => {})
+    // Ao EDITAR, descobre o ativo pelo lote gravado — sem isso o seletor de ativo
+    // (e o de lote) abriam em branco na edição.
+    listAtivoLotes().then((ls) => {
+      setAtivoLotes(ls)
+      if (supl?.ativo_lote_id) {
+        const lote = ls.find((l) => l.id === supl.ativo_lote_id)
+        if (lote) setAtivoId(lote.ativo_id)
+      }
+    }).catch(() => {})
     listRoutes().then(setVias).catch(() => {})
     listTreatmentPlans(patientId).then(setPlanos).catch(() => {})
     listPackages(patientId).then((ps) => setPacotes(ps.filter((p) => p.tipo === 'suplementacao'))).catch(() => {})
@@ -262,7 +270,10 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
     }).catch(() => {})
   }, [pacoteId, pacotes])
 
-  const lotesDoAtivo = ativoLotes.filter((l) => l.ativo_id === ativoId && Number(l.qtd_atual) > 0)
+  // Inclui SEMPRE o lote já escolhido (mesmo zerado); senão, ao editar um registro
+  // antigo o select ficava em branco porque o lote gasto saía da lista.
+  const lotesDoAtivo = ativoLotes.filter((l) => l.ativo_id === ativoId && (Number(l.qtd_atual) > 0 || l.id === ativoLoteId))
+  const lotesComSaldo = lotesDoAtivo.filter((l) => Number(l.qtd_atual) > 0)
   const saldoLote = (id: string) => Number(ativoLotes.find((l) => l.id === id)?.qtd_atual ?? 0)
 
   // Ao escolher um ativo: preenche nome/via e reseta o lote.
@@ -350,14 +361,16 @@ function Modal({ clinicId, patientId, professionalId, supl, onClose, onSaved }: 
         {ativoId && (
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm text-texto/70">Lote (com saldo)</label>
+              <label className="mb-1 block text-sm text-texto/70">Lote</label>
               <select className={field} value={ativoLoteId} onChange={(e) => escolherLote(e.target.value)}>
                 <option value="">Selecione o lote…</option>
                 {lotesDoAtivo.map((l) => (
-                  <option key={l.id} value={l.id}>{l.lote || 's/ lote'}{l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · {l.qtd_atual} un</option>
+                  <option key={l.id} value={l.id}>
+                    {l.lote || 's/ lote'}{l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · {l.qtd_atual} un{Number(l.qtd_atual) <= 0 ? ' (esgotado)' : ''}
+                  </option>
                 ))}
               </select>
-              {lotesDoAtivo.length === 0 && <p className="mt-1 text-[11px] text-amber-700">Sem saldo. Registre entrada (Nova Despesa, Editar Ativo → +Entrada — admin).</p>}
+              {lotesComSaldo.length === 0 && <p className="mt-1 text-[11px] text-amber-700">Nenhum lote com saldo. Registre entrada (Nova Despesa, Editar Ativo → +Entrada — admin).</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm text-texto/70">Quantidade (unidades)</label>
