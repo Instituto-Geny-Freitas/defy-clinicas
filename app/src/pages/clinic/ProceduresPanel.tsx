@@ -280,8 +280,12 @@ function RegistrarModal({
 
   const nomeProduto = (invId: string) => estoque.find((i) => i.id === invId)?.produto ?? ''
   const lotesComSaldo = lotes.filter((l) => Number(l.qtd_atual) > 0)
-  const rotuloLote = (l: InventoryLot) =>
-    `${nomeProduto(l.inventory_id)} · ${l.lote || 's/ lote'}${l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · ${l.qtd_atual} un${Number(l.preco_venda) > 0 ? ` · ${brl(Number(l.preco_venda))}` : ''}`
+  const rotuloLote = (l: InventoryLot) => {
+    const saldo = Number(l.qtd_atual)
+    // Produto sem cadastro (excluído do estoque) não deve deixar o rótulo vazio.
+    const nome = nomeProduto(l.inventory_id) || 'Produto sem cadastro'
+    return `${nome} · ${l.lote || 's/ lote'}${l.validade ? ` · val ${formatDateBR(l.validade)}` : ''} · ${saldo} un${saldo <= 0 ? ' (esgotado)' : ''}${Number(l.preco_venda) > 0 ? ` · ${brl(Number(l.preco_venda))}` : ''}`
+  }
   // Filtro textual por nome do produto, lote ou validade (facilita achar em listas grandes).
   const matchFiltro = (l: InventoryLot) => {
     const t = filtroLote.trim().toLowerCase()
@@ -545,15 +549,24 @@ function RegistrarModal({
             )}
             <div className="space-y-2">
               {produtos.map((p, idx) => {
-                // Lotes disponíveis: com saldo > 0 (e o já escolhido), aplicando o filtro textual.
-                const opcoes = lotesComSaldo.filter((l) => l.id === p.lot_id || (Number(l.qtd_atual) > 0 && matchFiltro(l)))
+                // Opções: lotes com saldo (pelo filtro) MAIS o lote já escolhido — mesmo
+                // que hoje esteja zerado. Sem isso, ao editar um procedimento antigo o
+                // select ficava em branco (o lote gasto não estava na lista).
+                const opcoes = lotes.filter((l) => l.id === p.lot_id || (Number(l.qtd_atual) > 0 && matchFiltro(l)))
                 const semSaldo = !!p.lot_id && !editar && p.qtd > saldoLote(p.lot_id)
+                // Lote apagado do estoque: mostra o registro histórico gravado no procedimento.
+                const loteAusente = !!p.lot_id && !opcoes.some((l) => l.id === p.lot_id)
                 return (
                   <div key={idx}>
                     <div className="flex gap-2">
                       <select className={field} value={p.lot_id ?? ''}
                         onChange={(e) => setProdutoLote(idx, lotes.find((l) => l.id === e.target.value) ?? null, p.qtd)}>
-                        <option value="">{p.lot_id ? '' : (p.produto ? `${p.produto} (lote antigo)` : 'Selecione o lote…')}</option>
+                        <option value="">{p.produto ? `${p.produto} — trocar lote…` : 'Selecione o lote…'}</option>
+                        {loteAusente && (
+                          <option value={p.lot_id as string}>
+                            {`${p.produto || 'Produto'}${p.lote ? ` · ${p.lote}` : ''}${p.validade ? ` · val ${formatDateBR(p.validade)}` : ''} · (lote fora do estoque)`}
+                          </option>
+                        )}
                         {opcoes.map((l) => <option key={l.id} value={l.id}>{rotuloLote(l)}</option>)}
                       </select>
                       <input type="number" min={1} className="w-20 rounded-lg border border-black/10 px-2 py-2 text-sm outline-none focus:border-primaria"
