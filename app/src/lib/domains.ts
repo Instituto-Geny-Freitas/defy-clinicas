@@ -141,6 +141,9 @@ export async function currentAtivoLoteInfo(): Promise<Record<string, AtivoLoteVi
   const lotes = await listAtivoLotes() // já ordenado por validade asc (FEFO)
   const comSaldo: Record<string, AtivoLoteVigente> = {}
   const qualquer: Record<string, AtivoLoteVigente> = {}
+  // Fornecedor é dado do item (não do lote em uso): se o lote vigente não tiver,
+  // aproveita o de qualquer outro lote do mesmo ativo para não exibir em branco.
+  const fornPorAtivo: Record<string, string> = {}
   for (const l of lotes) {
     const info: AtivoLoteVigente = {
       fornecedor: l.fornecedor,
@@ -150,8 +153,16 @@ export async function currentAtivoLoteInfo(): Promise<Record<string, AtivoLoteVi
     }
     if (!(l.ativo_id in qualquer)) qualquer[l.ativo_id] = info
     if (Number(l.qtd_atual) > 0 && !(l.ativo_id in comSaldo)) comSaldo[l.ativo_id] = info
+    const forn = (l.fornecedor ?? '').trim()
+    if (forn && !(l.ativo_id in fornPorAtivo)) fornPorAtivo[l.ativo_id] = forn
   }
-  return { ...qualquer, ...comSaldo } // lote com saldo tem prioridade
+  const out: Record<string, AtivoLoteVigente> = { ...qualquer, ...comSaldo } // lote com saldo tem prioridade
+  for (const ativoId of Object.keys(out)) {
+    if (!(out[ativoId].fornecedor ?? '').trim() && fornPorAtivo[ativoId]) {
+      out[ativoId] = { ...out[ativoId], fornecedor: fornPorAtivo[ativoId] }
+    }
+  }
+  return out
 }
 
 /**
