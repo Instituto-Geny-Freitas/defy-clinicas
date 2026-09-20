@@ -123,6 +123,37 @@ export async function currentAtivoSalePrices(): Promise<Record<string, number>> 
   return { ...qualquer, ...comSaldo } // lote com saldo tem prioridade
 }
 
+export interface AtivoLoteVigente {
+  fornecedor: string | null
+  custo_aquisicao: number
+  margem_pct: number
+  preco_venda: number
+}
+
+/**
+ * Dados "vigentes" por ativo (fornecedor, custo de aquisição, margem, venda),
+ * lidos do LOTE que será usado a seguir: prefere o lote COM SALDO de validade
+ * mais próxima (FEFO); se nenhum tiver saldo, usa o primeiro lote na ordenação.
+ * Esses campos migraram do cadastro do ativo para os lotes, então a listagem
+ * de ativos lê daqui — o cadastro (active_ingredients) pode estar zerado.
+ */
+export async function currentAtivoLoteInfo(): Promise<Record<string, AtivoLoteVigente>> {
+  const lotes = await listAtivoLotes() // já ordenado por validade asc (FEFO)
+  const comSaldo: Record<string, AtivoLoteVigente> = {}
+  const qualquer: Record<string, AtivoLoteVigente> = {}
+  for (const l of lotes) {
+    const info: AtivoLoteVigente = {
+      fornecedor: l.fornecedor,
+      custo_aquisicao: Number(l.custo_aquisicao) || 0,
+      margem_pct: Number(l.margem_pct) || 0,
+      preco_venda: Number(l.preco_venda) || 0,
+    }
+    if (!(l.ativo_id in qualquer)) qualquer[l.ativo_id] = info
+    if (Number(l.qtd_atual) > 0 && !(l.ativo_id in comSaldo)) comSaldo[l.ativo_id] = info
+  }
+  return { ...qualquer, ...comSaldo } // lote com saldo tem prioridade
+}
+
 /**
  * Entrada de estoque de ATIVO por lote: soma no mesmo lote (fornecedor+lote+validade)
  * ou cria um novo. O gatilho atualiza o saldo do lote.
