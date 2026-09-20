@@ -39,7 +39,7 @@ import {
   deleteProcedureType,
   deleteRoute,
   deleteSupplier,
-  currentAtivoSalePrices,
+  currentAtivoLoteInfo,
   currentProcedurePrices,
   listActiveIngredients,
   listAtivoLotes,
@@ -54,6 +54,7 @@ import {
   type AtivoCategoria,
   type AtivoInput,
   type AtivoLote,
+  type AtivoLoteVigente,
   type DomainItem,
   type ProcedureType,
   type ProcedureTypePrice,
@@ -294,8 +295,9 @@ function DocumentTypesSection({ clinicId }: { clinicId: string }) {
 // --- Ativos de composição ---------------------------------------------------
 function AtivosSection({ clinicId }: { clinicId: string }) {
   const [itens, setItens] = useState<ActiveIngredient[]>([])
-  // Preço de venda derivado dos LOTES (o cadastro do ativo pode estar zerado).
-  const [precosLote, setPrecosLote] = useState<Record<string, number>>({})
+  // Fornecedor, aquisição, margem e venda derivados dos LOTES (o cadastro do
+  // ativo pode estar zerado — esses campos migraram para cada lote).
+  const [infoLote, setInfoLote] = useState<Record<string, AtivoLoteVigente>>({})
   const [filtro, setFiltro] = useState<AtivoCategoria | ''>('')
   const [busca, setBusca] = useState('')
   const [editando, setEditando] = useState<ActiveIngredient | 'novo' | null>(null)
@@ -307,7 +309,7 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
 
   function recarregar() {
     listActiveIngredients().then(setItens).catch(() => {})
-    currentAtivoSalePrices().then(setPrecosLote).catch(() => {})
+    currentAtivoLoteInfo().then(setInfoLote).catch(() => {})
   }
   useEffect(recarregar, [])
 
@@ -434,12 +436,12 @@ function AtivosSection({ clinicId }: { clinicId: string }) {
                 <td className="px-3 py-1.5 text-texto">{a.nome}</td>
                 <td className="px-3 py-1.5 text-texto/60">{ATIVO_CATEGORIAS.find((c) => c.v === a.categoria)?.l}</td>
                 <td className="px-3 py-1.5 text-texto/60">{a.via ?? '—'}</td>
-                <td className="px-3 py-1.5 text-texto/60">{a.fornecedor ?? '—'}</td>
-                <td className="px-3 py-1.5 text-texto/60">{brl(a.preco_aquisicao)}</td>
-                <td className="px-3 py-1.5 text-texto/60">{a.margem_pct}%</td>
+                <td className="px-3 py-1.5 text-texto/60">{infoLote[a.id]?.fornecedor || a.fornecedor || '—'}</td>
+                <td className="px-3 py-1.5 text-texto/60">{brl(infoLote[a.id]?.custo_aquisicao || Number(a.preco_aquisicao) || 0)}</td>
+                <td className="px-3 py-1.5 text-texto/60">{infoLote[a.id]?.margem_pct ?? a.margem_pct}%</td>
                 <td className="px-3 py-1.5 font-medium text-texto">
-                  {brl(precosLote[a.id] || Number(a.preco_venda) || 0)}
-                  {precosLote[a.id] > 0 && !(Number(a.preco_venda) > 0) && <span className="ml-1 text-[10px] font-normal text-texto/40">(lote)</span>}
+                  {brl(infoLote[a.id]?.preco_venda || Number(a.preco_venda) || 0)}
+                  {(infoLote[a.id]?.preco_venda ?? 0) > 0 && !(Number(a.preco_venda) > 0) && <span className="ml-1 text-[10px] font-normal text-texto/40">(lote)</span>}
                 </td>
                 <td className="px-3 py-1.5 text-right whitespace-nowrap">
                   <button onClick={() => setEditando(a)} className="mr-3 text-xs font-medium text-primaria hover:underline">Editar</button>
