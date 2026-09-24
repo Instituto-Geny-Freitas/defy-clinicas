@@ -5,6 +5,8 @@ import { brl, listAllQuotes } from '@/lib/finance'
 import { estoqueBaixo, listInventory, validadeProxima } from '@/lib/inventory'
 import { listExpenses, listPaymentsPeriodo } from '@/lib/cashflow'
 import { buildMapaMensalPdf, type Linha } from '@/lib/mapaMensalPdf'
+import { listPatientPaymentsMonth, formaPagamentoLabel, formatCPF, type PatientPaymentRow } from '@/lib/paymentsReport'
+import { buildPatientPaymentsPdf } from '@/lib/pagamentosPacientesPdf'
 import { listNpsResponses, calcNps, type NpsResponse } from '@/lib/nps'
 import { getGestaoConfig } from '@/lib/gestao'
 import { listProfessionals } from '@/lib/settings'
@@ -138,6 +140,8 @@ export default function Reports() {
 
       <MapaMensal />
 
+      <PagamentosPacientes />
+
 
       <h2 className="mt-6 mb-2 text-sm font-semibold text-texto/70">Faturamento</h2>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -237,6 +241,108 @@ export default function Reports() {
               </ul>
             </div>
           )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ---- Pagamentos dos pacientes (filtro mês/ano + PDF) -----------------------
+function PagamentosPacientes() {
+  const clinic = useClinic()
+  const hoje = new Date()
+  const [ano, setAno] = useState(hoje.getFullYear())
+  const [mes, setMes] = useState(hoje.getMonth())
+  const [rows, setRows] = useState<PatientPaymentRow[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const anos = Array.from({ length: 6 }, (_, i) => hoje.getFullYear() - 4 + i)
+  const periodoLabel = `${MESES[mes]} de ${ano}`
+
+  useEffect(() => {
+    setCarregando(true)
+    listPatientPaymentsMonth(ano, mes)
+      .then(setRows)
+      .catch(() => setRows([]))
+      .finally(() => setCarregando(false))
+  }, [ano, mes])
+
+  const totalRecebido = rows.reduce((s, r) => s + r.valor, 0)
+  // "A receber" é por paciente: soma dos saldos distintos entre os pacientes listados.
+  const aReceberPorPaciente = new Map<string, number>()
+  for (const r of rows) if (!aReceberPorPaciente.has(r.patientId)) aReceberPorPaciente.set(r.patientId, r.aReceber)
+  const totalReceber = [...aReceberPorPaciente.values()].reduce((s, v) => s + v, 0)
+
+  function exportar() {
+    const { blob, filename } = buildPatientPaymentsPdf({ clinic, periodoLabel, rows })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
+
+  let ultimoPaciente = ''
+
+  return (
+    <div className="mt-8">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-texto/70">Pagamentos dos pacientes</h2>
+        <div className="flex gap-2">
+          <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
+            {MESES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+          <select className="rounded-lg border border-black/10 px-3 py-2 text-sm" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <button onClick={exportar} disabled={rows.length === 0} className="rounded-lg border border-primaria px-4 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-40">Exportar PDF</button>
+        </div>
+      </div>
+
+      {carregando ? (
+        <p className="p-6 text-sm text-texto/50">Carregando…</p>
+      ) : (
+        <>
+          <div className="overflow-x-auto rounded-xl border border-black/5 bg-white">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-black/[0.02] text-left text-texto/60"><tr>
+                <th className="px-3 py-2 font-medium">Nome</th>
+                <th className="px-3 py-2 font-medium">CPF</th>
+                <th className="px-3 py-2 font-medium">Data</th>
+                <th className="px-3 py-2 font-medium text-right">Valor</th>
+                <th className="px-3 py-2 font-medium">Forma de pagamento</th>
+                <th className="px-3 py-2 font-medium text-right">A receber</th>
+              </tr></thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-6 text-center text-texto/40">Nenhum pagamento no período.</td></tr>
+                ) : rows.map((r, i) => {
+                  const mostraReceber = r.patientId !== ultimoPaciente
+                  ultimoPaciente = r.patientId
+                  return (
+                    <tr key={i} className="border-t border-black/5">
+                      <td className="px-3 py-1.5 text-texto">{r.nome}</td>
+                      <td className="px-3 py-1.5 text-texto/60">{formatCPF(r.cpf)}</td>
+                      <td className="px-3 py-1.5 text-texto/60">{formatDateBR(r.data)}</td>
+                      <td className="px-3 py-1.5 text-right font-medium text-texto">{brl(r.valor)}</td>
+                      <td className="px-3 py-1.5 text-texto/70">{formaPagamentoLabel(r)}</td>
+                      <td className="px-3 py-1.5 text-right text-secundaria">{mostraReceber ? (r.aReceber > 0 ? brl(r.aReceber) : '—') : ''}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-black/10 bg-black/[0.02] font-semibold">
+                    <td className="px-3 py-2 text-texto/70" colSpan={3}>Total</td>
+                    <td className="px-3 py-2 text-right text-emerald-600">{brl(totalRecebido)}</td>
+                    <td className="px-3 py-2"></td>
+                    <td className="px-3 py-2 text-right text-amber-600">{brl(totalReceber)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-texto/50">
+            Cartão parcelado é contabilizado no ato da venda pelo valor total. “A receber” é o saldo atual do paciente (todos os orçamentos), exibido uma vez por paciente.
+          </p>
         </>
       )}
     </div>
