@@ -97,9 +97,11 @@ import { getReferralConfig, saveReferralConfig } from '@/lib/referral'
 import { getLoyaltyConfig, saveLoyaltyConfig } from '@/lib/loyalty'
 import { getGestaoConfig, saveGestaoConfig } from '@/lib/gestao'
 import { listResources, createResource, deleteResource, type Resource } from '@/lib/resources'
+import { listPops, createPop, updatePop, deletePop, novoBloco, type Pop, type PopBloco, type PopInput, type GestorSnapshot } from '@/lib/pops'
+import RichTextEditor from '@/components/RichTextEditor'
 import type { Professional, UserRole } from '@/lib/types'
 
-type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'tipos_doc' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'nps' | 'metas' | 'recursos'
+type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'tipos_doc' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'nps' | 'metas' | 'recursos' | 'pops'
 const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
 
 const ALFABETO_ATIVOS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -126,6 +128,7 @@ const SETTINGS_GRUPOS: { titulo: string; itens: { k: Sec; l: string }[] }[] = [
     { k: 'nps', l: 'NPS' },
     { k: 'lgpd', l: 'LGPD' },
     { k: 'imagem', l: 'Termo de Imagem' },
+    { k: 'pops', l: 'POPs' },
   ] },
   { titulo: 'Sistema', itens: [
     { k: 'fornecedores', l: 'Fornecedores' },
@@ -224,6 +227,7 @@ export default function Settings() {
       {sec === 'fidelidade' && <FidelidadeSection clinicId={clinicId} />}
       {sec === 'nps' && <NpsSection clinicId={clinicId} />}
       {sec === 'metas' && <MetasSection clinicId={clinicId} />}
+      {sec === 'pops' && <PopsSection clinicId={clinicId} />}
     </div>
   )
 }
@@ -3034,6 +3038,200 @@ function NpsForm({ clinicId, inicial }: { clinicId: string; inicial: NpsConfig }
       <div className="flex items-center gap-3">
         <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar NPS'}</button>
         {msg && <span className="text-sm text-texto/60">{msg}</span>}
+      </div>
+    </div>
+  )
+}
+
+// --- POPs (Procedimentos Operacionais Padrão) -------------------------------
+function conselhoDe(p?: Professional | null): string | null {
+  if (!p) return null
+  const s = [p.conselho_tipo, p.conselho_numero].filter(Boolean).join(' ')
+  const full = p.conselho_uf ? `${s}/${p.conselho_uf}` : s
+  return full.trim() || null
+}
+
+function PopsSection({ clinicId }: { clinicId: string }) {
+  const { profile } = useAuth()
+  const [itens, setItens] = useState<Pop[]>([])
+  const [editando, setEditando] = useState<Pop | 'novo' | null>(null)
+
+  function recarregar() { listPops().then(setItens).catch(() => {}) }
+  useEffect(recarregar, [])
+
+  async function remover(id: string) {
+    if (confirm('Excluir este POP? Ele deixa de aparecer na Gestão (o conteúdo é arquivado).')) {
+      await deletePop(id); recarregar()
+    }
+  }
+
+  return (
+    <div className="max-w-3xl space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="font-semibold text-texto">Procedimentos Operacionais Padrão (POPs)</h3>
+          <p className="text-xs text-texto/50">Crie e edite os POPs. Eles ficam disponíveis para a equipe em <strong>Gestão → POPs</strong>, com opção de gerar PDF e enviar ao paciente.</p>
+        </div>
+        <button onClick={() => setEditando('novo')} className="shrink-0 rounded-lg bg-primaria px-4 py-2 text-sm font-semibold text-white hover:opacity-90">+ Novo POP</button>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-black/5 bg-white">
+        {itens.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-texto/50">Nenhum POP cadastrado ainda.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <tbody>
+              {itens.map((p) => (
+                <tr key={p.id} className="border-t border-black/5 first:border-t-0">
+                  <td className="px-4 py-2.5 text-texto">{p.titulo}</td>
+                  <td className="px-4 py-2.5 text-right text-xs text-texto/40">atualizado {formatDateBR(p.updated_at)}</td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <button onClick={() => setEditando(p)} className="mr-3 text-xs font-medium text-primaria hover:underline">Editar</button>
+                    <button onClick={() => remover(p.id)} className="text-xs text-secundaria hover:underline">Excluir</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {editando && (
+        <PopEditModal
+          clinicId={clinicId}
+          pop={editando === 'novo' ? null : editando}
+          gestor={{ professionalId: profile?.professional?.id ?? null, nome: profile?.professional?.nome ?? null, conselho: conselhoDe(profile?.professional) }}
+          onClose={() => setEditando(null)}
+          onSaved={() => { setEditando(null); recarregar() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function PopEditModal({ clinicId, pop, gestor, onClose, onSaved }: { clinicId: string; pop: Pop | null; gestor: GestorSnapshot; onClose: () => void; onSaved: () => void }) {
+  const [titulo, setTitulo] = useState(pop?.titulo ?? '')
+  const [blocos, setBlocos] = useState<PopBloco[]>(pop?.estrutura?.length ? pop.estrutura : [novoBloco()])
+  const [elaboradoPor, setElaboradoPor] = useState(pop?.elaborado_por ?? '')
+  const [revisadoPor, setRevisadoPor] = useState(pop?.revisado_por ?? '')
+  const [dataAprovacao, setDataAprovacao] = useState(pop?.data_aprovacao ?? '')
+  const [profs, setProfs] = useState<Professional[]>([])
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  useEffect(() => { listProfessionals().then((l) => setProfs(l.filter((p) => p.ativo))).catch(() => {}) }, [])
+
+  function patchBloco(bi: number, patch: Partial<PopBloco>) {
+    setBlocos((bs) => bs.map((b, i) => (i === bi ? { ...b, ...patch } : b)))
+  }
+  function patchLinha(bi: number, li: number, col: 'col1' | 'col2', html: string) {
+    setBlocos((bs) => bs.map((b, i) => (i === bi ? { ...b, linhas: b.linhas.map((l, j) => (j === li ? { ...l, [col]: html } : l)) } : b)))
+  }
+  function addLinha(bi: number) { patchBloco(bi, { linhas: [...blocos[bi].linhas, { col1: '', col2: '' }] }) }
+  function removeLinha(bi: number, li: number) { patchBloco(bi, { linhas: blocos[bi].linhas.filter((_, j) => j !== li) }) }
+  function addBloco() { setBlocos((bs) => [...bs, novoBloco()]) }
+  function removeBloco(bi: number) { setBlocos((bs) => bs.filter((_, i) => i !== bi)) }
+  function moverBloco(bi: number, dir: -1 | 1) {
+    setBlocos((bs) => {
+      const j = bi + dir
+      if (j < 0 || j >= bs.length) return bs
+      const copia = bs.slice()
+      ;[copia[bi], copia[j]] = [copia[j], copia[bi]]
+      return copia
+    })
+  }
+
+  async function salvar() {
+    if (!titulo.trim()) { setErro('Informe o título do procedimento.'); return }
+    setSalvando(true); setErro(null)
+    const input: PopInput = {
+      titulo,
+      estrutura: blocos.map((b) => ({ ...b, linhas: b.linhas.filter((l) => !(l.col1 === '' && l.col2 === '')) })),
+      elaborado_por: elaboradoPor || null,
+      revisado_por: revisadoPor || null,
+      data_aprovacao: dataAprovacao || null,
+    }
+    try {
+      if (pop) await updatePop(pop.id, input, gestor)
+      else await createPop(clinicId, input, gestor)
+      onSaved()
+    } catch { setErro('Não foi possível salvar o POP.'); setSalvando(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[56] flex items-start justify-center overflow-y-auto bg-black/40 p-0 sm:p-4" onClick={onClose}>
+      <div className="my-0 w-full max-w-3xl rounded-none bg-white p-5 sm:my-4 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-texto">{pop ? 'Editar POP' : 'Novo POP'}</h3>
+          <button onClick={onClose} className="text-texto/40 hover:text-texto">✕</button>
+        </div>
+
+        <p className="mb-1 text-center text-xs font-semibold uppercase tracking-wider text-primaria">Procedimento Operacional Padrão – POP</p>
+        <input className={`${field} mb-4 text-center font-semibold`} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título do procedimento (ex.: Limpeza de pele com extração)" />
+
+        <div className="space-y-4">
+          {blocos.map((b, bi) => (
+            <div key={b.id} className="rounded-xl border border-black/10 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <input
+                  className={`${field} flex-1 font-medium`}
+                  value={b.subtitulo}
+                  onChange={(e) => patchBloco(bi, { subtitulo: e.target.value })}
+                  placeholder="Subtítulo (opcional) — ex.: OBJETIVO, MATERIAIS, PASSO A PASSO"
+                />
+                <button onClick={() => moverBloco(bi, -1)} disabled={bi === 0} title="Mover para cima" className="rounded px-1.5 py-1 text-texto/50 hover:bg-black/5 disabled:opacity-30">↑</button>
+                <button onClick={() => moverBloco(bi, 1)} disabled={bi === blocos.length - 1} title="Mover para baixo" className="rounded px-1.5 py-1 text-texto/50 hover:bg-black/5 disabled:opacity-30">↓</button>
+                <button onClick={() => removeBloco(bi)} title="Remover bloco" className="rounded px-1.5 py-1 text-secundaria hover:bg-secundaria/5">🗑</button>
+              </div>
+
+              <div className="space-y-2">
+                {b.linhas.map((l, li) => (
+                  <div key={li} className="grid grid-cols-1 gap-2 sm:grid-cols-[30%_1fr_auto] sm:items-start">
+                    <div>
+                      <span className="mb-0.5 block text-[11px] text-texto/40">Coluna 1 (rótulo)</span>
+                      <RichTextEditor value={l.col1} onChange={(html) => patchLinha(bi, li, 'col1', html)} placeholder="Ex.: OBJETIVO" minHeight={60} />
+                    </div>
+                    <div>
+                      <span className="mb-0.5 block text-[11px] text-texto/40">Coluna 2 (conteúdo)</span>
+                      <RichTextEditor value={l.col2} onChange={(html) => patchLinha(bi, li, 'col2', html)} placeholder="Descrição…" minHeight={60} />
+                    </div>
+                    <button onClick={() => removeLinha(bi, li)} title="Remover linha" className="mt-5 hidden shrink-0 rounded px-1.5 py-1 text-secundaria hover:bg-secundaria/5 sm:block">✕</button>
+                  </div>
+                ))}
+                <button onClick={() => addLinha(bi)} className="text-xs font-medium text-primaria hover:underline">+ Linha</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={addBloco} className="rounded-lg border border-dashed border-primaria/40 px-3 py-2 text-sm font-medium text-primaria hover:bg-primaria/5">+ Bloco / subtítulo</button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 rounded-xl bg-black/[0.02] p-3 sm:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">POP Elaborado por</label>
+            <select className={field} value={elaboradoPor} onChange={(e) => setElaboradoPor(e.target.value)}>
+              <option value="">—</option>
+              {profs.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">POP Revisado por</label>
+            <select className={field} value={revisadoPor} onChange={(e) => setRevisadoPor(e.target.value)}>
+              <option value="">—</option>
+              {profs.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-texto/70">Data de aprovação</label>
+            <input type="date" className={field} value={dataAprovacao} onChange={(e) => setDataAprovacao(e.target.value)} />
+          </div>
+        </div>
+
+        {erro && <p className="mt-3 text-sm text-secundaria">{erro}</p>}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-texto/60 hover:bg-black/5">Cancelar</button>
+          <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar POP'}</button>
+        </div>
       </div>
     </div>
   )

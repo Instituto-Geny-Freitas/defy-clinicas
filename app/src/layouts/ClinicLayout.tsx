@@ -23,6 +23,7 @@ const NAV_GESTAO = [
   { to: '/clinica/reunioes', label: 'Reuniões Internas', perm: 'menu.reunioes' },
   { to: '/clinica/atividades', label: 'Atividades Internas', perm: 'menu.atividades' },
   { to: '/clinica/documentos', label: 'Modelos de Documentos', perm: 'menu.documentos' },
+  { to: '/clinica/pops', label: 'POPs', perm: 'menu.pops' },
 ]
 
 export default function ClinicLayout() {
