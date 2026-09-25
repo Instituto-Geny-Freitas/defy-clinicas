@@ -27,6 +27,7 @@ export const FEATURES: FeatureDef[] = [
   { key: 'menu.administrativo', label: 'Administrativo', group: 'Menu lateral' },
   { key: 'menu.reunioes', label: 'Reuniões Internas', group: 'Menu lateral' },
   { key: 'menu.atividades', label: 'Atividades Internas', group: 'Menu lateral' },
+  { key: 'menu.pops', label: 'POPs', group: 'Menu lateral' },
   // Abas da ficha do paciente
   { key: 'paciente.resumo', label: 'Resumo', group: 'Abas do paciente' },
   { key: 'paciente.agenda', label: 'Agenda', group: 'Abas do paciente' },
@@ -55,7 +56,7 @@ export const DEFAULTS: Record<Exclude<Nivel, 'admin'>, string[]> = {
   profissional: ALL_KEYS.filter((k) => k !== 'reunioes.convocar'),
   // Secretaria/Recepção: agenda, cadastro (pacientes) e financeiro.
   recepcao: [
-    'menu.dashboard', 'menu.agenda', 'menu.pacientes', 'menu.financeiro', 'menu.relacionamento', 'menu.crm', 'menu.reunioes', 'menu.atividades',
+    'menu.dashboard', 'menu.agenda', 'menu.pacientes', 'menu.financeiro', 'menu.relacionamento', 'menu.crm', 'menu.reunioes', 'menu.atividades', 'menu.pops',
     'paciente.resumo', 'paciente.agenda', 'paciente.documentos', 'paciente.financeiro',
   ],
 }
