@@ -84,7 +84,8 @@ import {
   uploadAdminFile, signedAdminUrl, type DomItem,
 } from '@/lib/admin'
 import {
-  DEFAULT_FORMS, getForms, getClinicCodigo, resetFormDef, saveClinicCodigo, saveFormDef,
+  DEFAULT_FORMS, FORM_GROUPS, getForms, getClinicCodigo, resetFormDef, saveClinicCodigo, saveFormDef,
+  createForm, deleteForm, isCustomForm,
   type FieldType, type FormDef, type FormField,
 } from '@/lib/adminForms'
 import {
@@ -1565,13 +1566,30 @@ function FormulariosSection({ clinicId }: { clinicId: string }) {
   const [forms, setForms] = useState<FormDef[]>(DEFAULT_FORMS)
   const [chave, setChave] = useState<string>(DEFAULT_FORMS[0].chave)
   const [def, setDef] = useState<FormDef | null>(null)
+  const [criando, setCriando] = useState(false)   // def é um formulário novo ainda não salvo
   const [codigo, setCodigo] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const custom = !!def && isCustomForm(def.chave)
 
-  function recarregar() { getForms().then((fs) => { setForms(fs); setDef(fs.find((f) => f.chave === chave) ?? null) }).catch(() => {}) }
+  function recarregar() { getForms().then((fs) => { setForms(fs); if (!criando) setDef(fs.find((f) => f.chave === chave) ?? null) }).catch(() => {}) }
   useEffect(() => { getForms().then(setForms).catch(() => {}); getClinicCodigo().then(setCodigo).catch(() => {}) }, [])
-  useEffect(() => { setDef(forms.find((f) => f.chave === chave) ?? null) }, [chave, forms])
+  useEffect(() => { if (!criando) setDef(forms.find((f) => f.chave === chave) ?? null) }, [chave, forms, criando])
+
+  function novoFormulario() {
+    const proxOrdem = Math.max(0, ...forms.map((f) => f.ordem ?? 0)) + 10
+    setCriando(true)
+    setMsg(null)
+    setDef({
+      chave: '',
+      titulo: 'Novo formulário',
+      descricao: '',
+      grupo: FORM_GROUPS[0],
+      ordem: proxOrdem,
+      vinculo: 'none',
+      campos: [{ key: 'data', label: 'Data', tipo: 'date', obrigatorio: true }],
+    })
+  }
 
   function setCampos(campos: FormField[]) { setDef((d) => (d ? { ...d, campos } : d)) }
   function editarCampo(i: number, patch: Partial<FormField>) { if (!def) return; setCampos(def.campos.map((c, idx) => idx === i ? { ...c, ...patch } : c)) }
@@ -1592,27 +1610,62 @@ function FormulariosSection({ clinicId }: { clinicId: string }) {
 
   async function salvar() {
     if (!def) return
+    if (!def.titulo.trim()) { setMsg('Informe o título do formulário.'); return }
     setSalvando(true); setMsg(null)
     try {
-      await saveFormDef(clinicId, def.chave, { titulo: def.titulo, descricao: def.descricao, campoData: def.campoData, campos: def.campos })
-      setMsg('Formulário salvo.'); recarregar()
+      if (criando) {
+        // Gera uma chave única a partir do título (prefixo custom_ evita colisão com padrões).
+        const existentes = new Set(forms.map((f) => f.chave))
+        let ch = `custom_${slugKey(def.titulo)}`; let n = 1
+        while (existentes.has(ch)) ch = `custom_${slugKey(def.titulo)}_${++n}`
+        const novo: FormDef = {
+          ...def,
+          chave: ch,
+          numeradoEscopo: def.numerado ? ch : undefined,
+          campoData: def.campoData ?? def.campos.find((c) => c.tipo === 'date')?.key,
+        }
+        await createForm(clinicId, novo)
+        setCriando(false); setChave(ch); setMsg('Formulário criado.')
+        const fs = await getForms(); setForms(fs); setDef(fs.find((f) => f.chave === ch) ?? null)
+      } else if (custom) {
+        // Formulário do admin: persiste a definição completa (inclui grupo/vínculo/numeração).
+        await saveFormDef(clinicId, def.chave, {
+          titulo: def.titulo, descricao: def.descricao, grupo: def.grupo, vinculo: def.vinculo,
+          numerado: def.numerado, numeradoEscopo: def.numerado ? def.chave : undefined,
+          campoData: def.campoData, campos: def.campos,
+        })
+        setMsg('Formulário salvo.'); recarregar()
+      } else {
+        await saveFormDef(clinicId, def.chave, { titulo: def.titulo, descricao: def.descricao, campoData: def.campoData, campos: def.campos })
+        setMsg('Formulário salvo.'); recarregar()
+      }
     } catch { setMsg('Não foi possível salvar.') } finally { setSalvando(false) }
   }
   async function restaurar() {
-    if (!def || !confirm('Restaurar este formulário para o padrão de fábrica?')) return
+    if (!def) return
+    if (custom) {
+      if (!confirm('Excluir este formulário criado por você? Os registros já gravados são preservados no banco, mas o formulário sai da lista.')) return
+      await deleteForm(clinicId, def.chave)
+      setCriando(false); setChave(DEFAULT_FORMS[0].chave); setMsg('Formulário excluído.')
+      const fs = await getForms(); setForms(fs); setDef(fs.find((f) => f.chave === DEFAULT_FORMS[0].chave) ?? null)
+      return
+    }
+    if (!confirm('Restaurar este formulário para o padrão de fábrica?')) return
     await resetFormDef(clinicId, def.chave); setMsg('Restaurado ao padrão.'); recarregar()
   }
+  function cancelarCriacao() { setCriando(false); setDef(forms.find((f) => f.chave === chave) ?? null); setMsg(null) }
   async function salvarCodigo() { await saveClinicCodigo(clinicId, codigo); setMsg('Código da clínica salvo.') }
 
   return (
     <div className="max-w-3xl space-y-5">
       <div className="rounded-xl border border-black/5 bg-white p-5">
         <h3 className="mb-1 font-semibold text-texto">Construtor de formulários (Área Administrativa)</h3>
-        <p className="mb-3 text-xs text-texto/50">Personalize os campos de cada formulário. Registros já gravados são preservados; campos removidos deixam de aparecer e campos novos surgem em branco.</p>
+        <p className="mb-3 text-xs text-texto/50">Personalize os campos de cada formulário ou crie um novo com <strong>+ Novo formulário</strong> — escolhendo o <strong>grupo</strong> (Registros, Estrutura ou Limpeza e Desinfecção) em que ele aparece no Administrativo. Registros já gravados são preservados; campos removidos deixam de aparecer e campos novos surgem em branco.</p>
         <div className="flex flex-wrap items-center gap-2">
-          <select className={`${field} max-w-xs`} value={chave} onChange={(e) => setChave(e.target.value)}>
-            {forms.map((f) => <option key={f.chave} value={f.chave}>{f.titulo}</option>)}
+          <select className={`${field} max-w-xs`} value={chave} disabled={criando} onChange={(e) => setChave(e.target.value)}>
+            {forms.map((f) => <option key={f.chave} value={f.chave}>{f.titulo}{isCustomForm(f.chave) ? ' (personalizado)' : ''}</option>)}
           </select>
+          <button onClick={novoFormulario} disabled={criando} className="rounded-lg bg-primaria px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">+ Novo formulário</button>
           <div className="ml-auto flex items-center gap-2">
             <label className="text-xs text-texto/50">Código da clínica (numerador):</label>
             <input className="w-28 rounded-lg border border-black/10 px-2 py-1.5 text-sm" value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} />
@@ -1633,6 +1686,27 @@ function FormulariosSection({ clinicId }: { clinicId: string }) {
               </select>
             </div>
             <div className="sm:col-span-2"><label className="mb-1 block text-sm text-texto/70">Descrição</label><input className={field} value={def.descricao ?? ''} onChange={(e) => setDef({ ...def, descricao: e.target.value })} /></div>
+            {custom && (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm text-texto/70">Grupo (Administrativo)</label>
+                  <select className={field} value={def.grupo} onChange={(e) => setDef({ ...def, grupo: e.target.value })}>
+                    {FORM_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-texto/70">Vínculo</label>
+                  <select className={field} value={def.vinculo} onChange={(e) => setDef({ ...def, vinculo: e.target.value as FormDef['vinculo'] })}>
+                    <option value="none">Sem vínculo</option>
+                    <option value="paciente">Vinculado a um paciente</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-texto/70 sm:col-span-2">
+                  <input type="checkbox" checked={!!def.numerado} onChange={(e) => setDef({ ...def, numerado: e.target.checked })} />
+                  Gerar numeração automática (nnnnn/ano/código da clínica)
+                </label>
+              </>
+            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -1694,8 +1768,12 @@ function FormulariosSection({ clinicId }: { clinicId: string }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar formulário'}</button>
-            <button onClick={restaurar} className="rounded-lg border border-black/10 px-4 py-2.5 text-sm hover:bg-black/5">Restaurar padrão</button>
+            <button onClick={salvar} disabled={salvando} className="rounded-lg bg-primaria px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? 'Salvando…' : criando ? 'Criar formulário' : 'Salvar formulário'}</button>
+            {criando ? (
+              <button onClick={cancelarCriacao} className="rounded-lg border border-black/10 px-4 py-2.5 text-sm hover:bg-black/5">Cancelar</button>
+            ) : (
+              <button onClick={restaurar} className="rounded-lg border border-black/10 px-4 py-2.5 text-sm hover:bg-black/5">{custom ? 'Excluir formulário' : 'Restaurar padrão'}</button>
+            )}
             {msg && <span className="text-sm text-texto/60">{msg}</span>}
           </div>
         </div>
