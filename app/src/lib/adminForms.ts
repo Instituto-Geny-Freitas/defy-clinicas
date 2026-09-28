@@ -264,13 +264,21 @@ async function readClinicConfig(): Promise<{ id: string | null; dados: Record<st
   return { id: data?.id ?? null, dados, cfg }
 }
 
-/** Lista as definições (padrão + personalizações do admin), ordenadas. */
+/** Chaves dos formulários de fábrica (para distinguir dos criados pelo admin). */
+export const DEFAULT_CHAVES = new Set(DEFAULT_FORMS.map((d) => d.chave))
+export const isCustomForm = (chave: string) => !DEFAULT_CHAVES.has(chave)
+
+/** Lista as definições (padrão + personalizações + formulários criados pelo admin), ordenadas. */
 export async function getForms(): Promise<FormDef[]> {
   const { cfg } = await readClinicConfig()
   const overrides = cfg.forms ?? {}
-  return DEFAULT_FORMS
-    .map((d) => mergeDef(d, overrides[d.chave]))
-    .sort((a, b) => a.ordem - b.ordem)
+  const base = DEFAULT_FORMS.map((d) => mergeDef(d, overrides[d.chave]))
+  // Formulários criados pelo admin: chaves que não existem nos padrões e trazem
+  // uma definição completa (título + campos).
+  const custom = Object.entries(overrides)
+    .filter(([chave, def]) => !DEFAULT_CHAVES.has(chave) && !!def && !!(def as FormDef).titulo && Array.isArray((def as FormDef).campos))
+    .map(([, def]) => def as FormDef)
+  return [...base, ...custom].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
 }
 
 /** Definição de um formulário específico (com personalização aplicada). */
@@ -292,6 +300,16 @@ export async function saveFormDef(clinicId: string, chave: string, patch: Partia
   const novo = { ...dados, admin_forms: { ...cfg, forms } }
   const { error } = await supabase.from('clinics').update({ dados_empresa: novo }).eq('id', clinicId)
   if (error) throw error
+}
+
+/** Cria um formulário novo (definição completa) salvo na config da clínica. */
+export async function createForm(clinicId: string, def: FormDef): Promise<void> {
+  await saveFormDef(clinicId, def.chave, def)
+}
+
+/** Exclui um formulário criado pelo admin (remove a definição inteira). */
+export async function deleteForm(clinicId: string, chave: string): Promise<void> {
+  await resetFormDef(clinicId, chave)
 }
 
 /** Restaura um formulário para o padrão de fábrica (remove personalização). */
