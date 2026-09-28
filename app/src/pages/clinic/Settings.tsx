@@ -75,7 +75,7 @@ import {
   type FormulationLib,
 } from '@/lib/formulations'
 import { createExpenseType, deleteExpenseType, listExpenseTypes, updateExpenseType, type ExpenseType } from '@/lib/cashflow'
-import { createDocumentType, deleteDocumentType, listDocumentTypes, updateDocumentType, type DocTypeNatureza, type DocumentType } from '@/lib/documentTypes'
+import { createDocumentType, deleteDocumentType, listDocumentTypes, updateDocumentType, listDocNatures, saveDocNatures, natureLabel, BUILTIN_NATURES, type DocTypeNatureza, type DocNature, type DocumentType } from '@/lib/documentTypes'
 import { FEATURES, NIVEIS_EDITAVEIS, NIVEL_LABEL as PERM_NIVEL_LABEL, defaultsMatrix, getPermissions, savePermissions, type PermMatrix } from '@/lib/permissions'
 import { usePermissions } from '@/auth/PermissionsProvider'
 import {
@@ -235,32 +235,37 @@ export default function Settings() {
 // --- Tipos de documento (alimentam o dropdown "Tipo" dos Modelos) -----------
 function DocumentTypesSection({ clinicId }: { clinicId: string }) {
   const [itens, setItens] = useState<DocumentType[]>([])
+  const [natures, setNatures] = useState<DocNature[]>(BUILTIN_NATURES)
   const [rotulo, setRotulo] = useState('')
-  const [natureza, setNatureza] = useState<DocTypeNatureza>('termo')
+  const [natureKey, setNatureKey] = useState<string>('termo')
   const [salvando, setSalvando] = useState(false)
 
-  function recarregar() { listDocumentTypes(true).then(setItens).catch(() => {}) }
+  function recarregar() {
+    listDocumentTypes(true).then(setItens).catch(() => {})
+    listDocNatures().then(setNatures).catch(() => {})
+  }
   useEffect(recarregar, [])
 
   async function salvar() {
     if (!rotulo.trim()) return
     setSalvando(true)
-    try { await createDocumentType(clinicId, rotulo.trim(), natureza); setRotulo(''); recarregar() } finally { setSalvando(false) }
+    try { await createDocumentType(clinicId, rotulo.trim(), natureKey); setRotulo(''); recarregar() } finally { setSalvando(false) }
   }
   async function remover(id: string) { if (confirm('Excluir este tipo? Modelos que o usam voltam a exibir o rótulo padrão da natureza.')) { await deleteDocumentType(id); recarregar() } }
-  async function mudarNatureza(id: string, n: DocTypeNatureza) { await updateDocumentType(id, { natureza: n }); recarregar() }
+  async function mudarNatureza(id: string, k: string) { await updateDocumentType(id, { natureKey: k }); recarregar() }
   async function alternarAtivo(t: DocumentType) { await updateDocumentType(t.id, { ativo: !t.ativo }); recarregar() }
 
   return (
     <div className="max-w-2xl space-y-5">
+      <NaturezasPanel clinicId={clinicId} natures={natures} onChange={recarregar} />
+
       <div className="rounded-xl border border-black/5 bg-white p-5">
         <h3 className="mb-1 font-semibold text-texto">Novo tipo de documento</h3>
-        <p className="mb-3 text-xs text-texto/50">Aparecem no campo <strong>Tipo</strong> ao criar um Modelo de Documento. A <strong>natureza</strong> define o comportamento: <strong>Termo</strong> pede assinatura/leitura do paciente no portal; <strong>Orientação</strong> permite lembretes automáticos.</p>
+        <p className="mb-3 text-xs text-texto/50">Aparecem no campo <strong>Tipo</strong> ao criar um Modelo de Documento. A <strong>natureza</strong> define o comportamento (gerencie as naturezas acima).</p>
         <div className="flex flex-wrap gap-2">
           <input className={`${field} min-w-[12rem] flex-1`} value={rotulo} onChange={(e) => setRotulo(e.target.value)} placeholder="Ex.: Termo de imagem, Cuidados pós-procedimento" />
-          <select className={`${field} w-52 shrink-0`} value={natureza} onChange={(e) => setNatureza(e.target.value as DocTypeNatureza)}>
-            <option value="termo">Termo (consentimento)</option>
-            <option value="orientacao">Orientação (cuidados)</option>
+          <select className={`${field} w-52 shrink-0`} value={natureKey} onChange={(e) => setNatureKey(e.target.value)}>
+            {natures.map((n) => <option key={n.key} value={n.key}>{n.rotulo}</option>)}
           </select>
           <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
         </div>
@@ -275,11 +280,14 @@ function DocumentTypesSection({ clinicId }: { clinicId: string }) {
                 <td className="px-4 py-2">
                   <select
                     className="rounded-lg border border-black/10 px-2 py-1 text-xs outline-none focus:border-primaria"
-                    value={t.natureza}
-                    onChange={(e) => mudarNatureza(t.id, e.target.value as DocTypeNatureza)}
+                    value={t.natureza_key ?? t.natureza}
+                    onChange={(e) => mudarNatureza(t.id, e.target.value)}
                   >
-                    <option value="termo">Termo</option>
-                    <option value="orientacao">Orientação</option>
+                    {/* Garante que a natureza atual apareça mesmo se tiver sido removida da lista. */}
+                    {!natures.some((n) => n.key === (t.natureza_key ?? t.natureza)) && (
+                      <option value={t.natureza_key ?? t.natureza}>{natureLabel(natures, t)}</option>
+                    )}
+                    {natures.map((n) => <option key={n.key} value={n.key}>{n.rotulo}</option>)}
                   </select>
                 </td>
                 <td className="px-4 py-2 text-right whitespace-nowrap">
@@ -291,6 +299,79 @@ function DocumentTypesSection({ clinicId }: { clinicId: string }) {
             {itens.length === 0 && <tr><td className="px-4 py-3 text-sm text-texto/50">Nenhum tipo cadastrado.</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+/** CRUD das naturezas (opções do dropdown de Tipo). As de fábrica são fixas;
+ *  as personalizadas escolhem um comportamento-base (Termo ou Orientação). */
+function NaturezasPanel({ clinicId, natures, onChange }: { clinicId: string; natures: DocNature[]; onChange: () => void }) {
+  const custom = natures.filter((n) => !n.builtin)
+  const [novoRotulo, setNovoRotulo] = useState('')
+  const [novaBase, setNovaBase] = useState<DocTypeNatureza>('termo')
+  const [salvando, setSalvando] = useState(false)
+
+  const slug = (s: string) => (s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'natureza')
+
+  async function adicionar() {
+    if (!novoRotulo.trim()) return
+    const usados = new Set(natures.map((n) => n.key))
+    let key = `n_${slug(novoRotulo)}`; let i = 1
+    while (usados.has(key)) key = `n_${slug(novoRotulo)}_${++i}`
+    setSalvando(true)
+    try {
+      await saveDocNatures(clinicId, [...custom, { key, rotulo: novoRotulo.trim(), base: novaBase }])
+      setNovoRotulo(''); setNovaBase('termo'); onChange()
+    } finally { setSalvando(false) }
+  }
+  async function editar(key: string, patch: Partial<DocNature>) {
+    await saveDocNatures(clinicId, custom.map((n) => (n.key === key ? { ...n, ...patch } : n))); onChange()
+  }
+  async function remover(key: string) {
+    if (!confirm('Excluir esta natureza? Tipos que a usam passam a exibir o comportamento-base.')) return
+    await saveDocNatures(clinicId, custom.filter((n) => n.key !== key)); onChange()
+  }
+
+  const baseLabel = (b: DocTypeNatureza) => (b === 'termo' ? 'Termo — pede assinatura' : 'Orientação — permite lembretes')
+
+  return (
+    <div className="rounded-xl border border-black/5 bg-white p-5">
+      <h3 className="mb-1 font-semibold text-texto">Naturezas</h3>
+      <p className="mb-3 text-xs text-texto/50">São as opções do campo <strong>natureza</strong>. As de fábrica (Termo/Orientação) são fixas. Você pode criar novas — cada uma escolhe um <strong>comportamento-base</strong>: <strong>Termo</strong> pede assinatura do paciente no portal; <strong>Orientação</strong> permite lembretes automáticos.</p>
+
+      <div className="mb-3 space-y-1.5">
+        {natures.map((n) => (
+          <div key={n.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-black/5 px-3 py-2">
+            {n.builtin ? (
+              <>
+                <span className="flex-1 text-sm text-texto">{n.rotulo}</span>
+                <span className="text-xs text-texto/40">de fábrica · {baseLabel(n.base)}</span>
+              </>
+            ) : (
+              <>
+                <input className="min-w-[10rem] flex-1 rounded-lg border border-black/10 px-2 py-1 text-sm" value={n.rotulo} onChange={(e) => editar(n.key, { rotulo: e.target.value })} />
+                <select className="rounded-lg border border-black/10 px-2 py-1 text-xs" value={n.base} onChange={(e) => editar(n.key, { base: e.target.value as DocTypeNatureza })}>
+                  <option value="termo">comporta-se como Termo</option>
+                  <option value="orientacao">comporta-se como Orientação</option>
+                </select>
+                <button onClick={() => remover(n.key)} className="text-xs text-secundaria hover:underline">Excluir</button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 border-t border-black/5 pt-3">
+        <div className="min-w-[12rem] flex-1">
+          <label className="mb-1 block text-xs text-texto/50">Nova natureza</label>
+          <input className={field} value={novoRotulo} onChange={(e) => setNovoRotulo(e.target.value)} placeholder="Ex.: Receita, Ficha de avaliação" />
+        </div>
+        <select className={`${field} w-56 shrink-0`} value={novaBase} onChange={(e) => setNovaBase(e.target.value as DocTypeNatureza)}>
+          <option value="termo">comporta-se como Termo</option>
+          <option value="orientacao">comporta-se como Orientação</option>
+        </select>
+        <button onClick={adicionar} disabled={salvando || !novoRotulo.trim()} className="shrink-0 rounded-lg border border-primaria px-4 py-2 text-sm font-semibold text-primaria hover:bg-primaria/5 disabled:opacity-50">{salvando ? '…' : '+ Natureza'}</button>
       </div>
     </div>
   )
