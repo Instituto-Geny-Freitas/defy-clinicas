@@ -113,6 +113,10 @@ export async function buildPopPdf(args: {
     pdf.setTextColor(20); pdf.setFontSize(12)
     pdf.text(pop.titulo.toUpperCase(), W / 2, 48, { align: 'center', maxWidth: contentW - 100 })
     pdf.setFont('helvetica', 'normal')
+    if (pop.numero) {
+      pdf.setTextColor(110); pdf.setFontSize(8)
+      pdf.text(`POP nº ${pop.numero}`, W / 2, 60, { align: 'center' })
+    }
     pdf.setDrawColor(203, 213, 225)
     pdf.line(M, headerH - 8, W - M, headerH - 8)
 
@@ -128,5 +132,6 @@ export async function buildPopPdf(args: {
 
   const ts = localDateToday()
   const nome = (pop.titulo || 'POP').replace(/[^\w]+/g, '_').slice(0, 40)
-  return { blob: pdf.output('blob'), filename: `POP_${nome}_${ts}.pdf` }
+  const num = pop.numero ? `${pop.numero.replace(/\D+/g, '-')}_` : ''
+  return { blob: pdf.output('blob'), filename: `POP_${num}${nome}_${ts}.pdf` }
 }

@@ -14,6 +14,7 @@ export default function Pops() {
   const [pops, setPops] = useState<Pop[]>([])
   const [profs, setProfs] = useState<Professional[]>([])
   const [sel, setSel] = useState<Pop | null>(null)
+  const [busca, setBusca] = useState('')
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -28,6 +29,12 @@ export default function Pops() {
     return (id: string | null) => (id ? m.get(id) ?? '—' : '—')
   }, [profs])
 
+  const filtrados = useMemo(() => {
+    const t = busca.trim().toLowerCase()
+    if (!t) return pops
+    return pops.filter((p) => `${p.numero ?? ''} ${p.titulo}`.toLowerCase().includes(t))
+  }, [pops, busca])
+
   if (carregando) return <p className="text-sm text-texto/50">Carregando…</p>
 
   return (
@@ -40,18 +47,33 @@ export default function Pops() {
           Nenhum POP cadastrado. Um administrador pode criá-los em Configurações → POPs.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
-          {/* Lista */}
-          <div className="space-y-1">
-            {pops.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setSel(p)}
-                className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${sel?.id === p.id ? 'bg-primaria text-white' : 'bg-white text-texto/80 hover:bg-black/5'}`}
-              >
-                {p.titulo}
-              </button>
-            ))}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
+          {/* Lista com busca (por número ou título) */}
+          <div>
+            <input
+              className="mb-2 w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria"
+              placeholder="Buscar POP por número ou nome…"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+            />
+            <p className="mb-1 px-1 text-[11px] text-texto/40">
+              {filtrados.length} de {pops.length} POP(s)
+            </p>
+            <div className="max-h-[70vh] space-y-1 overflow-y-auto pr-1">
+              {filtrados.length === 0 && <p className="px-1 py-3 text-sm text-texto/40">Nenhum POP encontrado.</p>}
+              {filtrados.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSel(p)}
+                  className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition ${sel?.id === p.id ? 'bg-primaria text-white' : 'bg-white text-texto/80 hover:bg-black/5'}`}
+                >
+                  {p.numero && (
+                    <span className={`mr-1.5 font-mono text-[11px] ${sel?.id === p.id ? 'text-white/70' : 'text-texto/40'}`}>{p.numero}</span>
+                  )}
+                  {p.titulo}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Documento */}
@@ -97,6 +119,7 @@ function PopViewer({ pop, clinic, nomeProf }: { pop: Pop; clinic: ReturnType<typ
           <div className="flex-1 text-center">
             <div className="text-xs font-bold uppercase tracking-wider text-primaria">{POP_TITULO_GERAL}</div>
             <div className="text-sm font-semibold text-texto">{pop.titulo.toUpperCase()}</div>
+            {pop.numero && <div className="mt-0.5 font-mono text-[11px] text-texto/50">POP nº {pop.numero}</div>}
           </div>
         </div>
 
@@ -134,7 +157,7 @@ function EnviarPacienteModal({ pop, clinic, nomeProf, onClose }: { pop: Pop; cli
         clinicId: profile?.professional?.clinic_id ?? '',
         patientId: selId,
         professionalId: profile?.professional?.id ?? null,
-        titulo: `POP – ${pop.titulo}`,
+        titulo: `POP${pop.numero ? ` ${pop.numero}` : ''} – ${pop.titulo}`,
         categoria: 'documento',
         blob,
         enviarPaciente: true,
