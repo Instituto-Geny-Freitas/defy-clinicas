@@ -3242,7 +3242,10 @@ function PopsSection({ clinicId }: { clinicId: string }) {
             <tbody>
               {itens.map((p) => (
                 <tr key={p.id} className="border-t border-black/5 first:border-t-0">
-                  <td className="px-4 py-2.5 text-texto">{p.titulo}</td>
+                  <td className="px-4 py-2.5 text-texto">
+                    {p.numero && <span className="mr-2 rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs text-texto/60">{p.numero}</span>}
+                    {p.titulo}
+                  </td>
                   <td className="px-4 py-2.5 text-right text-xs text-texto/40">atualizado {formatDateBR(p.updated_at)}</td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <button onClick={() => setEditando(p)} className="mr-3 text-xs font-medium text-primaria hover:underline">Editar</button>
@@ -3269,6 +3272,7 @@ function PopsSection({ clinicId }: { clinicId: string }) {
 }
 
 function PopEditModal({ clinicId, pop, gestor, onClose, onSaved }: { clinicId: string; pop: Pop | null; gestor: GestorSnapshot; onClose: () => void; onSaved: () => void }) {
+  const [numero, setNumero] = useState(pop?.numero ?? '')
   const [titulo, setTitulo] = useState(pop?.titulo ?? '')
   const [blocos, setBlocos] = useState<PopBloco[]>(pop?.estrutura?.length ? pop.estrutura : [novoBloco()])
   const [elaboradoPor, setElaboradoPor] = useState(pop?.elaborado_por ?? '')
@@ -3304,6 +3308,7 @@ function PopEditModal({ clinicId, pop, gestor, onClose, onSaved }: { clinicId: s
     if (!titulo.trim()) { setErro('Informe o título do procedimento.'); return }
     setSalvando(true); setErro(null)
     const input: PopInput = {
+      numero: numero || null,
       titulo,
       estrutura: blocos.map((b) => ({ ...b, linhas: b.linhas.filter((l) => !(l.col1 === '' && l.col2 === '')) })),
       elaborado_por: elaboradoPor || null,
@@ -3326,7 +3331,16 @@ function PopEditModal({ clinicId, pop, gestor, onClose, onSaved }: { clinicId: s
         </div>
 
         <p className="mb-1 text-center text-xs font-semibold uppercase tracking-wider text-primaria">Procedimento Operacional Padrão – POP</p>
-        <input className={`${field} mb-4 text-center font-semibold`} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título do procedimento (ex.: Limpeza de pele com extração)" />
+        <div className="mb-4 flex gap-2">
+          <input
+            className={`${field} w-32 shrink-0 text-center font-semibold`}
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+            placeholder="001/2026"
+            title="Número oficial do POP"
+          />
+          <input className={`${field} text-center font-semibold`} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título do procedimento (ex.: Limpeza de pele com extração)" />
+        </div>
 
         <div className="space-y-4">
           {blocos.map((b, bi) => (

@@ -9,6 +9,8 @@ export interface PopBloco { id: string; subtitulo: string; linhas: PopLinha[] }
 export interface Pop {
   id: string
   clinic_id: string
+  /** Número oficial, ex.: "001/2026". */
+  numero: string | null
   titulo: string
   estrutura: PopBloco[]
   elaborado_por: string | null
@@ -25,6 +27,7 @@ export interface Pop {
 }
 
 export interface PopInput {
+  numero: string | null
   titulo: string
   estrutura: PopBloco[]
   elaborado_por: string | null
@@ -59,6 +62,7 @@ export async function listPops(): Promise<Pop[]> {
     .from('pops')
     .select('*')
     .eq('ativo', true)
+    .order('numero', { ascending: true, nullsFirst: false })
     .order('titulo', { ascending: true })
   if (error) throw error
   return (data ?? []) as Pop[]
@@ -75,6 +79,7 @@ export async function createPop(clinicId: string, input: PopInput, gestor: Gesto
     .from('pops')
     .insert({
       clinic_id: clinicId,
+      numero: input.numero?.trim() || null,
       titulo: input.titulo.trim(),
       estrutura: sanitizarEstrutura(input.estrutura),
       elaborado_por: input.elaborado_por,
@@ -96,6 +101,7 @@ export async function updatePop(id: string, input: PopInput, gestor: GestorSnaps
   const { error } = await supabase
     .from('pops')
     .update({
+      numero: input.numero?.trim() || null,
       titulo: input.titulo.trim(),
       estrutura: sanitizarEstrutura(input.estrutura),
       elaborado_por: input.elaborado_por,
