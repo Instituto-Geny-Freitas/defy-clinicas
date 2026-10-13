@@ -103,7 +103,10 @@ import RichTextEditor from '@/components/RichTextEditor'
 import type { Professional, UserRole } from '@/lib/types'
 
 type Sec = 'visual' | 'equipe' | 'disponibilidade' | 'papeis' | 'permissoes' | 'integracoes' | 'textos' | 'tipos_doc' | 'ativos' | 'unidades' | 'vias' | 'fornecedores' | 'formulas' | 'procedimentos' | 'despesas' | 'exames' | 'servicos' | 'vacinas' | 'formularios' | 'lgpd' | 'imagem' | 'indicacao' | 'fidelidade' | 'nps' | 'metas' | 'recursos' | 'pops'
-const field = 'w-full rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+/** Visual padrao dos campos, SEM largura — para usar com largura fixa num flex. */
+const fieldBase = 'rounded-lg border border-black/10 px-3 py-2 text-sm outline-none focus:border-primaria'
+/** Campo de largura total. Nao combine com w-NN: o w-full vence e espreme os vizinhos. */
+const field = `w-full ${fieldBase}`
 
 const ALFABETO_ATIVOS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 const OPCOES_QTD_ATIVOS = [20, 50, 100]
@@ -265,7 +268,7 @@ function DocumentTypesSection({ clinicId }: { clinicId: string }) {
         <p className="mb-3 text-xs text-texto/50">Aparecem no campo <strong>Tipo</strong> ao criar um Modelo de Documento. A <strong>natureza</strong> define o comportamento (gerencie as naturezas acima).</p>
         <div className="flex flex-wrap gap-2">
           <input className={`${field} min-w-[12rem] flex-1`} value={rotulo} onChange={(e) => setRotulo(e.target.value)} placeholder="Ex.: Termo de imagem, Cuidados pós-procedimento" />
-          <select className={`${field} w-52 shrink-0`} value={natureKey} onChange={(e) => setNatureKey(e.target.value)}>
+          <select className={`${fieldBase} w-52 shrink-0`} value={natureKey} onChange={(e) => setNatureKey(e.target.value)}>
             {natures.map((n) => <option key={n.key} value={n.key}>{n.rotulo}</option>)}
           </select>
           <button onClick={salvar} disabled={salvando} className="shrink-0 rounded-lg bg-primaria px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{salvando ? '…' : 'Adicionar'}</button>
@@ -368,7 +371,7 @@ function NaturezasPanel({ clinicId, natures, onChange }: { clinicId: string; nat
           <label className="mb-1 block text-xs text-texto/50">Nova natureza</label>
           <input className={field} value={novoRotulo} onChange={(e) => setNovoRotulo(e.target.value)} placeholder="Ex.: Receita, Ficha de avaliação" />
         </div>
-        <select className={`${field} w-56 shrink-0`} value={novaBase} onChange={(e) => setNovaBase(e.target.value as DocTypeNatureza)}>
+        <select className={`${fieldBase} w-56 shrink-0`} value={novaBase} onChange={(e) => setNovaBase(e.target.value as DocTypeNatureza)}>
           <option value="termo">comporta-se como Termo</option>
           <option value="orientacao">comporta-se como Orientação</option>
         </select>
@@ -1424,7 +1427,7 @@ function DespesasSection({ clinicId }: { clinicId: string }) {
         <p className="mb-3 text-xs text-texto/50">Usados ao registrar despesas no Financeiro (fluxo de caixa). A natureza define se a despesa é um Produto ou um Gasto fixo.</p>
         <div className="flex flex-wrap gap-2">
           <input className={`${field} min-w-[12rem] flex-1`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Aluguel, Insumos, Energia" />
-          <select className={`${field} w-40 shrink-0`} value={tipo} onChange={(e) => setTipo(e.target.value as 'produto' | 'fixo')}>
+          <select className={`${fieldBase} w-40 shrink-0`} value={tipo} onChange={(e) => setTipo(e.target.value as 'produto' | 'fixo')}>
             <option value="fixo">Gasto fixo</option>
             <option value="produto">Produto</option>
           </select>
@@ -2608,7 +2611,7 @@ function RolesSection({ clinicId }: { clinicId: string }) {
         </p>
         <div className="flex flex-wrap gap-2">
           <input className={`${field} min-w-[12rem] flex-1`} value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Gerente, Esteticista" />
-          <select className={`${field} w-48 shrink-0`} value={nivel} onChange={(e) => setNivel(e.target.value as UserRole)}>
+          <select className={`${fieldBase} w-48 shrink-0`} value={nivel} onChange={(e) => setNivel(e.target.value as UserRole)}>
             <option value="admin">Administrador</option>
             <option value="profissional">Profissional</option>
             <option value="recepcao">Secretaria</option>
@@ -3332,14 +3335,20 @@ function PopEditModal({ clinicId, pop, gestor, onClose, onSaved }: { clinicId: s
 
         <p className="mb-1 text-center text-xs font-semibold uppercase tracking-wider text-primaria">Procedimento Operacional Padrão – POP</p>
         <div className="mb-4 flex gap-2">
+          {/* Largura fixa SEM a classe `field` (ela traz w-full, que venceria o w-28). */}
           <input
-            className={`${field} w-32 shrink-0 text-center font-semibold`}
+            className={`${fieldBase} w-28 shrink-0 text-center font-semibold`}
             value={numero}
             onChange={(e) => setNumero(e.target.value)}
             placeholder="001/2026"
             title="Número oficial do POP"
           />
-          <input className={`${field} text-center font-semibold`} value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título do procedimento (ex.: Limpeza de pele com extração)" />
+          <input
+            className={`${field} min-w-0 flex-1 text-center font-semibold`}
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            placeholder="Título do procedimento (ex.: Limpeza de pele com extração)"
+          />
         </div>
 
         <div className="space-y-4">
