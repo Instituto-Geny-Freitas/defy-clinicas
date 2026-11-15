@@ -3,6 +3,9 @@ import {
   camposDe,
   deleteDocument,
   getTemplate,
+  govbrSignedUrl,
+  GOVBR_VALIDADOR_URL,
+  isTermo,
   issueDocument,
   listActiveTemplates,
   listPatientDocuments,
@@ -57,6 +60,15 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
       .finally(() => setCarregando(false))
   }
   useEffect(recarregar, [patient.id])
+
+  async function verGovbr(d: DocInstance) {
+    if (!d.govbr_arquivo_url) return
+    // Abre a aba no clique (evita bloqueio de pop-up) e aponta para a URL temporária.
+    const aba = window.open('', '_blank')
+    const url = await govbrSignedUrl(d.govbr_arquivo_url)
+    if (url && aba) aba.location.href = url
+    else { aba?.close(); alert('Não foi possível abrir o PDF assinado.') }
+  }
 
   function gerarPdf(d: DocInstance) {
     printDocument(
@@ -121,9 +133,27 @@ export default function DocumentsPanel({ patient, clinicId, professionalId }: Pr
                     {d.document_templates?.tipo === 'termo' ? 'Termo' : 'Orientação'}
                     {d.assinado_em && ` · assinado em ${new Date(d.assinado_em).toLocaleDateString('pt-BR')}`}
                     {!d.assinado_em && d.lido_em && ` · lido em ${new Date(d.lido_em).toLocaleDateString('pt-BR')}`}
+                    {isTermo(d) && d.govbr_arquivo_url && (
+                      <span className="font-medium text-emerald-700">
+                        {' · '}Gov.br ✓{d.govbr_enviado_em && ` em ${new Date(d.govbr_enviado_em).toLocaleDateString('pt-BR')}`}
+                      </span>
+                    )}
+                    {isTermo(d) && !d.govbr_arquivo_url && !editavel && (
+                      <span className="text-amber-700"> · aguardando assinatura Gov.br</span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {d.govbr_arquivo_url && (
+                    <>
+                      <button onClick={() => verGovbr(d)} className="text-xs font-medium text-emerald-700 hover:underline" title="PDF assinado pelo paciente no Gov.br">
+                        Ver Gov.br
+                      </button>
+                      <a href={GOVBR_VALIDADOR_URL} target="_blank" rel="noopener noreferrer" className="text-xs text-texto/50 hover:underline" title="Validar a assinatura no site oficial do ITI">
+                        Validar ↗
+                      </a>
+                    </>
+                  )}
                   {editavel && (
                     <button onClick={() => setEditando(d)} className="text-xs font-medium text-texto/60 hover:underline">
                       Editar

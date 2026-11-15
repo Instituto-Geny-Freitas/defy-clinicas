@@ -5,7 +5,8 @@ import { useClinic } from '@/theme/ThemeProvider'
 import { listDueNotifications, markNotificationRead, type AppNotification } from '@/lib/notifications'
 import { listPatientAppointments, updateAppointmentStatus, type Appointment } from '@/lib/appointments'
 import { listPackages, type TreatmentPackage } from '@/lib/packages'
-import { getLatestAnamnesis } from '@/lib/anamnesis'
+import { anamneseSituacao, getLatestAnamnesis } from '@/lib/anamnesis'
+import { PortalIcon } from '@/components/PortalIcons'
 import { brl } from '@/lib/finance'
 import NpsCard from './NpsCard'
 import { getReferralConfig, myReferralInfo, type ReferralConfig } from '@/lib/referral'
@@ -134,6 +135,35 @@ export default function PatientHome() {
         </section>
       )}
 
+      {/* Acesso rápido à anamnese — sempre visível, com a situação da ficha. */}
+      {anamneseAtualizadaEm !== undefined && (() => {
+        const sit = anamneseSituacao(anamneseAtualizadaEm)
+        const alerta = sit !== 'em_dia'
+        return (
+          <Link
+            to="/portal/anamnese"
+            className={`flex items-center gap-3 rounded-xl border p-4 transition hover:opacity-95 ${alerta ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
+          >
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${alerta ? 'bg-amber-100 text-amber-800' : 'bg-primaria/10 text-primaria'}`}>
+              <PortalIcon name="anamnese" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className={`text-sm font-semibold ${alerta ? 'text-amber-900' : 'text-texto'}`}>Minha anamnese</div>
+              <div className={`text-xs ${alerta ? 'text-amber-800' : 'text-texto/60'}`}>
+                {sit === 'pendente'
+                  ? (proxima ? 'Preencha antes da sua consulta para agilizar o atendimento.' : 'Preencha sua ficha de saúde para agilizar o atendimento.')
+                  : sit === 'desatualizada'
+                    ? 'Faz um tempo desde a última atualização. Revise seus dados de saúde.'
+                    : `Atualizada em ${new Date(anamneseAtualizadaEm as string).toLocaleDateString('pt-BR')}. Toque para revisar.`}
+              </div>
+            </div>
+            <span className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${alerta ? 'bg-amber-600 text-white' : 'border border-primaria/30 text-primaria'}`}>
+              {sit === 'pendente' ? 'Preencher' : 'Revisar'}
+            </span>
+          </Link>
+        )
+      })()}
+
       <section className="rounded-xl border border-black/5 p-4">
         <h2 className="text-sm font-semibold text-texto">Próxima consulta</h2>
         {proxima ? (
@@ -153,20 +183,6 @@ export default function PatientHome() {
           <p className="mt-1 text-sm text-texto/60">Nenhuma consulta agendada. Solicite em “Agenda”.</p>
         )}
       </section>
-
-      {proxima && anamneseAtualizadaEm !== undefined && (anamneseAtualizadaEm === null || (Date.now() - new Date(anamneseAtualizadaEm).getTime()) / 86400000 > 180) && (
-        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h2 className="text-sm font-semibold text-amber-900">Antes da sua consulta 📋</h2>
-          <p className="mt-0.5 text-xs text-amber-800">
-            {anamneseAtualizadaEm === null
-              ? 'Preencha sua ficha de anamnese para agilizar o atendimento.'
-              : 'Faz um tempo desde a última atualização da sua ficha. Revise seus dados de saúde antes da consulta.'}
-          </p>
-          <Link to="/portal/anamnese" className="mt-2 inline-block rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
-            {anamneseAtualizadaEm === null ? 'Preencher anamnese' : 'Revisar anamnese'}
-          </Link>
-        </section>
-      )}
 
       {retornos.length > 0 && (
         <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">

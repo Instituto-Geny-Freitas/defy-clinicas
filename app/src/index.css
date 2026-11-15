@@ -38,3 +38,7 @@ body {
 .rte-content ol, .pop-rich ol { list-style: decimal; padding-left: 1.4em; margin: 0.2em 0; }
 .rte-content li, .pop-rich li { margin: 0.1em 0; }
 .rte-content p, .pop-rich p { margin: 0.3em 0; }
+
+/* Carrossel do portal do paciente: rolagem lateral sem barra visível. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

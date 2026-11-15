@@ -76,6 +76,9 @@ export interface DocInstance {
   content_hash: string | null
   assinatura_hash: string | null
   uso_imagem_autorizado: boolean | null
+  /** PDF assinado pelo paciente no Gov.br (bucket patient-files, pasta do paciente). */
+  govbr_arquivo_url?: string | null
+  govbr_enviado_em?: string | null
   created_at: string
   document_templates?: { nome: string; tipo: DocType; requer_assinatura: boolean }
 }
@@ -257,4 +260,59 @@ export async function acceptDocument(
     .single()
   if (error) throw error
   return data
+}
+
+// ---- Assinatura pelo Gov.br ---------------------------------------------------
+// Fluxo complementar à ciência no app: o paciente baixa o PDF do termo, assina no
+// Gov.br e envia o PDF assinado. O arquivo vai para a pasta PRIVADA do paciente no
+// bucket patient-files (só a equipe e o próprio paciente leem — políticas 0011).
+
+const PATIENT_BUCKET = 'patient-files'
+const GOVBR_MAX_BYTES = 10 * 1024 * 1024
+
+/** Portal oficial de assinatura eletrônica do Gov.br (ITI). */
+export const GOVBR_ASSINADOR_URL = 'https://assinador.iti.br/'
+/** Validador oficial de documentos assinados (ITI). */
+export const GOVBR_VALIDADOR_URL = 'https://validar.iti.gov.br/'
+
+/** O documento é um termo (consentimento) — elegível à assinatura pelo Gov.br. */
+export function isTermo(inst: DocInstance): boolean {
+  return inst.document_templates?.tipo === 'termo'
+}
+
+/** Confere a assinatura de arquivo PDF ("%PDF-") além da extensão/tipo. */
+async function pareceSerPdf(file: File): Promise<boolean> {
+  const nomeOk = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+  if (!nomeOk) return false
+  const head = new Uint8Array(await file.slice(0, 5).arrayBuffer())
+  return String.fromCharCode(...head) === '%PDF-'
+}
+
+/** Envia o PDF assinado no Gov.br e o vincula ao documento do paciente. */
+export async function uploadGovbrSigned(inst: DocInstance, file: File): Promise<DocInstance> {
+  if (!(await pareceSerPdf(file))) throw new Error('Envie o arquivo em PDF (o mesmo baixado e assinado no Gov.br).')
+  if (file.size > GOVBR_MAX_BYTES) throw new Error('O arquivo passa de 10 MB.')
+  // Caminho sempre na pasta do paciente dono do documento (a política de storage e
+  // a constraint do banco exigem isso).
+  const path = `${inst.patient_id}/termos_govbr/${inst.id}-${crypto.randomUUID()}.pdf`
+  const { error: upErr } = await supabase.storage.from(PATIENT_BUCKET).upload(path, file, { contentType: 'application/pdf' })
+  if (upErr) throw upErr
+  const { data, error } = await supabase
+    .from('document_instances')
+    .update({ govbr_arquivo_url: path, govbr_enviado_em: new Date().toISOString() })
+    .eq('id', inst.id)
+    .select('*, document_templates(nome, tipo, requer_assinatura)')
+    .single()
+  if (error) {
+    await supabase.storage.from(PATIENT_BUCKET).remove([path]).catch(() => {})
+    throw error
+  }
+  return data
+}
+
+/** URL temporária (1h) para abrir o PDF assinado no Gov.br. */
+export async function govbrSignedUrl(path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(PATIENT_BUCKET).createSignedUrl(path, 3600)
+  if (error) return null
+  return data?.signedUrl ?? null
 }
