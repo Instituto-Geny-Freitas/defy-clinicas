@@ -114,3 +114,13 @@ export async function saveAnamnesis(args: SaveArgs): Promise<AnamnesisRecord> {
   await syncPatientFields(args.patientId, args.values).catch(() => {})
   return data
 }
+
+/** Situação da ficha de anamnese do paciente (mesma regra de 180 dias usada no portal). */
+export type AnamneseSituacao = 'pendente' | 'desatualizada' | 'em_dia'
+export const ANAMNESE_VALIDADE_DIAS = 180
+
+export function anamneseSituacao(atualizadaEm: string | null): AnamneseSituacao {
+  if (!atualizadaEm) return 'pendente'
+  const dias = (Date.now() - new Date(atualizadaEm).getTime()) / 86400000
+  return dias > ANAMNESE_VALIDADE_DIAS ? 'desatualizada' : 'em_dia'
+}
