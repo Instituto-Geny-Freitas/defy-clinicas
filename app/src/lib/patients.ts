@@ -62,6 +62,7 @@ export async function createPatient(clinicId: string, input: PatientInput): Prom
   const payload = {
     clinic_id: clinicId,
     ...input,
+    nome: input.nome.trim(), // espaço no início/fim desordena as listas (ver 0081)
     cpf: input.cpf ? digitsOnly(input.cpf) : null,
     nascimento: input.nascimento || null, // '' (coluna date) quebraria o insert
   }
@@ -79,6 +80,7 @@ export interface PatientUpdate extends Partial<PatientInput> {
 
 export async function updatePatient(id: string, patch: PatientUpdate): Promise<Patient> {
   const body = { ...patch }
+  if (typeof body.nome === 'string') body.nome = body.nome.trim()
   if (body.cpf) body.cpf = digitsOnly(body.cpf)
   if (body.nascimento === '') body.nascimento = null // '' quebraria a coluna date
   const { data, error } = await supabase.from('patients').update(body).eq('id', id).select().single()
