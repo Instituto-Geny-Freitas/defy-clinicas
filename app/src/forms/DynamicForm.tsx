@@ -1,17 +1,11 @@
-import type { FormField, FormSchema, FormValues, ShowIf } from './types'
+import type { FormField, FormSchema, FormValues } from './types'
+import { visivel } from './visibility'
 
 interface DynamicFormProps {
   schema: FormSchema
   values: FormValues
   onChange: (key: string, value: unknown) => void
   readOnly?: boolean
-}
-
-function visivel(showIf: ShowIf | undefined, values: FormValues): boolean {
-  if (!showIf) return true
-  const v = values[showIf.field]
-  if (showIf.truthy) return Boolean(v)
-  return v === showIf.equals
 }
 
 const inputCls =

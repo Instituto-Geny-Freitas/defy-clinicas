@@ -124,3 +124,10 @@ export function anamneseSituacao(atualizadaEm: string | null): AnamneseSituacao 
   const dias = (Date.now() - new Date(atualizadaEm).getTime()) / 86400000
   return dias > ANAMNESE_VALIDADE_DIAS ? 'desatualizada' : 'em_dia'
 }
+
+/** Nome do profissional que preencheu a ficha (para o PDF). Falha silenciosa → null. */
+export async function getProfessionalNome(id: string | null | undefined): Promise<string | null> {
+  if (!id) return null
+  const { data } = await supabase.from('professionals').select('nome').eq('id', id).maybeSingle()
+  return (data?.nome as string | undefined) ?? null
+}

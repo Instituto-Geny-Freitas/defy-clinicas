@@ -67,3 +67,10 @@ export function parseMoneyBR(value: string | number | null | undefined): number 
   const n = Number(s)
   return isNaN(n) ? 0 : n
 }
+
+/** Formata CPF (11 dígitos) como XXX.XXX.XXX-XX; devolve o original se inesperado. */
+export function formatCPF(cpf?: string | null): string {
+  const d = (cpf ?? '').replace(/\D/g, '')
+  if (d.length !== 11) return cpf?.trim() || '—'
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+}
